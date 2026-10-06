@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>系統図 — URLからの派生</title>
+<style>
+:root{--bg:#f4f6f6;--ink:#0b0b0b;--ink2:#52514e;--line:#c3ccce;
+  --origin:#0f6f68;--tool:#2a78d6;--trait:#8aa0a3;--det:#eda100;--def:#1baf7a;--edge:#9fb0b2;}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10191c;--ink:#fff;--ink2:#c3c2b7;--line:#2c4045;--edge:#3b5258;color-scheme:dark;}}
+:root[data-theme="dark"]{--bg:#10191c;--ink:#fff;--ink2:#c3c2b7;--line:#2c4045;--edge:#3b5258;color-scheme:dark;}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);
+  font:14px/1.5 system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 16px 40px}
+h1{font-size:19px;margin:0 0 2px}.sub{color:var(--ink2);font-size:12.5px;margin:0 0 10px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--ink2);margin:8px 0 14px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.cols{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:11.5px;color:var(--ink2);text-align:center;margin-bottom:4px}
+svg{width:100%;height:auto;display:block}
+.node rect{rx:7;ry:7}
+.node text{font-size:12px;fill:var(--ink)}
+.cap{fill:var(--ink2);font-size:10.5px}
+</style></head>
+<body><div class="wrap">
+<h1>系統図 — 起点URLからの派生（ツール要素 → 検知 → 防御）</h1>
+<p class="sub">起点: usestrix/strix → 3ツール解析 → 検知ルール R1–R7 → 防御コントロール。検知・防御の設計に限定。</p>
+<div class="legend">
+  <span><i style="background:#0f6f68"></i>起点</span>
+  <span><i style="background:#2a78d6"></i>ツール</span>
+  <span><i style="background:#8aa0a3"></i>要素/挙動</span>
+  <span><i style="background:#eda100"></i>検知 R1–R7</span>
+  <span><i style="background:#1baf7a"></i>防御</span>
+</div>
+<div class="cols"><div>① ツール</div><div>② 要素/挙動</div><div>③ 検知</div><div>④ 防御</div></div>
+<svg id="svg" viewBox="0 0 1160 560" role="img" aria-label="系統図"></svg>
+</div>
+<script>
+var COLX=[30,330,650,950], W=200, H=38;
+var nodes={
+  // col0 tools
+  url:{c:-1,x:30,y:10,w:200,h:30,t:"起点 usestrix/strix",cls:"origin"},
+  S:{c:0,y:70,t:"Strix",cap:"偵察・脆弱性",cls:"tool"},
+  C:{c:0,y:250,t:"Cairn",cap:"自律侵入",cls:"tool"},
+  H:{c:0,y:420,t:"Hermes",cap:"統括・事後",cls:"tool"},
+  // col1 traits
+  scan:{c:1,y:30,t:"スキャナ/自動ブラウザ",cls:"trait"},
+  llm:{c:1,y:110,t:"LLM API egress",cls:"trait"},
+  ctr:{c:1,y:190,t:"特権コンテナ(NET_RAW)",cls:"trait"},
+  multi:{c:1,y:270,t:"多ツール連続実行",cls:"trait"},
+  msg:{c:1,y:350,t:"メッセージングGW",cls:"trait"},
+  persist:{c:1,y:430,t:"cron/永続化",cls:"trait"},
+  skill:{c:1,y:510,t:"スキル(安全フィルタ除去悪用)",cls:"trait"},
+  // col2 detections
+  R3:{c:2,y:30,t:"R3 偵察列挙",cls:"det"},
+  R1:{c:2,y:95,t:"R1 LLM egress",cls:"det"},
+  R2:{c:2,y:160,t:"R2 特権コンテナ",cls:"det"},
+  R7:{c:2,y:270,t:"R7 多ツール実行",cls:"det"},
+  R4:{c:2,y:350,t:"R4 メッセージングC2",cls:"det"},
+  R5:{c:2,y:430,t:"R5 永続化",cls:"det"},
+  GOV:{c:2,y:510,t:"ガバナンス(T1562)",cls:"det"},
+  // col3 defenses
+  allow:{c:3,y:95,t:"送信ドメイン allowlist",cls:"def"},
+  adm:{c:3,y:200,t:"コンテナ admission",cls:"def"},
+  surf:{c:3,y:30,t:"攻撃面最小化/CSP",cls:"def"},
+  persmon:{c:3,y:430,t:"永続化監視",cls:"def"},
+  gov:{c:3,y:510,t:"LLM利用ガバナンス",cls:"def"}
+};
+var edges=[
+  ["url","S"],["url","C"],["url","H"],
+  ["S","scan"],["S","llm"],["S","ctr"],
+  ["C","ctr"],["C","multi"],["C","llm"],
+  ["H","msg"],["H","persist"],["H","skill"],["H","multi"],
+  ["scan","R3"],["scan","R7"],["llm","R1"],["ctr","R2"],["multi","R7"],
+  ["msg","R4"],["persist","R5"],["skill","GOV"],
+  ["R1","allow"],["R4","allow"],["R2","adm"],["R7","adm"],["R3","surf"],["R5","persmon"],["GOV","gov"]
+];
+var C={origin:"#0f6f68",tool:"#2a78d6",trait:"#8aa0a3",det:"#eda100",def:"#1baf7a"};
+var FG={origin:"#fff",tool:"#fff",trait:"#0b0b0b",det:"#18262b",def:"#06211f"};
+function pos(n){var x=n.x!=null?n.x:COLX[n.c];var w=n.w||W;var h=n.h||H;return {x:x,y:n.y,w:w,h:h,cx:x+w,cxl:x,cy:n.y+h/2};}
+var svg=document.getElementById("svg"),NS="http://www.w3.org/2000/svg";
+function el(t,a){var e=document.createElementNS(NS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+// edges first
+edges.forEach(function(e){
+  var a=pos(nodes[e[0]]),b=pos(nodes[e[1]]);
+  var x1=a.x+a.w, y1=a.cy, x2=b.x, y2=b.cy, mx=(x1+x2)/2;
+  svg.appendChild(el("path",{d:"M"+x1+" "+y1+" C"+mx+" "+y1+" "+mx+" "+y2+" "+x2+" "+y2,
+    fill:"none",stroke:"var(--edge)","stroke-width":"1.3"}));
+});
+// nodes
+for(var k in nodes){var n=nodes[k],p=pos(n);
+  var g=el("g",{class:"node"});
+  g.appendChild(el("rect",{x:p.x,y:p.y,width:p.w,height:p.h,rx:7,ry:7,fill:C[n.cls],stroke:"rgba(0,0,0,.12)"}));
+  var tx=el("text",{x:p.x+10,y:p.y+(n.cap?16:23),fill:FG[n.cls],"font-weight":"600"});tx.textContent=n.t;g.appendChild(tx);
+  if(n.cap){var c=el("text",{x:p.x+10,y:p.y+30,fill:FG[n.cls],"font-size":"10.5","opacity":"0.85"});c.textContent=n.cap;g.appendChild(c);}
+  svg.appendChild(g);
+}
+</script>
+</body></html>
