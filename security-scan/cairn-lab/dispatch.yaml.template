@@ -1,0 +1,60 @@
+# Cairn dispatcher — 認可済み隔離ラボ用テンプレート（container モード）
+# 使い方:
+#   cp dispatch.yaml.template dispatch.yaml   # コピーして <...> を埋める
+#   dispatch.yaml は .gitignore 済み前提でコミットしない（秘密情報を含むため）
+#
+# 前提（runbook のチェックリスト参照）:
+#   - 対象は自分が所有 or 書面認可。対象とワーカーは隔離ネットワーク上。
+#   - egress は LLM エンドポイントだけ許可（または local モデルで egress ゼロ）。
+#   - まず dispatch_mock_local.yaml で攻撃なしスモークを通してから本設定へ。
+
+# Cairn サーバ（黒板）の URL。ラボ内のアドレスに。
+server: "http://<SERVER_HOST>:8000"
+
+common_env:
+  TSEC_SERVER_HOST: "<SERVER_HOST>:8000"
+  # 認証トークン。環境変数から注入推奨: 値を "${CAIRN_AGENT_TOKEN}" にして export する。
+  TSEC_AGENT_TOKEN: "<AGENT_TOKEN>"
+
+runtime:
+  interval: 3
+  # まず小さく。挙動を把握してから増やす。
+  max_workers: 2
+  max_running_projects: 1
+  max_project_workers: 2
+  healthcheck_timeout: 20
+  worker_healthcheck: "startup_only"
+  prompt_group: "default"
+
+tasks:
+  bootstrap:
+    timeout: 300
+    conclude_timeout: 90
+  reason:
+    timeout: 300
+    max_intents: 2       # 1 reason あたりの新規 intent 上限。保守的に。
+  explore:
+    timeout: 300
+    conclude_timeout: 90
+
+container:
+  image: "ghcr.io/oritera/cairn-worker-container:latest"
+  # !!! host にしない !!! 隔離した専用ネットワーク名を指定する（下記 compose 参照）。
+  network_mode: "<ISOLATED_DOCKER_NETWORK>"   # 例: "cairn_lab_net"
+  completed_action: "stop"                    # 事後調査用に停止で残す
+  # raw socket を使うタスク（nmap -sS 等）が要るときだけ有効化。不要なら外す。
+  # cap_add:
+  #   - "NET_RAW"
+  #   - "NET_ADMIN"
+
+workers:
+  # LLM は「自分の」資格情報で。秘密情報は環境変数から注入し、ここにベタ書きしない。
+  - name: "worker-1"
+    type: "claudecode"                 # claudecode / codex / pi から選択
+    task_types: [bootstrap, reason, explore]
+    max_running: 1
+    priority: 0
+    env:
+      ANTHROPIC_MODEL: "<MODEL_ID>"            # 例: deepseek-v4-pro / 任意の対応モデル
+      ANTHROPIC_BASE_URL: "<LLM_BASE_URL>"     # 例: https://api.deepseek.com/anthropic
+      ANTHROPIC_AUTH_TOKEN: "${LLM_AUTH_TOKEN}" # export LLM_AUTH_TOKEN=... で注入
