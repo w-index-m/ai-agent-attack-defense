@@ -1,3 +1,6 @@
+# コミット前に秘密情報を止める(ローカル用)。
+# 使い方: pip install pre-commit && pre-commit install
+# rev は、gitleaks の最新の安定タグに更新してから使う(https://github.com/gitleaks/gitleaks/tags)
 repos:
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.18.4

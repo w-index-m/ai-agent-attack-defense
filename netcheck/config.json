@@ -1,1 +1,6 @@
-{"allowed_ranges": [], "max_targets": 256, "port_timeout": 1.0, "delay": 0.02}
+{
+  "allowed_ranges": [],
+  "max_targets": 256,
+  "port_timeout": 1.0,
+  "delay": 0.02
+}

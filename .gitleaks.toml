@@ -1,6 +1,12 @@
-title = "gitleaks config"
+# gitleaks の設定。標準のルールに加えて、誤検出を除く例外だけを書く。
 [extend]
 useDefault = true
+
 [allowlist]
-description = "sample data and docs"
-paths = ['''samples/.*''', '''docs/.*''']
+description = "テスト用のダミー値やサンプルファイルは除外する"
+paths = [
+  '''(^|/)tests?/fixtures/''',
+  '''\.sample$''',
+]
+# 個別の誤検出は、検出値そのものではなく、指紋(fingerprint)で除外する:
+#   gitleaks detect の出力にある Fingerprint を .gitleaksignore に 1 行ずつ書く

@@ -1,44 +1,75 @@
+# 診断を自動で回すワークフロー(GitHub Actions)
+# - プルリク・main への push・毎日の定期実行・手動実行で動く
+# - コード/依存/設定/秘密情報の診断は、ネットワーク越しの攻撃はせず、リポジトリを読むだけ
+# - ZAP(Web アプリへの診断)は、検証環境の URL を設定したときだけ動く。本番には向けない
 name: security-scan
+
 on:
   pull_request:
   push:
     branches: [main]
   schedule:
-    - cron: "17 18 * * *"
+    - cron: "17 18 * * *"   # 毎日 03:17(日本時間)
   workflow_dispatch:
+
 permissions:
-  contents: read
+  contents: read            # 最小権限。書き込み権限は与えない
+
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   scan:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - name: Prepare output dir
+        with:
+          fetch-depth: 0     # gitleaks が履歴も調べるため
+
+      - name: 出力先を作る
         run: mkdir -p results
-      - name: Semgrep (code)
+
+      # --- コードの弱点(SQL インジェクション等) -----------------------------
+      - name: Semgrep
         run: |
-          docker run --rm -v "$PWD:/src" semgrep/semgrep \
-            semgrep scan --config auto --json --output /src/results/semgrep.json /src || true
-      - name: Trivy (dependencies / config / secrets)
+          docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:latest \
+            semgrep scan --config auto --json --output results/semgrep.json --metrics=off || true
+
+      # --- 部品の既知の脆弱性・設定の不備・秘密情報 -------------------------
+      - name: Trivy (脆弱性 / 設定 / 秘密情報)
         run: |
-          docker run --rm -v "$PWD:/src" aquasec/trivy:latest \
-            fs --scanners vuln,misconfig,secret --format json --output /src/results/trivy.json /src || true
-      - name: gitleaks (secrets)
+          docker run --rm -v "$PWD:/work" -w /work aquasec/trivy:latest \
+            fs --scanners vuln,misconfig,secret --format json --output results/trivy.json . || true
+
+      # --- 秘密情報の混入(履歴を含む) -----------------------------------------
+      - name: gitleaks
         run: |
-          docker run --rm -v "$PWD:/src" zricethezav/gitleaks:latest \
-            detect --source /src --config /src/.gitleaks.toml --report-format json \
-            --report-path /src/results/gitleaks.json --exit-code 0 || true
-      - name: ZAP baseline (only if STAGING_URL is set)
+          docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
+            detect --source=/repo --report-format=json --report-path=/repo/results/gitleaks.json \
+            --exit-code=0 --no-banner || true
+
+      # --- Web アプリへの診断(検証環境のみ) -------------------------------------
+      # リポジトリ変数 STAGING_URL に、ダミーデータの検証環境の URL を設定したときだけ動く。
+      # ここは受け身の診断(baseline)。攻撃的な full scan は、別途、許可を取って手動で行う。
+      - name: ZAP baseline (検証環境のみ)
         if: ${{ vars.STAGING_URL != '' }}
         run: |
           chmod 777 results
           docker run --rm -v "$PWD/results:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t "${{ vars.STAGING_URL }}" -J zap.json || true
-      - name: Summarize
-        run: python3 scripts/summarize.py results --fail-on "${{ vars.FAIL_ON || 'none' }}" | tee -a "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+
+      - name: 集計(要約を表示)
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" results || true
+          python3 scripts/summarize.py results --fail-on "${{ vars.FAIL_ON || 'none' }}" >> "$GITHUB_STEP_SUMMARY"
+          python3 scripts/summarize.py results --fail-on "${{ vars.FAIL_ON || 'none' }}"
+
+      - name: 結果を保存(「脆弱性トリアージ」ページに読み込める)
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: security-scan-results
-          path: results/
+          path: results/*.json
+          retention-days: 30

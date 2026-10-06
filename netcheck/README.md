@@ -1,10 +1,55 @@
-# netcheck
+# netcheck(確認だけのチェックツール)
 
-Confirmation-only checker for hosts you own or are authorized to test. Python standard library only.
+自社の IP・ホストに対して、**確認だけ**を行い、結果をブラウザで見るツールです。Python 3.8 以上があれば動きます(追加のインストールは不要)。
 
-    python3 netcheck.py [port]     # default 8765; open the printed URL (it contains a per-start token)
+## 起動
 
-Does: open TCP ports (standard 28 / extended 43), banners, HTTP security headers and cookie flags, TLS version / expiry, whether admin-like URLs respond (status only), risky-port flags.
-Does not: exploit, guess passwords, log in, or decide whether SQL injection exists (use Semgrep on the code, or an authorized staging test).
+```
+python3 netcheck.py
+```
 
-Safety: binds 127.0.0.1; token required; consent checkbox required; private ranges and loopback only by default (add your own to `config.json` `allowed_ranges`); the whole run is refused if any target is out of range; max 256 targets; actions are logged to `netcheck.log`.
+起動すると URL が表示されます(`http://127.0.0.1:8765/?t=...`)。ブラウザで開いてください。そのパソコンからだけ開けます。URL の `t=` は、起動のたびに変わる合言葉です。
+
+## やること(読み取りだけ)
+
+- TCP で接続できるポートの一覧(標準 約30、拡張 約45)
+- 接続時にサーバーが自分で出す表示(バナー)の読み取り
+- HTTP の通常の応答ヘッダ(CSP、HSTS、Cookie の属性など)と、HTTPS 証明書の期限・検証
+- 管理画面らしき URL(/admin、/wp-admin/ など 8 件)が応答するか。状態コードを見るだけで、ログインはしない
+- 開いていると危険なポート(データベース、NFS、Docker API、Redis など)への注意と、直し方の表示
+
+## やらないこと
+
+- 脆弱性を突く動作(SQL インジェクションの試行、総当たり、アップロードなど)
+- データの読み出し・変更・削除、権限の昇格
+- **SQL インジェクションの有無は、この確認では分かりません**。サイト固有のコードの問題なので、Semgrep などのコード診断、または許可を得た検証環境での診断で確認してください
+
+## 安全のための制限
+
+- 対象は、許可した範囲だけ。既定は社内のプライベート IP(10.0.0.0/8、172.16.0.0/12、192.168.0.0/16)と 127.0.0.0/8。範囲外が 1 つでも混ざると、全体を実行しません
+- ホスト名を入力した場合は、名前から引いた IP が範囲内かで判断します
+- 実行のたびに、「自社が管理している(または書面で許可を得た)対象です」のチェックが必要です
+- 画面は 127.0.0.1 だけで待ち受け、合言葉(トークン)がないと操作できません
+- 一度に調べる対象は最大 256 件。接続の間隔を空けて、相手に負荷をかけないようにしています
+- 起動、拒否、開始、完了は、`netcheck.log` に記録されます
+
+## 許可する範囲を増やす(自社の公開 IP など)
+
+`config.json` の `allowed_ranges` に、自社が管理している範囲を書きます。
+
+```
+{ "allowed_ranges": ["203.0.113.0/24"] }
+```
+
+**自社のものと確認できない範囲は、書かないでください。** 書いた範囲の責任は、書いた人にあります。
+
+## 結果の使い方
+
+- 画面の「結果を JSON で保存」で、結果を保存できます
+- 重大度の高いものから、直し方の通りに対応します。コードの診断(SQL インジェクションなど)は、別のツール(Semgrep など)で行います
+
+## 確認できていないこと
+
+- 動作は、この開発環境の中の、テスト用の Web サーバー 1 台で確認しました。社内のネットワークの複数の機器には、まだ試していません
+- 画面の見た目は、ブラウザでの確認をしていません。崩れがあれば教えてください
+- バージョンの古さは、表示された文字列から推測しています。実際のバージョンと違うことがあります

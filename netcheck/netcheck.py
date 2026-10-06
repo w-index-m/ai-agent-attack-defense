@@ -1,263 +1,486 @@
 #!/usr/bin/env python3
-"""netcheck - confirmation-only checker for hosts you own or are authorized to test.
-Standard library only. Starts a browser UI bound to 127.0.0.1.
+"""netcheck: 自社の IP・ホストに対する「確認だけ」のチェックツール(ブラウザ画面つき)
 
-What it does : open TCP ports, banners, HTTP security headers/cookies, TLS certificate,
-               whether admin-like URLs respond (status code only, no login attempts).
-What it never does: exploit, brute-force, log in, or judge SQL injection.
-Safety       : private ranges + loopback only by default; whole run refused if any target
-               is out of range; consent required; per-start token; max targets; log file.
+やること(読み取りだけ):
+  - TCP で接続できるポートの一覧 / 接続時の表示(バナー)の読み取り
+  - HTTP の通常の応答ヘッダ、HTTPS 証明書の状態
+  - 管理画面らしき URL が応答するか(状態コードを見るだけ。ログインはしない)
+やらないこと:
+  - 脆弱性を突く動作(SQL インジェクションの試行、総当たり、アップロード等)
+  - データの読み出し・変更、権限の昇格
+
+安全のための制限:
+  - 対象は、許可した IP 範囲(既定: 社内のプライベート IP)だけ。範囲外は実行を拒否する
+  - 画面は 127.0.0.1 だけで待ち受け、起動のたびに変わる合言葉(トークン)が必要
+  - 実行のたびに「自社が管理している対象」の確認が必要。実行は netcheck.log に記録する
+標準ライブラリだけで動く(Python 3.8 以上)。
 """
-import concurrent.futures as cf, datetime, html, http.client, ipaddress, json, os, secrets
-import socket, ssl, sys, threading, time, urllib.parse
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import argparse, concurrent.futures as cf, http.client, ipaddress, json, os, re, secrets
+import socket, ssl, sys, threading, time, uuid
+from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_ALLOWED = [ipaddress.ip_network(n) for n in
-                   ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8")]
-STD_PORTS = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1433,
-             2049, 3000, 3306, 3389, 5432, 5900, 6379, 8000, 8080, 8443, 9200, 27017]
-EXT_PORTS = STD_PORTS + [81, 389, 636, 873, 1521, 2375, 5000, 5601, 8081, 8888, 9000, 11211, 5984, 9090, 15672]
-RISKY = {21: "FTP (plaintext)", 23: "Telnet (plaintext)", 111: "rpcbind", 135: "MS RPC", 139: "NetBIOS",
-         445: "SMB", 1433: "MSSQL exposed", 2049: "NFS", 2375: "Docker API (unauth)", 3306: "MySQL exposed",
-         3389: "RDP", 5432: "PostgreSQL exposed", 5900: "VNC", 6379: "Redis exposed", 9200: "Elasticsearch",
-         11211: "Memcached", 27017: "MongoDB exposed", 873: "rsync", 5984: "CouchDB"}
-ADMIN_PATHS = ["/admin", "/administrator", "/login", "/wp-admin/", "/wp-login.php", "/phpmyadmin/",
-               "/manager/html", "/console", "/server-status", "/.git/HEAD", "/.env"]
-SEC_HEADERS = ["Strict-Transport-Security", "Content-Security-Policy", "X-Content-Type-Options",
-               "X-Frame-Options", "Referrer-Policy"]
-LOG = os.path.join(HERE, "netcheck.log")
-TOKEN = secrets.token_urlsafe(16)
-LOCK = threading.Lock()
+LOG_PATH = os.path.join(HERE, "netcheck.log")
+UA = "netcheck/1.0 (internal asset check; read-only)"
 
-class TooMany(Exception): pass
+DEFAULT_ALLOWED = ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+STANDARD_PORTS = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1433,
+                  2049, 3000, 3306, 3389, 5432, 5900, 6379, 8000, 8080, 8443, 8888, 9200, 11211, 27017]
+EXTENDED_PORTS = sorted(set(STANDARD_PORTS + [81, 88, 389, 636, 1521, 2375, 5000, 5601, 5985, 7001,
+                                              8081, 8181, 9000, 9090, 15672]))
+HTTP_PORTS = {80, 81, 3000, 5000, 5601, 7001, 8000, 8080, 8081, 8181, 8888, 9000, 9090, 9200, 15672}
+HTTPS_PORTS = {443, 8443}
+BANNER_PORTS = {21, 22, 25, 110, 143, 3306}
+ADMIN_PATHS = ["/admin", "/administrator", "/wp-admin/", "/wp-login.php", "/phpmyadmin/",
+               "/manager/html", "/login", "/console"]
+
+# ポートごとの注意(sev, 題名, 説明, 直し方)
+RISKY = {
+    21: ("medium", "FTP が開いている", "FTP は通信が暗号化されません。", "SFTP/FTPS に切り替えるか、不要なら閉じる。"),
+    23: ("high", "Telnet が開いている", "Telnet は通信が暗号化されず、認証情報が見えます。", "SSH に切り替え、Telnet は停止する。"),
+    111: ("medium", "rpcbind が開いている", "NFS などの共有の入口です。", "不要なら停止し、必要なら接続元を限定する。"),
+    135: ("medium", "Windows RPC が開いている", "社内向けの機能です。", "接続元を限定する。"),
+    139: ("medium", "NetBIOS が開いている", "社内向けの機能です。", "接続元を限定する。"),
+    445: ("medium", "SMB が開いている", "ファイル共有の入口で、攻撃の対象になりやすいポートです。", "接続元を限定し、更新を適用する。"),
+    1433: ("high", "SQL Server が開いている", "データベースが、ネットワークから直接届く状態です。", "アプリのサーバーだけから接続できるようにする。"),
+    1521: ("high", "Oracle DB が開いている", "データベースが、ネットワークから直接届く状態です。", "アプリのサーバーだけから接続できるようにする。"),
+    2049: ("high", "NFS が開いている", "NFS の設定不備(no_root_squash など)は、今回の攻撃連鎖の一段でした。", "/etc/exports で no_root_squash を外し、接続元を限定する。"),
+    2375: ("critical", "Docker API(暗号化なし)が開いている", "認証なしで、コンテナの操作ができる可能性があります。", "直ちに閉じる。必要なら TLS と認証を付ける。"),
+    3306: ("high", "MySQL が開いている", "データベースが、ネットワークから直接届く状態です。", "アプリのサーバーだけから接続できるようにする。"),
+    3389: ("high", "リモートデスクトップが開いている", "総当たりやリモートの欠陥の標的になりやすいポートです。", "VPN の内側に置き、多要素認証を付ける。"),
+    5432: ("high", "PostgreSQL が開いている", "データベースが、ネットワークから直接届く状態です。", "アプリのサーバーだけから接続できるようにする。"),
+    5900: ("high", "VNC が開いている", "画面の遠隔操作です。", "VPN の内側に置き、強い認証を付ける。"),
+    6379: ("high", "Redis が開いている", "認証なしで使えることが多く、データの読み書きができます。", "接続元を限定し、パスワードを設定する。"),
+    9200: ("high", "Elasticsearch が開いている", "認証なしで、データを読めることがあります。", "接続元を限定し、認証を有効にする。"),
+    11211: ("high", "memcached が開いている", "認証がなく、データの読み出しや攻撃への悪用があります。", "接続元を限定する。"),
+    27017: ("high", "MongoDB が開いている", "認証なしで、データを読めることがあります。", "接続元を限定し、認証を有効にする。"),
+}
+EOL_HINTS = [  # (正規表現, 説明)
+    (re.compile(r"PHP/(5|7)\.", re.I), "PHP 5/7 系はサポートが終了しています"),
+    (re.compile(r"Apache/2\.(0|2)\.", re.I), "Apache 2.0/2.2 系はサポートが終了しています"),
+    (re.compile(r"Microsoft-IIS/(6|7|8)\.", re.I), "この IIS のバージョンはサポートが終了しています"),
+    (re.compile(r"OpenSSH_[1-6]\.", re.I), "OpenSSH 6 以前は古いバージョンです"),
+]
+SQLI_NOTE = ("SQL インジェクションの有無は、この確認では分かりません。サイト固有のコードの問題なので、"
+             "Semgrep などのコード診断、または許可を得た検証環境での診断で確認してください。")
+
+
+class TooMany(Exception):
+    pass
+
+
+def now():
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def log(line):
+    try:
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write("%s %s\n" % (now(), line))
+    except OSError:
+        pass
+
 
 def load_config():
     cfg = {"allowed_ranges": [], "max_targets": 256, "port_timeout": 1.0, "delay": 0.02}
-    try:
-        cfg.update(json.load(open(os.path.join(HERE, "config.json"))))
-    except Exception:
-        pass
+    p = os.path.join(HERE, "config.json")
+    if os.path.exists(p):
+        try:
+            cfg.update(json.load(open(p, encoding="utf-8")))
+        except (OSError, ValueError) as e:
+            print("config.json を読めませんでした:", e, file=sys.stderr)
     return cfg
 
-def allowed_nets(cfg):
-    extra = [ipaddress.ip_network(n, strict=False) for n in cfg.get("allowed_ranges", [])]
-    return DEFAULT_ALLOWED + extra
 
-def log(msg):
-    with LOCK, open(LOG, "a", encoding="utf-8") as f:
-        f.write(f"{datetime.datetime.now().isoformat(timespec='seconds')} {msg}\n")
+def allowed_networks(cfg):
+    return [ipaddress.ip_network(x, strict=False) for x in DEFAULT_ALLOWED + list(cfg.get("allowed_ranges", []))]
 
-def expand(text, cfg):
-    """Return list of IPs from lines of IP / CIDR / hostname. Raises TooMany / ValueError."""
-    maxn = int(cfg["max_targets"])
-    ips = []
-    for raw in text.replace(",", "\n").splitlines():
-        t = raw.strip()
-        if not t:
+
+def expand_targets(text, cfg):
+    """入力(IP / CIDR / ホスト名)を、(表示名, IP)のリストにする。範囲外は拒否する。"""
+    nets = allowed_networks(cfg)
+    out, refused = [], []
+    for raw in re.split(r"[\s,]+", text.strip()):
+        if not raw:
             continue
         try:
-            net = ipaddress.ip_network(t, strict=False)
-            if net.num_addresses > maxn * 4:
-                raise TooMany(t)
-            hosts = list(net.hosts()) if net.num_addresses > 2 else list(net)
-            ips += [str(h) for h in hosts]
-        except TooMany:
-            raise
-        except ValueError:
-            try:
-                ips.append(socket.gethostbyname(t))
-            except OSError:
-                raise ValueError(f"cannot resolve: {t}")
-        if len(ips) > maxn:
-            raise TooMany(t)
-    ips = list(dict.fromkeys(ips))
-    if len(ips) > maxn:
-        raise TooMany("total")
-    return ips
+            if "/" in raw:
+                net = ipaddress.ip_network(raw, strict=False)
+                if net.num_addresses > cfg["max_targets"] + 2:
+                    raise TooMany("対象が多すぎます(上限 %d)。範囲を小さくしてください。" % cfg["max_targets"])
+                hosts = [net.network_address] if net.num_addresses == 1 else list(net.hosts())
+                for h in hosts:
+                    out.append((str(h), str(h)))
+            else:
+                try:
+                    out.append((raw, str(ipaddress.ip_address(raw))))
+                except ValueError:
+                    ips = {ai[4][0] for ai in socket.getaddrinfo(raw, None, socket.AF_UNSPEC, socket.SOCK_STREAM)}
+                    for ip in sorted(ips):
+                        out.append((raw, ip))
+        except (ValueError, socket.gaierror):
+            refused.append("%s(解釈できません)" % raw)
+        if len(out) > cfg["max_targets"]:
+            raise TooMany("対象が多すぎます(上限 %d)。範囲を小さくしてください。" % cfg["max_targets"])
+    ok = []
+    for name, ip in out:
+        addr = ipaddress.ip_address(ip)
+        if any(addr in n for n in nets if n.version == addr.version):
+            ok.append((name, ip))
+        else:
+            refused.append("%s → %s(許可した範囲の外)" % (name, ip))
+    return ok, refused
 
-def check_allowed(ips, cfg):
-    nets = allowed_nets(cfg)
-    bad = [ip for ip in ips if not any(ipaddress.ip_address(ip) in n for n in nets)]
-    return bad
 
-def probe_port(ip, port, timeout):
+def tcp_open(ip, port, timeout):
+    fam = socket.AF_INET6 if ":" in ip else socket.AF_INET
+    s = socket.socket(fam, socket.SOCK_STREAM)
+    s.settimeout(timeout)
     try:
-        with socket.create_connection((ip, port), timeout=timeout) as s:
-            s.settimeout(timeout)
-            banner = ""
-            try:
-                if port in (80, 8000, 8080, 8081, 3000, 5000, 8888, 9000):
-                    s.sendall(b"HEAD / HTTP/1.0\r\n\r\n")
-                banner = s.recv(200).decode("latin-1", "replace").strip().splitlines()[0][:120] if True else ""
-            except Exception:
-                pass
-            return {"port": port, "banner": banner}
-    except Exception:
+        s.connect((ip, port))
+        return s
+    except OSError:
+        s.close()
         return None
 
-def http_get(ip, port, path, tls, timeout):
-    cls = http.client.HTTPSConnection if tls else http.client.HTTPConnection
-    kw = {"context": ssl._create_unverified_context()} if tls else {}
-    c = cls(ip, port, timeout=timeout, **kw)
-    try:
-        c.request("GET", path, headers={"User-Agent": "netcheck/1.0 (confirmation only)"})
-        r = c.getresponse()
-        r.read(1)
-        return r.status, r.getheaders()
-    finally:
-        c.close()
 
-def tls_info(ip, port, timeout):
+def read_banner(s):
     try:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        with socket.create_connection((ip, port), timeout=timeout) as s, ctx.wrap_socket(s) as t:
-            der = t.getpeercert(binary_form=True)
-            ver = t.version()
-        info = {"tls_version": ver}
-        try:
-            pem = ssl.DER_cert_to_PEM_cert(der)
-            import tempfile
-            with tempfile.NamedTemporaryFile("w", suffix=".pem", delete=False) as f:
-                f.write(pem); fn = f.name
-            d = ssl._ssl._test_decode_cert(fn); os.unlink(fn)
-            exp = datetime.datetime.strptime(d["notAfter"], "%b %d %H:%M:%S %Y %Z")
-            info["expires"] = exp.date().isoformat()
-            info["days_left"] = (exp - datetime.datetime.utcnow()).days
-        except Exception:
-            pass
-        if ver in ("TLSv1", "TLSv1.1", "SSLv3"):
-            info["warn"] = f"old protocol {ver}"
-        return info
-    except Exception:
-        return None
+        s.settimeout(1.5)
+        data = s.recv(256)
+        return data.decode("latin-1", "replace").strip().splitlines()[0][:160] if data else ""
+    except OSError:
+        return ""
 
-def check_host(ip, ports, cfg):
-    to = float(cfg["port_timeout"])
-    res = {"ip": ip, "open": [], "findings": [], "http": []}
-    for p in ports:
-        r = probe_port(ip, p, to)
-        time.sleep(float(cfg["delay"]))
-        if r:
-            res["open"].append(r)
-            if p in RISKY:
-                res["findings"].append(f"port {p} open: {RISKY[p]} - confirm it must be reachable")
-    for r in res["open"]:
-        p = r["port"]
-        tls = p in (443, 8443)
-        if p in (80, 443, 8000, 8080, 8081, 8443, 3000, 5000, 8888, 9000):
-            h = {"port": p, "tls": tls, "missing_headers": [], "cookies": [], "admin_urls": []}
-            try:
-                st, hdrs = http_get(ip, p, "/", tls, to)
-                h["status"] = st
-                names = {k.lower(): v for k, v in hdrs}
-                h["missing_headers"] = [x for x in SEC_HEADERS if x.lower() not in names]
-                if "server" in names or "x-powered-by" in names:
-                    h["disclosure"] = {k: names[k] for k in ("server", "x-powered-by") if k in names}
-                for k, v in hdrs:
-                    if k.lower() == "set-cookie":
-                        flags = [f for f in ("secure", "httponly", "samesite") if f not in v.lower()]
-                        if flags:
-                            h["cookies"].append(f'{v.split("=")[0]} missing: {", ".join(flags)}')
-                for path in ADMIN_PATHS:
-                    try:
-                        s2, _ = http_get(ip, p, path, tls, to)
-                        time.sleep(float(cfg["delay"]))
-                        if s2 in (200, 401, 403):
-                            h["admin_urls"].append(f"{path} -> {s2}")
-                    except Exception:
-                        pass
-                res["http"].append(h)
-                if h["admin_urls"]:
-                    res["findings"].append(f"port {p}: admin-like URLs respond ({len(h['admin_urls'])}) - restrict by IP/VPN")
-            except Exception as e:
-                h["error"] = str(e)[:80]
-                res["http"].append(h)
-            if tls:
-                ti = tls_info(ip, p, to)
-                if ti:
-                    h["tls"] = ti
-                    if ti.get("days_left") is not None and ti["days_left"] < 30:
-                        res["findings"].append(f"port {p}: certificate expires in {ti['days_left']} days")
-                    if ti.get("warn"):
-                        res["findings"].append(f"port {p}: {ti['warn']}")
+
+def http_get(ip, port, host, path, tls, method="GET", timeout=3.0):
+    try:
+        if tls:
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE   # ここは応答を読むだけ。証明書の検証は別に行う
+            conn = http.client.HTTPSConnection(ip, port, timeout=timeout, context=ctx)
+        else:
+            conn = http.client.HTTPConnection(ip, port, timeout=timeout)
+        conn.request(method, path, headers={"Host": host, "User-Agent": UA, "Connection": "close"})
+        r = conn.getresponse()
+        r.read(2048)
+        hdrs = {k.lower(): v for k, v in r.getheaders()}
+        cookies = [v for k, v in r.getheaders() if k.lower() == "set-cookie"]
+        conn.close()
+        return r.status, hdrs, cookies
+    except (OSError, http.client.HTTPException, ssl.SSLError):
+        return None, {}, []
+
+
+def tls_info(ip, port, timeout=3.0):
+    """証明書を、鎖と期限だけ検証して読む(名前の照合はしない)。"""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_REQUIRED
+    try:
+        with socket.create_connection((ip, port), timeout=timeout) as raw:
+            with ctx.wrap_socket(raw) as s:
+                cert = s.getpeercert()
+                exp = ssl.cert_time_to_seconds(cert["notAfter"])
+                days = int((exp - time.time()) // 86400)
+                return {"ok": True, "version": s.version(), "days_left": days,
+                        "subject": dict(x[0] for x in cert.get("subject", ()))}
+    except ssl.SSLCertVerificationError as e:
+        return {"ok": False, "reason": e.verify_message or str(e)}
+    except (OSError, ssl.SSLError) as e:
+        return {"ok": None, "reason": str(e)}
+
+
+def add(findings, sev, title, detail, fix, port=None):
+    findings.append({"sev": sev, "title": title, "detail": detail, "fix": fix, "port": port})
+
+
+def check_host(name, ip, ports, cfg, admin_check, progress):
+    res = {"name": name, "ip": ip, "open": [], "findings": [], "http": [], "admin": []}
+    f = res["findings"]
+    timeout = float(cfg["port_timeout"])
+    delay = float(cfg["delay"])
+    socks = {}
+
+    def probe(p):
+        time.sleep(delay)
+        s = tcp_open(ip, p, timeout)
+        if s:
+            socks[p] = s
+        progress()
+    with cf.ThreadPoolExecutor(max_workers=16) as ex:
+        list(ex.map(probe, ports))
+
+    for p in sorted(socks):
+        s = socks[p]
+        banner = read_banner(s) if p in BANNER_PORTS else ""
+        s.close()
+        res["open"].append({"port": p, "banner": banner})
+        if p in RISKY:
+            sev, t, d, fx = RISKY[p]
+            add(f, sev, t, d, fx, p)
+        for rx, msg in EOL_HINTS:
+            if banner and rx.search(banner):
+                add(f, "medium", "古いバージョンの可能性(%s)" % banner, msg, "サポート中のバージョンに更新する。", p)
+        if p in BANNER_PORTS and banner:
+            add(f, "info", "接続時にバージョン情報が見える(ポート %d)" % p, banner, "不要な情報は表示しない設定にする。", p)
+
+    open_ports = {o["port"] for o in res["open"]}
+    for p in sorted(open_ports & (HTTP_PORTS | HTTPS_PORTS)):
+        tls = p in HTTPS_PORTS
+        status, h, cookies = http_get(ip, p, name, "/", tls)
+        if status is None:
+            continue
+        info = {"port": p, "tls": tls, "status": status, "server": h.get("server", "")}
+        res["http"].append(info)
+        srv = " ".join(x for x in (h.get("server", ""), h.get("x-powered-by", "")) if x)
+        if re.search(r"\d+\.\d+", srv):
+            add(f, "low", "応答にバージョン情報が出ている(ポート %d)" % p, srv, "Server / X-Powered-By のバージョン表示を消す。", p)
+        for rx, msg in EOL_HINTS:
+            if srv and rx.search(srv):
+                add(f, "medium", "古いバージョンの可能性(%s)" % srv, msg, "サポート中のバージョンに更新する。", p)
+        if "content-security-policy" not in h:
+            add(f, "medium", "CSP がない(ポート %d)" % p,
+                "他人のスクリプトの実行を制限する設定がありません。決済ページでは、カード窃取コードの挿入を防ぐ要になります。",
+                "まず Content-Security-Policy-Report-Only で、読み込み元を洗い出してから、CSP を有効にする。", p)
+        if "x-frame-options" not in h and "frame-ancestors" not in h.get("content-security-policy", ""):
+            add(f, "low", "クリックジャッキング対策のヘッダがない(ポート %d)" % p, "他のサイトに埋め込まれて操作される可能性があります。",
+                "X-Frame-Options か、CSP の frame-ancestors を設定する。", p)
+        if "x-content-type-options" not in h:
+            add(f, "low", "X-Content-Type-Options がない(ポート %d)" % p, "", "X-Content-Type-Options: nosniff を設定する。", p)
+        if tls and "strict-transport-security" not in h:
+            add(f, "low", "HSTS がない(ポート %d)" % p, "", "Strict-Transport-Security を設定する。", p)
+        for c in cookies:
+            low = c.lower()
+            miss = [x for x, k in (("Secure", "secure"), ("HttpOnly", "httponly")) if k not in low]
+            if miss and (tls or "secure" not in low):
+                add(f, "low", "Cookie の属性が足りない(ポート %d)" % p, "%s に %s がない" % (c.split("=")[0], "・".join(miss)),
+                    "Secure と HttpOnly(必要なら SameSite)を付ける。", p)
+        if tls:
+            t = tls_info(ip, p)
+            info["tls_info"] = t
+            if t.get("ok") is True:
+                if t["days_left"] < 0:
+                    add(f, "high", "HTTPS 証明書の期限が切れている(ポート %d)" % p, "", "証明書を更新する。", p)
+                elif t["days_left"] < 30:
+                    add(f, "medium", "HTTPS 証明書の期限が近い(残り %d 日)" % t["days_left"], "", "証明書を更新する(自動更新が望ましい)。", p)
+                if t.get("version") in ("TLSv1", "TLSv1.1"):
+                    add(f, "high", "古い TLS が使われている(%s)" % t["version"], "", "TLS 1.2 以上に限定する。", p)
+            elif t.get("ok") is False:
+                add(f, "medium", "HTTPS 証明書を検証できない(ポート %d)" % p, t.get("reason", ""),
+                    "信頼された認証局の証明書にするか、社内の認証局を正しく配布する。期限切れの場合は更新する。", p)
+        if admin_check:
+            for path in ADMIN_PATHS:
+                time.sleep(delay)
+                st, _, _ = http_get(ip, p, name, path, tls, timeout=3.0)
+                if st is not None and st != 404:
+                    res["admin"].append({"port": p, "path": path, "status": st})
+                    if st in (200, 401):
+                        add(f, "medium", "管理画面らしき URL が応答している: %s(ポート %d, 状態 %d)" % (path, p, st),
+                            "ログインはせず、応答の状態だけを見ています。",
+                            "社内ネットワークや VPN、IP 制限の内側に置き、多要素認証を付ける。", p)
+                    elif st in (301, 302, 303, 307, 308):
+                        add(f, "info", "管理画面らしき URL がリダイレクトされる: %s(ポート %d)" % (path, p), "", "公開が必要か確認する。", p)
+    res["findings"].sort(key=lambda x: ["critical", "high", "medium", "low", "info"].index(x["sev"]))
     return res
 
-def run(text, ext, cfg):
-    ips = expand(text, cfg)
-    bad = check_allowed(ips, cfg)
-    if bad:
-        log(f"REFUSED out-of-range: {bad[:5]}")
-        return {"error": "Refused: targets outside allowed ranges: " + ", ".join(bad[:5]) +
-                " . Add your own range to config.json allowed_ranges only if you are authorized."}
-    ports = EXT_PORTS if ext else STD_PORTS
-    log(f"RUN targets={len(ips)} ports={len(ports)}")
-    with cf.ThreadPoolExecutor(max_workers=8) as ex:
-        results = list(ex.map(lambda ip: check_host(ip, ports, cfg), ips))
-    return {"results": results, "note": "SQL injection cannot be determined by this tool. Use code scanning (Semgrep) or an authorized staging test."}
 
-PAGE = """<!doctype html><meta charset=utf-8><title>netcheck</title>
-<style>body{font:14px system-ui;max-width:900px;margin:20px auto;padding:0 12px}textarea{width:100%;height:90px}
-pre{background:#f4f4f4;padding:8px;overflow:auto}.w{background:#fff4d6;padding:8px;border-radius:6px}.f{color:#b00}</style>
-<h2>netcheck <small>(confirmation only)</small></h2>
-<p class=w>Only scan systems you own or are authorized to test. Defaults to private ranges only.
-SQL injection cannot be determined here.</p>
-<textarea id=t placeholder="192.168.0.10&#10;192.168.0.0/28"></textarea><br>
-<label><input type=checkbox id=e> extended ports</label>
-<label><input type=checkbox id=c> I am authorized to check these targets</label>
-<button onclick=go()>Run</button><div id=o></div>
-<script>
-const T=new URLSearchParams(location.search).get('t')||'';
-async function go(){const o=document.getElementById('o');o.textContent='running...';
-const r=await fetch('/run?t='+encodeURIComponent(T),{method:'POST',headers:{'Content-Type':'application/json'},
-body:JSON.stringify({targets:t.value,extended:e.checked,consent:c.checked})});const j=await r.json();
-if(j.error){o.innerHTML='<p class=f>'+esc(j.error)+'</p>';return}
-o.innerHTML='<p>'+esc(j.note)+'</p>'+j.results.map(x=>'<h3>'+esc(x.ip)+'</h3>'+
-(x.findings.length?'<ul class=f>'+x.findings.map(f=>'<li>'+esc(f)+'</li>').join('')+'</ul>':'<p>no flagged items</p>')+
-'<pre>'+esc(JSON.stringify({open:x.open,http:x.http},null,1))+'</pre>').join('')}
-function esc(s){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
-</script>"""
+JOBS = {}
 
-class H(BaseHTTPRequestHandler):
-    def log_message(self, *a): pass
-    def _send(self, code, body, ctype="application/json"):
-        b = body.encode() if isinstance(body, str) else body
-        self.send_response(code); self.send_header("Content-Type", ctype + "; charset=utf-8")
-        self.send_header("Content-Length", str(len(b))); self.end_headers(); self.wfile.write(b)
-    def _tok(self):
-        return urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("t", [""])[0] == TOKEN
+
+def run_job(job_id, targets, ports, admin, cfg):
+    job = JOBS[job_id]
+    total = len(targets) * len(ports)
+    state = {"done": 0}
+    lock = threading.Lock()
+
+    def progress():
+        with lock:
+            state["done"] += 1
+            job["progress"] = min(0.99, state["done"] / max(1, total))
+    try:
+        for name, ip in targets:
+            job["current"] = "%s (%s)" % (name, ip)
+            job["results"].append(check_host(name, ip, ports, cfg, admin, progress))
+        job["status"] = "done"
+    except Exception as e:  # noqa
+        job["status"] = "error"
+        job["error"] = str(e)
+    job["progress"] = 1.0
+    job["finished"] = now()
+    log("job=%s 完了 hosts=%d" % (job_id, len(job["results"])))
+
+
+def start_scan(body, cfg):
+    if body.get("consent") is not True:
+        return 400, {"error": "「自社が管理している対象です」の確認が必要です。"}
+    try:
+        targets, refused = expand_targets(str(body.get("targets", "")), cfg)
+    except TooMany as e:
+        return 400, {"error": str(e)}
+    if refused:
+        log("拒否 %s" % "; ".join(refused))
+        return 400, {"error": "許可した範囲の外、または解釈できない対象があります。実行しません。", "refused": refused}
+    if not targets:
+        return 400, {"error": "対象を入力してください。"}
+    ports = EXTENDED_PORTS if body.get("ports") == "extended" else STANDARD_PORTS
+    admin = bool(body.get("admin", True))
+    job_id = uuid.uuid4().hex[:10]
+    JOBS[job_id] = {"id": job_id, "status": "running", "progress": 0.0, "current": "", "started": now(),
+                    "results": [], "targets": [t[1] for t in targets], "sqli_note": SQLI_NOTE}
+    log("job=%s 開始 consent=true targets=%s ports=%s admin=%s" % (job_id, ",".join(t[1] for t in targets), body.get("ports", "standard"), admin))
+    threading.Thread(target=run_job, args=(job_id, targets, ports, admin, cfg), daemon=True).start()
+    return 200, {"id": job_id, "count": len(targets)}
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "netcheck"
+    cfg = {}
+    token = ""
+
+    def log_message(self, *a):
+        pass
+
+    def _send(self, code, body, ctype="application/json; charset=utf-8"):
+        data = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline' 'self'; script-src 'unsafe-inline' 'self'")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _auth(self):
+        host = (self.headers.get("Host") or "").split(":")[0]
+        if host not in ("127.0.0.1", "localhost"):
+            return False
+        return secrets.compare_digest(self.headers.get("X-Token", ""), self.token)
+
     def do_GET(self):
-        if not self._tok():
-            return self._send(403, "forbidden", "text/plain")
-        self._send(200, PAGE, "text/html")
+        u = urlparse(self.path)
+        if u.path == "/":
+            q = parse_qs(u.query)
+            if not secrets.compare_digest(q.get("t", [""])[0], self.token):
+                return self._send(403, "起動時に表示された URL(?t=...付き)から開いてください。".encode("utf-8"), "text/plain; charset=utf-8")
+            return self._send(200, PAGE.encode("utf-8"), "text/html; charset=utf-8")
+        if not self._auth():
+            return self._send(403, {"error": "認証に失敗しました。"})
+        if u.path == "/api/job":
+            j = JOBS.get(parse_qs(u.query).get("id", [""])[0])
+            return self._send(200 if j else 404, j or {"error": "見つかりません"})
+        if u.path == "/api/config":
+            return self._send(200, {"allowed": [str(n) for n in allowed_networks(self.cfg)], "max_targets": self.cfg["max_targets"]})
+        self._send(404, {"error": "not found"})
+
     def do_POST(self):
-        if not self._tok() or urllib.parse.urlparse(self.path).path != "/run":
-            return self._send(403, json.dumps({"error": "forbidden"}))
+        if not self._auth() or self.path != "/api/scan":
+            return self._send(403, {"error": "認証に失敗しました。"})
         try:
-            d = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
-        except Exception:
-            return self._send(400, json.dumps({"error": "bad request"}))
-        if d.get("consent") is not True:
-            return self._send(200, json.dumps({"error": "Consent checkbox is required."}))
-        cfg = load_config()
-        try:
-            out = run(d.get("targets", ""), bool(d.get("extended")), cfg)
-        except TooMany:
-            out = {"error": f"Too many targets (max {cfg['max_targets']}). Use a smaller range."}
-        except ValueError as e:
-            out = {"error": str(e)}
-        self._send(200, json.dumps(out))
+            n = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(min(n, 65536)) or b"{}")
+        except (ValueError, OSError):
+            return self._send(400, {"error": "リクエストを読めませんでした。"})
+        code, out = start_scan(body, self.cfg)
+        self._send(code, out)
+
+
+PAGE = r"""<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>netcheck</title><style>
+:root{--bg:#f3f6f6;--sf:#fff;--s2:#e9eff0;--ln:#d3dcde;--fg:#18262b;--mu:#566a71;--ac:#0f6f68;--acf:#fff;--crit:#a3262a;--high:#c0511d;--med:#a57400;--low:#3f6f94;--info:#6b7b82;
+--cb:#f8e3e3;--hb:#fbe9dd;--mb:#f8efd2;--lb:#e1ecf5;--ib:#e8edee}
+@media(prefers-color-scheme:dark){:root{--bg:#10191c;--sf:#172326;--s2:#1f2f33;--ln:#2c4045;--fg:#e3eef0;--mu:#97aeb4;--ac:#4fc3b8;--acf:#06211f;--crit:#ff8f8f;--high:#ffa070;--med:#e8c25a;--low:#86b9e3;--info:#9db0b6;--cb:#3a1b1d;--hb:#3a2417;--mb:#352d12;--lb:#17293a;--ib:#222f33;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.7 system-ui,-apple-system,"Hiragino Sans","Yu Gothic",sans-serif;padding:20px 16px 48px}
+.w{max-width:960px;margin:auto;display:flex;flex-direction:column;gap:20px}h1{margin:0;font-size:24px}h2{margin:0;font-size:16px}
+.p{background:var(--sf);border:1px solid var(--ln);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+textarea{width:100%;min-height:90px;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;background:var(--bg);color:var(--fg);border:1px solid var(--ln);border-radius:4px;padding:8px}
+button,select{font:inherit;border:1px solid var(--ln);background:var(--s2);color:var(--fg);border-radius:4px;padding:7px 14px;min-height:36px;cursor:pointer}
+button.pr{background:var(--ac);color:var(--acf);border-color:var(--ac);font-weight:600}button:disabled{opacity:.5;cursor:not-allowed}
+.r{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.n{color:var(--mu);font-size:12.5px}.err{color:var(--crit);font-weight:600}
+.warn{background:var(--mb);color:var(--fg);border-left:4px solid var(--med);padding:10px 12px;border-radius:4px}
+.bar{height:8px;background:var(--s2);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ac);width:0}
+.tag{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:3px}
+.critical{background:var(--cb);color:var(--crit)}.high{background:var(--hb);color:var(--high)}.medium{background:var(--mb);color:var(--med)}.low{background:var(--lb);color:var(--low)}.info{background:var(--ib);color:var(--info)}
+.sv{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px}.sv div{border-radius:4px;padding:6px 10px;display:flex;justify-content:space-between}
+details{border:1px solid var(--ln);border-left-width:5px;border-radius:4px;background:var(--sf)}summary{cursor:pointer;padding:8px 12px}
+.b{padding:4px 14px 12px;border-top:1px solid var(--ln)}.b h4{margin:8px 0 2px;font-size:12.5px;color:var(--ac)}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--ln);padding:4px 8px;text-align:left;font-size:13px;vertical-align:top}.sc{overflow-x:auto}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+</style></head><body><div class="w">
+<header><h1>netcheck</h1><p class="n" style="margin:4px 0 0">自社の IP・ホストに対する、確認だけのチェックです。脆弱性を突く動作はしません。</p></header>
+<div class="p"><h2>1. 対象を入力</h2>
+<label class="n" for="t">IP、範囲(例: 192.168.1.0/28)、ホスト名を、改行かカンマで区切って入力します。</label>
+<textarea id="t" placeholder="192.168.1.10&#10;192.168.1.0/28"></textarea>
+<div class="n" id="al"></div>
+<div class="r"><label>ポート <select id="pt"><option value="standard">標準(約30)</option><option value="extended">拡張(約45)</option></select></label>
+<label><input type="checkbox" id="ad" checked> 管理画面らしき URL の応答も見る(ログインはしない)</label></div>
+<label class="warn"><input type="checkbox" id="cs"> 入力した対象は、自社が管理している(または書面で許可を得た)ものです。</label>
+<div class="r"><button class="pr" id="go">確認を開始</button><span id="msg" class="n" role="status"></span></div>
+<div class="bar" id="bw" hidden><i id="bi"></i></div><div class="n" id="cur"></div></div>
+<div class="p" id="out" hidden><h2>2. 結果</h2><div class="sv" id="sv"></div><div id="res"></div>
+<div class="warn" id="sq"></div><div class="r"><button id="ex">結果を JSON で保存</button></div></div>
+</div><script>
+var TOKEN=new URLSearchParams(location.search).get("t")||"",job=null,last=null;
+var $=function(i){return document.getElementById(i)};
+var SEV=["critical","high","medium","low","info"],LB={critical:"緊急",high:"高",medium:"中",low:"低",info:"情報"};
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function api(p,o){o=o||{};o.headers=Object.assign({"X-Token":TOKEN,"Content-Type":"application/json"},o.headers||{});return fetch(p,o).then(function(r){return r.json().then(function(j){return{ok:r.ok,j:j}})})}
+api("/api/config").then(function(r){if(r.ok)$("al").textContent="許可している範囲: "+r.j.allowed.join(" , ")+"(範囲外は実行しません。追加は config.json で行います)"});
+$("go").onclick=function(){
+  $("msg").className="n";$("msg").textContent="";
+  if(!$("cs").checked){$("msg").className="err";$("msg").textContent="確認のチェックを入れてください。";return}
+  api("/api/scan",{method:"POST",body:JSON.stringify({targets:$("t").value,ports:$("pt").value,admin:$("ad").checked,consent:true})}).then(function(r){
+    if(!r.ok){$("msg").className="err";$("msg").textContent=r.j.error+(r.j.refused?" "+r.j.refused.join(" / "):"");return}
+    job=r.j.id;$("go").disabled=true;$("bw").hidden=false;$("out").hidden=true;poll();
+  });
+};
+function poll(){api("/api/job?id="+job).then(function(r){var j=r.j;last=j;
+  $("bi").style.width=Math.round(j.progress*100)+"%";$("cur").textContent=j.status==="running"?"確認中: "+j.current:"";
+  if(j.status==="running"){setTimeout(poll,800);return}
+  $("go").disabled=false;$("bw").hidden=true;if(j.status==="error"){$("msg").className="err";$("msg").textContent=j.error;return}render(j)})}
+function render(j){
+  var c={};SEV.forEach(function(s){c[s]=0});j.results.forEach(function(h){h.findings.forEach(function(f){c[f.sev]++})});
+  $("sv").innerHTML=SEV.map(function(s){return'<div class="'+s+'"><span>'+LB[s]+'</span><b>'+c[s]+"</b></div>"}).join("");
+  $("res").innerHTML=j.results.map(function(h){
+    var op=h.open.length?'<div class="sc"><table><tr><th>ポート</th><th>表示(バナー)</th></tr>'+h.open.map(function(o){return"<tr><td>"+o.port+"</td><td><code>"+esc(o.banner)+"</code></td></tr>"}).join("")+"</table></div>":'<p class="n">開いているポートはありません(応答なし)。</p>';
+    var fs=h.findings.map(function(f){return'<details class="'+f.sev+'"><summary><span class="tag '+f.sev+'">'+LB[f.sev]+"</span> "+esc(f.title)+'</summary><div class="b">'+(f.detail?"<h4>内容</h4>"+esc(f.detail):"")+"<h4>直し方</h4>"+esc(f.fix)+"</div></details>"}).join("");
+    return'<div style="margin-top:14px"><h2>'+esc(h.name)+' <span class="n">'+esc(h.ip)+"</span></h2>"+op+'<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">'+(fs||'<p class="n">指摘はありません。</p>')+"</div></div>"}).join("");
+  $("sq").textContent=j.sqli_note;$("out").hidden=false;
+}
+$("ex").onclick=function(){if(!last)return;var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(last,null,2)],{type:"application/json"}));a.download="netcheck-"+last.id+".json";a.click()};
+</script></body></html>"""
+
 
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-    srv = HTTPServer(("127.0.0.1", port), H)
-    print(f"Open: http://127.0.0.1:{port}/?t={TOKEN}\nCtrl+C to stop. Log: {LOG}")
+    ap = argparse.ArgumentParser(description="netcheck: 確認だけのネットワークチェック(ブラウザ画面)")
+    ap.add_argument("--port", type=int, default=8765, help="画面の待ち受けポート(既定 8765)")
+    ap.add_argument("--no-browser", action="store_true")
+    a = ap.parse_args()
+    cfg = load_config()
+    Handler.cfg = cfg
+    Handler.token = secrets.token_urlsafe(16)
+    srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
+    url = "http://127.0.0.1:%d/?t=%s" % (a.port, Handler.token)
+    print("netcheck を起動しました。次の URL をブラウザで開いてください(このパソコンだけから開けます):")
+    print(url)
+    print("許可している範囲:", ", ".join(str(n) for n in allowed_networks(cfg)))
+    print("終了は Ctrl+C。実行の記録は", LOG_PATH)
+    log("起動 allowed=%s" % ",".join(str(n) for n in allowed_networks(cfg)))
+    if not a.no_browser:
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception:  # noqa
+            pass
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        pass
+        print("\n終了します。")
+
 
 if __name__ == "__main__":
     main()
