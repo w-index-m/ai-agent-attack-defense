@@ -76,3 +76,135 @@ Gambit レポートの攻撃連鎖（偵察→侵入→統括/事後）を、**�
 - `cvp-readiness.md`: これらを CVP（Defense/Red Team）の統制証拠として束ねる枠組み。
 
 > 本ノートは防御・検知の観点に限定し、攻撃の再現手順や安全機構の回避方法は含めない。
+
+---
+
+# 運用レイヤー（SOC / 検知エンジニア向け）
+
+上の観測点を、**データソース → シグナル → 検知ロジック**に落とす。ルール雛形はベンダ非依存の
+Sigma 風擬似記法（防御用の検知であり、攻撃手順ではない）。閾値は各環境のベースラインに合わせて調整する。
+
+## 1. データソース対応表
+
+| データソース | ここで効く段階 | 主なシグナル |
+|---|---|---|
+| フォワードプロキシ / NetFlow / DNS ログ | 全段・最重要 | LLM API・メッセージング API への外向き通信 |
+| コンテナランタイム監査（Docker events / containerd / Falco / auditd） | 侵入(Cairn)・ツール実行 | 特権 cap / host ネット / 未知イメージの起動 |
+| EDR / プロセステレメトリ（Sysmon / auditd / eBPF） | 侵入・統括 | スキャナ系プロセス、サブエージェント大量生成、連続自動ツール実行 |
+| Web/WAF アクセスログ | 偵察(Strix) | パス列挙、多数 404/403、管理画面プローブ |
+| ホスト永続化（cron / systemd timer / 自動起動） | 統括(Hermes) | 新規スケジュール・サービス |
+| 認証 / 監査ログ | 侵入・事後 | 異常な権限取得・横移動 |
+
+## 2. 検知ルール雛形（Sigma 風・擬似）
+
+**R1. サーバ系ホストから LLM API への外向き通信（最優先）**
+```
+logsource: proxy / dns / netflow
+detection:
+  dest_domain in:
+    - api.openai.com
+    - api.anthropic.com
+    - api.openrouter.ai
+    - api.deepseek.com
+    - "*.openrouter.ai"
+  src_zone: server|production|dmz   # 開発者端末ゾーンは除外
+condition: dest_domain AND src_zone
+note: 正規業務でLLMを使うホストは allowlist 化し、それ以外からの通信を異常として上げる。
+```
+
+**R2. 特権 cap / host ネットのコンテナ起動**
+```
+logsource: container_runtime (docker events / falco / auditd)
+detection:
+  event: container_create|container_start
+  any_of:
+    - cap_add contains: NET_RAW
+    - cap_add contains: NET_ADMIN
+    - network_mode: host
+    - privileged: true
+condition: event AND any_of
+note: cairn-worker-container 等、未知イメージ名との相関で確度を上げる。
+```
+
+**R3. 偵察的 Web アクセス（列挙バースト）**
+```
+logsource: web|waf
+detection:
+  status in: [401,403,404]
+  uri in: ["/admin","/administrator","/wp-login.php","/phpmyadmin/","/manager/html","/console",...]
+  threshold: 同一 src_ip から 60秒に > N 件（N は環境ベースライン）
+condition: status AND (uri OR threshold)
+note: 自動化ブラウザ(CDP/playwright)系UA/フィンガープリントと相関。
+```
+
+**R4. サーバからのメッセージング API 通信（C2 的チャネル）**
+```
+logsource: proxy / dns
+detection:
+  dest_domain in:
+    - api.telegram.org
+    - discord.com / discordapp.com
+    - slack.com / hooks.slack.com
+    - *.signal.org
+  src_zone: server|production
+condition: dest_domain AND src_zone
+note: サーバ/本番ホストからのメッセージング送信は強い異常シグナル。
+```
+
+**R5. 永続化の新規作成**
+```
+logsource: host (auditd / sysmon / file_events)
+detection:
+  any_of:
+    - new cron entry (/etc/cron* , crontab -e)
+    - new systemd timer/service (/etc/systemd/system/*.timer|.service)
+    - new autostart item
+condition: any_of
+note: 自動化エージェントの常駐化。作成プロセス系統を併せて記録。
+```
+
+**R6. 自律エージェントの相関検知（単発では見えないものを束ねる）**
+```
+correlation (時系列・同一アセット or 同一オペレータ):
+  R3 (偵察バースト)  AND
+  R1 (継続的な LLM egress) AND
+  (R2 (特権コンテナ) OR 連続自動ツール実行) AND
+  任意で R4/R5
+window: 数十分〜数時間
+action: 「自律 AI エージェント攻撃」候補として優先度最上位でエスカレーション
+note: 本キャンペーンの本質は“各単体は既知挙動でも、連鎖が速く広い”こと。相関が最大の武器。
+```
+
+## 3. MITRE ATT&CK 対応（検知の棚卸し用）
+
+| 段階 | 代表 Technique | 本ノートの検知 |
+|---|---|---|
+| 偵察 | T1595 Active Scanning / T1046 Network Service Scanning | R3 |
+| 実行・ツール | T1059 など（自動ツール実行） | EDR 連続実行、R2 |
+| C2 | T1071 Application Layer Protocol（メッセージング悪用） | R4 |
+| 永続化 | T1053 Scheduled Task/Job（cron/timer） | R5 |
+| 防御回避 | T1562 Impair Defenses（安全機構の無効化に相当） | ガバナンス検知（※下記） |
+| 探索/横移動 | T1046 / 認証異常 | R2・認証ログ |
+| 持ち出し | T1041 Exfiltration over C2 Channel | R1/R4 と DLP の相関 |
+
+※ T1562 相当（Hermes の「自身の安全フィルタ除去」など）は、ネットワーク/ホストの単純シグナルでは捉えにくい。
+LLM 利用ガバナンス（プロンプト/ツール呼び出しの監査、安全機構の除去・迂回の試行検知）で補う。本ノートは
+その「兆候の存在」を指摘するに留め、具体的な回避手法は扱わない。
+
+## 4. SOC トリアージ手順（優先度順）
+
+1. **R1/R4 ヒット** → 送信元ホストの業務用途を確認。正規でなければ即封じ込め（egress 遮断）＋プロセス/コンテナ調査。
+2. **R2 ヒット** → 起動元・イメージ出所・cap の必要性を確認。未知イメージ＋特権は高確度。
+3. **R3 ヒット** → 対象資産の露出（管理画面・RISKY ポート）を `netcheck` 等で確認し、塞ぐ。
+4. **R5 ヒット** → 永続化を除去し、作成プロセス系統を遡る。
+5. **R6（相関）** → 単発を超えた連鎖として、インシデント化・full IR へ。
+
+## 5. 予防（検知の前段で効く固定策）
+
+- 送信ドメイン **allowlist**（サーバ系からの LLM/メッセージングは既定遮断）。
+- コンテナ: 特権 cap・host ネット・未署名/未知イメージを**ポリシーで禁止**（admission control）。
+- 攻撃面最小化: 管理画面の隔離、DB/サービスをネット直結にしない（`netcheck` の RISKY ポート群）。
+- 決済・機微ページの **CSP**（skimmer/カード窃取コード注入の防止）。
+- LLM 利用の監査・ガバナンス（安全機構の除去/迂回の試行を検知・通報）。
+
+> すべて検知・防御の設計に限定。攻撃の実行手順や安全機構の回避方法は本ノートに含めない。
