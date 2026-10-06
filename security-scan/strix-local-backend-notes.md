@@ -103,3 +103,56 @@ uv run strix -n -t ./ --scan-mode quick --max-budget 10
 - `docker info` 到達不可（ローカル CLI の実スキャンは不可）。
 - `strix cloud login` はネットワークポリシーにより `app.strix.ai` へ 403（プロキシ CONNECT 拒否）。
 - SDK に `unix_local.py` が存在することを確認。
+
+## PoC 結果（実装して検証した）
+
+設計案どおり 2 ファイルにパッチを当て、PoC を実行して成立を確認した。
+パッチ: [`strix-local-poc/strix-local-backend.patch`](strix-local-poc/strix-local-backend.patch)
+検証スクリプト: [`strix-local-poc/poc_local_backend.py`](strix-local-poc/poc_local_backend.py)
+
+### 当てたパッチ（計 2 箇所・~40 行）
+
+1. `strix/runtime/backends.py`: `_unix_local_backend` を追加し `register`（`_BACKENDS["local"]`、
+   `supports_bind_mounts=False`）。
+2. `strix/interface/main.py`: Docker 事前チェック（`check_docker_installed` / `pull_docker_image`）を
+   `settings.runtime.backend == "docker"` のときだけ実行するようゲート。
+
+### 検証 1: バックエンドを直接叩く（LLM 非依存）
+
+`poc_local_backend.py` を `uv run python` で実行した結果:
+
+- `supported_backends()` → `['docker', 'local']`、`get_backend('local')` 解決 OK。
+- `DOCKER_HOST=unix:///nonexistent-docker.sock` にしても **セッション起動成功**
+  （`UnixLocalSandboxSession`）。Docker デーモンに一切触れない。
+- `session.exec(...)` が**ホスト上で**実行される（`uname -a` が実ホスト、`whoami=root`、
+  `python3 --version=3.13.16`）。
+- `LocalDir` で対象ソースが workspace に materialize され、`ls repo` に
+  `netcheck / scripts / security-scan / …` が出現。
+- 対象リポジトリ自身のツール `scripts/summarize.py` をセッション内で実行し完走（exit 0）。
+
+### 検証 2: 実 CLI 配線（`strix -n -t ./ --scan-mode quick`）
+
+`STRIX_RUNTIME_BACKEND=local` で CLI を起動:
+
+- パッチ前: 起動時の Docker 事前チェックで `DOCKER NOT AVAILABLE` により即停止。
+- パッチ後: Docker ゲートを通過し、環境検証 → **LLM プリフライト接続**まで到達。
+  ダミーキーのため `invalid x-api-key` で停止（`api.anthropic.com` への到達自体は成功）。
+  → **残る唯一の前提は有効な LLM API キーのみ**。実キーがあれば検証 1 で実証済みの
+  ローカルセッション起動を経てエージェントループに進む。
+
+### PoC で判明した追加の実挙動（設計メモの補足）
+
+- **base_dir = `Path.cwd()` 制約**: SDK の `LocalDir` 展開は、ソースが CWD 配下でないと
+  `LocalDirReadError (outside_base_dir)` で拒否する（source grant 未指定時）。
+  Strix の正規の使い方 `-t ./`（対象＝カレント）では常に満たされるため実害なし。
+  CWD 外を対象にする場合は source grant の付与か、対象を CWD 配下に置く必要がある。
+- **Docker 事前チェックの無条件実行**: `main.py` の `check_docker_installed` /
+  `pull_docker_image` はバックデンド設定を見ずに走るため、`local` でも上記ゲートが必須。
+- シンボリックリンクは `LocalDir` 展開で非サポート（`symlink_not_supported`）。
+  `.git` などリンクを含むツリーは除外して渡すのが無難。
+
+### 未検証（本 PoC のスコープ外）
+
+- 実 LLM キーでのエンドツーエンドのスキャン完走。
+- caido プロキシ依存フロー（検証ではコード解析系のみ。`proxy` ツールは未使用）。
+- nmap など外部ツールを要する動的スキャン（ホストに未導入）。

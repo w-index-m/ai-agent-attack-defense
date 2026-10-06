@@ -1,0 +1,66 @@
+diff --git a/strix/interface/main.py b/strix/interface/main.py
+index cc3a032..d9242bc 100644
+--- a/strix/interface/main.py
++++ b/strix/interface/main.py
+@@ -482,8 +482,12 @@ def main() -> None:
+     if args.resume_picker:
+         _pick_run_to_resume(args)
+ 
+-    check_docker_installed()
+-    pull_docker_image()
++    # The Docker preflight only applies to the Docker backend. Other runtime
++    # backends (e.g. STRIX_RUNTIME_BACKEND=local) have no daemon to reach, so
++    # gate the check on the configured backend instead of running it always.
++    if load_settings().runtime.backend == "docker":
++        check_docker_installed()
++        pull_docker_image()
+     validate_environment()
+ 
+     # Everything below imports the scan engine; do not race the warm-up thread.
+diff --git a/strix/runtime/backends.py b/strix/runtime/backends.py
+index 0cb2218..94f24db 100644
+--- a/strix/runtime/backends.py
++++ b/strix/runtime/backends.py
+@@ -51,8 +51,42 @@ async def _docker_backend(
+     return client, session
+ 
+ 
++async def _unix_local_backend(
++    *,
++    image: str,
++    manifest: Manifest,
++    exposed_ports: tuple[int, ...],
++    bind_mounts: list[dict[str, Any]] | None = None,
++) -> tuple[Any, Any]:
++    """Bring up a session that runs on the host, with no Docker daemon.
++
++    Uses the openai-agents SDK's bundled ``UnixLocalSandboxClient``, which
++    executes commands directly on the host and uses the host filesystem as the
++    workspace (rooted at ``manifest.root``). ``image`` is ignored (there is no
++    container to pull) and ``bind_mounts`` is unused: this backend is registered
++    with ``supports_bind_mounts=False`` so local sources arrive as manifest
++    entries that the SDK materializes into the workspace.
++
++    Caveat: the host must already carry whatever tools the agent uses (nmap,
++    ffuf, playwright, …) and there is no Caido sidecar, so proxy-dependent
++    flows need Caido started on the host or disabled. Running here removes the
++    container isolation Docker provides — only point it at targets you own.
++    """
++    from agents.sandbox.sandboxes.unix_local import (
++        UnixLocalSandboxClient,
++        UnixLocalSandboxClientOptions,
++    )
++
++    client = UnixLocalSandboxClient()
++    options = UnixLocalSandboxClientOptions(exposed_ports=exposed_ports)
++    session = await client.create(options=options, manifest=manifest)
++    await session.start()
++    return client, session
++
++
+ _BACKENDS: dict[str, SandboxBackend] = {
+     "docker": _docker_backend,
++    "local": _unix_local_backend,
+ }
+ 
+ _BIND_MOUNT_BACKENDS: set[str] = {"docker"}
