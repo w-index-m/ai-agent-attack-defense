@@ -1,0 +1,47 @@
+title: Rapid multi-tool security tooling execution by one parent (AI agent)
+id: 7b1f0a2c-1d3e-4a6b-9c01-r7multitoolex0
+status: experimental
+description: >
+  Detects one parent process (or tool-broker) spawning many distinct security
+  tools within a short window — the behavioral core of autonomous AI pentest
+  agents (E2E agents like PentAGI/Villager, and MCP frameworks like HexStrike
+  that orchestrate 150+ tools). This signal persists even when the agent uses a
+  LOCAL LLM and therefore produces no LLM-API egress (R1). Correlate with R2
+  (Kali/privileged container) and R3 (recon). Tune N to your baseline.
+references:
+  - https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company
+author: ai-agent-attack-defense
+date: 2026/10/07
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_tools:
+    process_name:
+      - 'nmap'
+      - 'ffuf'
+      - 'gobuster'
+      - 'nikto'
+      - 'sqlmap'
+      - 'hydra'
+      - 'nuclei'
+      - 'wpscan'
+      - 'msfconsole'
+      - 'medusa'
+      - 'enum4linux'
+  timeframe: 5m
+  condition: selection_tools | count(process_name) by parent_process_id > 4
+fields:
+  - parent_process_name
+  - parent_process_id
+  - process_name
+  - user
+  - container_id
+falsepositives:
+  - Authorized scanning pipelines / scheduled security scans (allowlist the orchestrator).
+  - A human pentester working fast (correlate with authorization/scope).
+level: medium
+tags:
+  - attack.execution
+  - attack.t1059
+  - attack.t1046
