@@ -24,9 +24,14 @@ date: "2026-10-06"
 ## 収録ドキュメント
 
 1. CVP 適用メモ＆ティア対応表（`cvp-readiness.md`）
-2. 3ツール横断 防御・検知ノート（`defense-detection-notes.md`）
+2. 3ツール横断 防御・検知ノート（`defense-detection-notes.md`）— SOC 向け運用レイヤー（データソース対応、Sigma 風検知ルール雛形、MITRE ATT&CK 対応、トリアージ手順）を含む
 3. Cairn 認可ラボ・ランブック（`cairn-lab/cairn-authorized-lab-runbook.md`）
 4. Strix ローカル実行バックエンド設計・PoC（`strix-local-backend-notes.md`）
+
+**付随リソース（本冊子には全文は載せず、リポジトリに収録）**:
+
+- `security-scan/detections/` — 上記検知ロジック（R1–R5）を実スタック向けに具体化した検知ルール
+  （Sigma / Falco / Datadog）。閾値・allowlist は環境でチューニングする前提の検知コンテンツ。
 
 > 本パッケージは防御・統制の観点に限定し、攻撃の再現手順や安全機構の回避方法は含まない。
 
