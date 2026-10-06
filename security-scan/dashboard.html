@@ -94,8 +94,9 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   <a href="#map">① 攻撃エージェント マップ</a>
   <a href="#cov">② 検知カバレッジ</a>
   <a href="#ctl">③ 予防コントロール</a>
-  <a href="#cvp">④ CVP 対応</a>
-  <a href="#assets">⑤ リポジトリ資産</a>
+  <a href="#gov">④ スキル機構とガバナンス</a>
+  <a href="#cvp">⑤ CVP 対応</a>
+  <a href="#assets">⑥ リポジトリ資産</a>
 </nav>
 
 <!-- ① MAP -->
@@ -205,9 +206,43 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   </ul>
 </section>
 
-<!-- ④ CVP -->
+<!-- ④ SKILLS & GOVERNANCE -->
+<section id="gov">
+  <h2>④ スキル機構とガバナンス <span class="en">Skills & governance / T1562</span></h2>
+  <p class="note">ネットワーク/ホストの検知(R1–R7)では捕まえにくい「エージェント/LLM の使い方そのもの」を統制・監査する層。MITRE <b>T1562（防御の無効化）</b>に対応。</p>
+  <div class="grid c2">
+    <div class="card"><h3>スキルとは／なぜ危険か</h3>
+      <p class="cap" style="line-height:1.6">スキル＝エージェントに後付けする「指示＋ツール権限＋ワークフロー」の束。Hermes は自己改善ループで自動生成・改良する。危険なのは、スキル内容を<b>“信頼された上位の指示＋権限”として取り込む</b>点。Gambit の事例では本体コードを変えず、攻撃用スキル(121中78が攻撃目的)＋<b>自身の安全フィルタを外すスキル</b>を上乗せしただけで司令塔化した。実質「信頼された指示＋権限を外部注入する口」＝<b>サプライチェーン＋プロンプトインジェクション</b>の二重の攻撃面。</p>
+    </div>
+    <div class="card"><h3>ガバナンスが要求すること</h3>
+      <ul class="tight" style="font-size:13px">
+        <li><b>不可変の安全層</b>：安全強制をスキル/モデルの外側で（書き換え不能に）。CVPの“不変の一線”が実例。</li>
+        <li><b>スキル allowlist・出所管理</b>：署名/レビュー済みのみ許可、未知は既定で停止。</li>
+        <li><b>ツール権限の最小化＋ブローカー経由</b>：権限はポリシーが決める。拡大は人の承認。</li>
+        <li><b>改ざん耐性の監査ログ</b>：プロンプト/ツール/スキル/安全設定変更を追記のみで記録。</li>
+        <li><b>高リスク操作は人間承認(HITL)</b>。</li>
+        <li><b>検知と相関(R6)</b>：下の監査イベントを R1/R4/R7 と突き合わせる。</li>
+      </ul>
+    </div>
+  </div>
+  <h3 style="margin:14px 0 2px;font-size:14px">監査イベント G1–G6（ガバナンス層）</h3>
+  <p class="note">ネットワーク/ホストの R1–R7 とは観測点が異なり、<b>アプリ/監査ログ層</b>（エージェント監査ログ・スキルレジストリ・LLM/ツールゲートウェイ・ログ基盤）で見る。</p>
+  <div class="sc"><table><thead>
+    <tr><th>ID</th><th>監査イベント</th><th>データソース</th><th>優先度</th><th>対応</th></tr>
+  </thead><tbody>
+    <tr><td>G1</td><td>スキルの導入・自動生成・自己改変</td><td>エージェント監査ログ / スキルレジストリ</td><td><span class="pri sev-high">高</span></td><td>出所・署名・レビューを確認。未承認は隔離。</td></tr>
+    <tr><td>G2</td><td>安全設定/ガードレールの変更・無効化の試行</td><td>ポリシーゲートウェイ</td><td><span class="pri sev-high">高</span></td><td>外側の安全層で拒否。試行を即エスカレーション。</td></tr>
+    <tr><td>G3</td><td>プロンプト/ツール呼び出しに迂回意図</td><td>LLMゲートウェイ監査</td><td><span class="pri sev-high">高</span></td><td>ガバナンス審査。セッションを保全。</td></tr>
+    <tr><td>G4</td><td>監査ログの欠落・停止</td><td>ログ基盤ヘルス</td><td><span class="pri sev-high">高</span></td><td>ログ自体への攻撃を疑い復旧・保全。</td></tr>
+    <tr><td>G5</td><td>ツール権限の拡大要求/付与</td><td>ツールブローカー監査</td><td><span class="pri sev-med">中</span></td><td>最小権限に照合。拡大は人の承認。</td></tr>
+    <tr><td>G6</td><td>サブエージェント大量スポーン/権限拡大の構成変更</td><td>プロセス/エージェント・テレメトリ</td><td><span class="pri sev-med">中</span></td><td>R7 と相関。</td></tr>
+  </tbody></table></div>
+  <p class="foot">兆候の存在と対応方針のみ。安全機構の回避方法は含めない。詳細は <code>defense-detection-notes.md</code> §7。</p>
+</section>
+
+<!-- ⑤ CVP -->
 <section id="cvp">
-  <h2>④ CVP（Cyber Verification Program）対応 <span class="en">Anthropic</span></h2>
+  <h2>⑤ CVP（Cyber Verification Program）対応 <span class="en">Anthropic</span></h2>
   <p class="note">活動をどのティアで正規化するか。詳細は <code>cvp-readiness.md</code>。</p>
   <div class="tier"><div class="b">Defense Access</div><div>防御（SOC/IR/マルウェア解析/脆弱性検証）。<b>個人研究者も可・審査数日</b>。本リポの防御ツール＋解析＋検知ルールが射程。</div></div>
   <div class="tier"><div class="b">Red Team Access</div><div>認可されたペンテスト（組織のみ・数週間）。Cairn ラボ運用はここ。隔離設計・ランブック・mock検証が統制証拠。</div></div>
@@ -217,7 +252,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 
 <!-- ⑤ ASSETS -->
 <section id="assets">
-  <h2>⑤ リポジトリ資産 <span class="en">Repository assets</span></h2>
+  <h2>⑥ リポジトリ資産 <span class="en">Repository assets</span></h2>
   <div class="grid c2">
     <div class="card"><h3>防御ツール</h3><ul class="tight">
       <li><code>vuln_triage.html</code> — スキャナ結果のトリアージ</li>
