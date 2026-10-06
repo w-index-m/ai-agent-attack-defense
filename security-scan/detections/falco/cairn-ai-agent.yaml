@@ -1,0 +1,69 @@
+# Falco ルール: 自律AIエージェント攻撃ハーネス（Cairn 等）のランタイム検知
+# 検知コンテンツのみ。閾値・allowlist は環境に合わせて調整すること。
+#
+# 配置例: /etc/falco/rules.d/cairn-ai-agent.yaml
+# 注意: マクロ/フィールドは Falco のバージョンに依存。自環境の falco --list で確認。
+
+- list: ai_agent_known_worker_images
+  items:
+    - "ghcr.io/oritera/cairn-worker-container"
+    - "ghcr.io/usestrix/strix-sandbox"
+
+# R2: 特権 / raw-socket / host ネットのコンテナ起動
+- rule: AI Agent Privileged Worker Container Started
+  desc: >
+    Container started with NET_RAW/NET_ADMIN, privileged, or host network —
+    consistent with Cairn/Strix worker sandboxes. Correlate with unknown images.
+  condition: >
+    container_started and container
+    and (thread.cap_permitted contains CAP_NET_RAW
+         or thread.cap_permitted contains CAP_NET_ADMIN
+         or proc.args contains "--privileged"
+         or container.privileged = true
+         or proc.args contains "--network=host"
+         or proc.args contains "--net=host")
+  output: >
+    Privileged/raw-socket/host-net container started
+    (image=%container.image.repository tag=%container.image.tag
+     name=%container.name priv=%container.privileged
+     caps=%thread.cap_permitted cmd=%proc.cmdline)
+  priority: WARNING
+  tags: [container, mitre_execution, T1610, ai_agent]
+
+# R1/R4: コンテナ内プロセスから LLM / メッセージング API への外向き接続
+- list: ai_agent_egress_domains
+  items:
+    - "api.openai.com"
+    - "api.anthropic.com"
+    - "api.openrouter.ai"
+    - "api.deepseek.com"
+    - "api.telegram.org"
+    - "discord.com"
+    - "hooks.slack.com"
+
+- rule: AI Agent Container Outbound To LLM Or Messaging API
+  desc: >
+    Outbound connection from a container to an external LLM or messaging API.
+    High-signal when it originates from a server/worker container that has no
+    approved LLM/ChatOps use. Tune the domain list to an allowlist model.
+  condition: >
+    outbound and container
+    and fd.sip.name in (ai_agent_egress_domains)
+  output: >
+    Container egress to LLM/messaging API
+    (image=%container.image.repository dest=%fd.sip.name:%fd.sport
+     proc=%proc.name cmd=%proc.cmdline)
+  priority: NOTICE
+  tags: [network, mitre_command_and_control, T1071, T1041, ai_agent]
+
+# R5: コンテナ内での永続化（cron / systemd）作成
+- rule: AI Agent Persistence Via Cron Or Systemd
+  desc: Creation of cron/systemd persistence from inside a container or by an agent process.
+  condition: >
+    (open_write or rename) and fd.name pmatch
+      (/etc/cron.*, /var/spool/cron/*, /etc/crontab, /etc/systemd/system/*)
+  output: >
+    Persistence file written (file=%fd.name proc=%proc.name
+     pcmd=%proc.pcmdline container=%container.name)
+  priority: WARNING
+  tags: [persistence, mitre_persistence, T1053, ai_agent]

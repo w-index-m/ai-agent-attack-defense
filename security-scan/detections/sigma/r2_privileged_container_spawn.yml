@@ -1,0 +1,37 @@
+title: Privileged / raw-socket / host-network container started
+id: 7b1f0a2c-1d3e-4a6b-9c01-r2privcontain0
+status: experimental
+description: >
+  Detects container starts granting NET_RAW/NET_ADMIN, running privileged, or
+  joining the host network namespace. Cairn-style worker containers request
+  these for packet crafting/network tooling. Correlate with unknown image
+  names. (Falco is usually the better native source; see ../falco/.)
+references:
+  - https://github.com/oritera/Cairn
+author: ai-agent-attack-defense
+date: 2026/10/06
+logsource:
+  product: linux
+  service: auditd
+detection:
+  selection_caps:
+    capabilities|contains:
+      - 'cap_net_raw'
+      - 'cap_net_admin'
+  selection_privileged:
+    privileged: true
+  selection_hostnet:
+    network_mode: 'host'
+  condition: selection_caps or selection_privileged or selection_hostnet
+fields:
+  - image
+  - container_name
+  - capabilities
+  - network_mode
+falsepositives:
+  - Legitimate network tooling / CNI / monitoring agents (allowlist images).
+level: medium
+tags:
+  - attack.execution
+  - attack.privilege_escalation
+  - attack.t1610

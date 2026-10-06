@@ -1,0 +1,18 @@
+{
+  "name": "[R3] Admin/sensitive path enumeration burst",
+  "type": "log_detection",
+  "message": "A single source produced a burst of 4xx responses against admin/sensitive endpoints — reconnaissance (Strix-style). Confirm the source is not an approved scanner; check the targeted assets' exposure and close it.\n\nTune: adjust the count threshold to your baseline; allowlist approved scanner IPs.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1595", "tactic:reconnaissance"],
+  "queries": [
+    {
+      "name": "recon_4xx",
+      "query": "source:(nginx OR apache OR http OR waf) @http.status_code:(401 OR 403 OR 404) @http.url_details.path:(*\\/admin* OR *wp-login* OR *phpmyadmin* OR *manager\\/html* OR *\\/console*)",
+      "aggregation": "count",
+      "groupByFields": ["@network.client.ip"]
+    }
+  ],
+  "cases": [
+    { "name": "Enumeration burst", "status": "medium", "condition": "recon_4xx > 30" }
+  ],
+  "options": { "evaluationWindow": 60, "keepAlive": 1800, "maxSignalDuration": 7200 }
+}

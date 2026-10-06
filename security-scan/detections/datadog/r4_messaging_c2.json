@@ -1,0 +1,18 @@
+{
+  "name": "[R4] Server-zone host contacting a messaging API (possible C2)",
+  "type": "log_detection",
+  "message": "Outbound to a messaging platform API (Telegram/Discord/Slack/Signal) from a server/production host. Hermes-style orchestration can use messaging as a C2/report channel. Verify against approved ChatOps integrations; if none, treat as suspected C2 and contain.\n\nTune: define @network.client.zone; allowlist approved alerting integrations.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1071", "tactic:command-and-control"],
+  "queries": [
+    {
+      "name": "messaging_egress",
+      "query": "source:(proxy OR firewall OR dns) @network.destination.name:(api.telegram.org OR discord.com OR discordapp.com OR hooks.slack.com OR slack.com) @network.client.zone:(server OR production OR dmz)",
+      "aggregation": "count",
+      "groupByFields": ["@network.client.ip"]
+    }
+  ],
+  "cases": [
+    { "name": "Messaging egress from server zone", "status": "high", "condition": "messaging_egress > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}
