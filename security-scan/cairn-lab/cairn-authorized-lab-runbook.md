@@ -141,6 +141,20 @@ UV_DEFAULT_INDEX="https://pypi.org/simple" uv run --project cairn cairn dispatch
 
 ---
 
+## この構成の実設定（local / ローカルLLM / 隔離ネット）
+
+選択した構成（**ローカルLLM・egress ゼロ / local 実行 / 既定の隔離ネット 10.77.0.0/24**）の実ファイルを同梱：
+
+- [`dispatch.lab.yaml`](dispatch.lab.yaml) — そのまま使える local 実行設定。**埋めるのは 2 値だけ**：
+  `workers[].env.CODEX_MODEL`（ローカルモデル名）と `CODEX_BASE_URL`（ローカルLLM の OpenAI 互換 URL）。
+- [`run-lab.sh`](run-lab.sh) — server 起動 → project 作成（origin=認可ラボ対象）→ dispatcher 起動 の手順ヘルパー。
+  `TARGET`/`GOAL`/`CAIRN_DIR` を環境変数で上書き可能。
+
+> local 実行はワーカーを**ホストプロセス**で動かし、ホストの `codex` CLI を再利用する（サンドボックスなし）。
+> したがって **dispatcher ホスト自体を隔離セグメントに置く**こと（`container.network_mode` ではなくホスト配置で隔離）。
+> ローカルLLM のエンドポイントも隔離ネット内 or localhost に限定し、外部プロキシを設定しないことで egress ゼロを保つ。
+> `codex` CLI がホストに導入済み・PATH 上にあることが前提。
+
 ## 参考（リポジトリ内）
 - `dispatch.example.yaml` — container モードの完全な設定例
 - `dispatch.local.example.yaml` — local モード（ホスト実行、CLI 再利用）
