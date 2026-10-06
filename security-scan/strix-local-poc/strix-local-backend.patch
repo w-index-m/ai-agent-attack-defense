@@ -18,10 +18,10 @@ index cc3a032..d9242bc 100644
  
      # Everything below imports the scan engine; do not race the warm-up thread.
 diff --git a/strix/runtime/backends.py b/strix/runtime/backends.py
-index 0cb2218..94f24db 100644
+index 0cb2218..30128fd 100644
 --- a/strix/runtime/backends.py
 +++ b/strix/runtime/backends.py
-@@ -51,8 +51,42 @@ async def _docker_backend(
+@@ -51,12 +51,55 @@ async def _docker_backend(
      return client, session
  
  
@@ -51,6 +51,10 @@ index 0cb2218..94f24db 100644
 +        UnixLocalSandboxClientOptions,
 +    )
 +
++    # Part of the SandboxBackend signature (callers pass by keyword) but not
++    # meaningful here: there is no image to pull and no container to bind into.
++    _ = (image, bind_mounts)
++
 +    client = UnixLocalSandboxClient()
 +    options = UnixLocalSandboxClientOptions(exposed_ports=exposed_ports)
 +    session = await client.create(options=options, manifest=manifest)
@@ -64,3 +68,183 @@ index 0cb2218..94f24db 100644
  }
  
  _BIND_MOUNT_BACKENDS: set[str] = {"docker"}
+ 
++# Backends that ship the in-container Caido proxy sidecar. Only these get the
++# proxy bootstrap (exposed port, env vars, login) at session bring-up; others
++# (e.g. ``local``) run without Caido and the proxy tools report unavailable.
++_CAIDO_BACKENDS: set[str] = {"docker"}
++
+ 
+ def get_backend(name: str) -> SandboxBackend:
+     """Return the backend factory for ``name`` or raise.
+@@ -81,6 +124,7 @@ def register_backend(
+     backend: SandboxBackend,
+     *,
+     supports_bind_mounts: bool = False,
++    supports_caido: bool = False,
+ ) -> None:
+     """Register a custom backend under ``name``.
+ 
+@@ -89,18 +133,34 @@ def register_backend(
+     an existing name overwrites the prior entry. ``supports_bind_mounts``
+     defaults to False: a remote runtime cannot see the caller's filesystem, so
+     it is handed local sources as manifest entries to upload instead.
++    ``supports_caido`` defaults to False: only a backend that ships the Caido
++    sidecar gets the proxy bootstrap; others run without it and the proxy tools
++    degrade to "unavailable".
+     """
+     _BACKENDS[name] = backend
+     if supports_bind_mounts:
+         _BIND_MOUNT_BACKENDS.add(name)
+     else:
+         _BIND_MOUNT_BACKENDS.discard(name)
+-    logger.info("Registered sandbox backend: %s (bind mounts: %s)", name, supports_bind_mounts)
++    if supports_caido:
++        _CAIDO_BACKENDS.add(name)
++    else:
++        _CAIDO_BACKENDS.discard(name)
++    logger.info(
++        "Registered sandbox backend: %s (bind mounts: %s, caido: %s)",
++        name,
++        supports_bind_mounts,
++        supports_caido,
++    )
+ 
+ 
+ def backend_supports_bind_mounts(name: str) -> bool:
+     return name in _BIND_MOUNT_BACKENDS
+ 
+ 
++def backend_supports_caido(name: str) -> bool:
++    return name in _CAIDO_BACKENDS
++
++
+ def supported_backends() -> list[str]:
+     return sorted(_BACKENDS)
+diff --git a/strix/runtime/session_manager.py b/strix/runtime/session_manager.py
+index a8447eb..ac06609 100644
+--- a/strix/runtime/session_manager.py
++++ b/strix/runtime/session_manager.py
+@@ -16,7 +16,11 @@ from agents.sandbox.entries import BaseEntry, LocalDir
+ from agents.sandbox.manifest import Environment, Manifest
+ 
+ from strix.config import load_settings
+-from strix.runtime.backends import backend_supports_bind_mounts, get_backend
++from strix.runtime.backends import (
++    backend_supports_bind_mounts,
++    backend_supports_caido,
++    get_backend,
++)
+ from strix.runtime.caido_bootstrap import bootstrap_caido
+ from strix.runtime.caido_handle import CaidoBootstrapHandle
+ 
+@@ -296,25 +300,34 @@ async def create_or_reuse(
+         build_extra_file_archive(extra_files, local_sources) if extra_files else None
+     )
+ 
+-    # Caido runs as an in-container sidecar; HTTP(S) traffic from any
+-    # process started via ``session.exec`` (the SDK's Shell tool, etc.)
+-    # picks up these env vars automatically. ``NO_PROXY`` keeps the
+-    # agent-browser CDP daemon's localhost traffic from looping back
+-    # through Caido.
++    # Caido runs as an in-container sidecar, only on backends that ship it.
++    # When the backend has no Caido (e.g. the ``local`` host backend), skip the
++    # proxy entirely: do not point HTTP(S) traffic at a dead port, do not expose
++    # the Caido port, and do not bootstrap it. The proxy tools then degrade to
++    # "client unavailable" (caido_client is None) instead of breaking bring-up.
++    use_caido = backend_supports_caido(backend_name)
+     container_caido_url = f"http://127.0.0.1:{_CONTAINER_CAIDO_PORT}"
+-    manifest = Manifest(
+-        entries=entries,
+-        environment=Environment(
+-            value={
+-                "PYTHONUNBUFFERED": "1",
+-                "HOST_GATEWAY": "host.docker.internal",
+-                **_host_identity_env(),
++    environment: dict[str, str] = {
++        "PYTHONUNBUFFERED": "1",
++        "HOST_GATEWAY": "host.docker.internal",
++        **_host_identity_env(),
++    }
++    if use_caido:
++        # HTTP(S) traffic from any process started via ``session.exec`` (the
++        # SDK's Shell tool, etc.) picks up these env vars automatically.
++        # ``NO_PROXY`` keeps the agent-browser CDP daemon's localhost traffic
++        # from looping back through Caido.
++        environment.update(
++            {
+                 "http_proxy": container_caido_url,
+                 "https_proxy": container_caido_url,
+                 "ALL_PROXY": container_caido_url,
+                 "NO_PROXY": "localhost,127.0.0.1",
+-            },
+-        ),
++            }
++        )
++    manifest = Manifest(
++        entries=entries,
++        environment=Environment(value=environment),
+     )
+ 
+     logger.info(
+@@ -327,7 +340,7 @@ async def create_or_reuse(
+     client, session = await backend(
+         image=image,
+         manifest=manifest,
+-        exposed_ports=(_CONTAINER_CAIDO_PORT,),
++        exposed_ports=(_CONTAINER_CAIDO_PORT,) if use_caido else (),
+         bind_mounts=bind_mounts,
+     )
+ 
+@@ -339,26 +352,32 @@ async def create_or_reuse(
+             await _discard_session(client, session)
+             raise
+ 
+-    report("Setting up the proxy")
+-    caido_endpoint = await session.resolve_exposed_port(_CONTAINER_CAIDO_PORT)
+-    scheme = "https" if caido_endpoint.tls else "http"
+-    host_caido_url = f"{scheme}://{caido_endpoint.host}:{caido_endpoint.port}"
+-    logger.debug("Caido host endpoint resolved: %s", host_caido_url)
+-
+-    # The Caido login + project setup polls the guest for a couple of seconds
+-    # and nothing needs the client before the first proxy tool call, so it
+-    # runs concurrently with the rest of scan start; consumers resolve the
+-    # handle at first use (see CaidoBootstrapHandle).
+-    caido_client = CaidoBootstrapHandle(
+-        asyncio.create_task(
+-            bootstrap_caido(
+-                session,
+-                host_url=host_caido_url,
+-                container_url=container_caido_url,
+-            ),
+-            name=f"caido-bootstrap-{scan_id}",
++    caido_client: CaidoBootstrapHandle | None = None
++    if use_caido:
++        report("Setting up the proxy")
++        caido_endpoint = await session.resolve_exposed_port(_CONTAINER_CAIDO_PORT)
++        scheme = "https" if caido_endpoint.tls else "http"
++        host_caido_url = f"{scheme}://{caido_endpoint.host}:{caido_endpoint.port}"
++        logger.debug("Caido host endpoint resolved: %s", host_caido_url)
++
++        # The Caido login + project setup polls the guest for a couple of
++        # seconds and nothing needs the client before the first proxy tool
++        # call, so it runs concurrently with the rest of scan start; consumers
++        # resolve the handle at first use (see CaidoBootstrapHandle).
++        caido_client = CaidoBootstrapHandle(
++            asyncio.create_task(
++                bootstrap_caido(
++                    session,
++                    host_url=host_caido_url,
++                    container_url=container_caido_url,
++                ),
++                name=f"caido-bootstrap-{scan_id}",
++            )
++        )
++    else:
++        logger.info(
++            "Backend %r has no Caido sidecar; proxy tools will be unavailable", backend_name
+         )
+-    )
+ 
+     bundle = {
+         "client": client,

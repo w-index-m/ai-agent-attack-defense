@@ -110,12 +110,17 @@ uv run strix -n -t ./ --scan-mode quick --max-budget 10
 パッチ: [`strix-local-poc/strix-local-backend.patch`](strix-local-poc/strix-local-backend.patch)
 検証スクリプト: [`strix-local-poc/poc_local_backend.py`](strix-local-poc/poc_local_backend.py)
 
-### 当てたパッチ（計 2 箇所・~40 行）
+### 当てたパッチ（3 ファイル）
 
-1. `strix/runtime/backends.py`: `_unix_local_backend` を追加し `register`（`_BACKENDS["local"]`、
-   `supports_bind_mounts=False`）。
+1. `strix/runtime/backends.py`: `_unix_local_backend` を追加し `_BACKENDS["local"]` に登録。
+   さらに **caido 対応をバックエンド単位で持つレジストリ** `_CAIDO_BACKENDS`（既定 `{"docker"}`）と
+   `backend_supports_caido()` を追加。`register_backend` に `supports_caido` 引数を追加。
 2. `strix/interface/main.py`: Docker 事前チェック（`check_docker_installed` / `pull_docker_image`）を
    `settings.runtime.backend == "docker"` のときだけ実行するようゲート。
+3. `strix/runtime/session_manager.py`: `create_or_reuse` の **caido 結合をバックエンド単位でゲート**。
+   caido 非対応バックエンド（`local`）では (a) caido プロキシ env（`http_proxy`/`https_proxy`/`ALL_PROXY`）を
+   注入しない、(b) `exposed_ports=()`、(c) `resolve_exposed_port` と `bootstrap_caido` をスキップ、
+   (d) `caido_client=None`。proxy ツールは既存の graceful-degradation（`_ctx_client` が None →「利用不可」）に乗る。
 
 ### 検証 1: バックエンドを直接叩く（LLM 非依存）
 
@@ -140,6 +145,19 @@ uv run strix -n -t ./ --scan-mode quick --max-budget 10
   → **残る唯一の前提は有効な LLM API キーのみ**。実キーがあれば検証 1 で実証済みの
   ローカルセッション起動を経てエージェントループに進む。
 
+### 検証 3: caido 非依存（`create_or_reuse` を `local` で直接呼ぶ）
+
+`poc_caido_free.py` を実行した結果:
+
+- `backend_supports_caido('local')=False` / `('docker')=True`。
+- `create_or_reuse(backend=local)` が **caido bootstrap を呼ばずに**セッションを返す。
+- `bundle["caido_client"] is None`（proxy ツールは「利用不可」に degrade。クラッシュしない）。
+- セッション内に caido プロキシ env が**注入されていない**（`echo $http_proxy $ALL_PROXY` が空）。
+- 対象ソースの materialize と `session.exec` は正常。
+
+→ これで `local` バックエンドは **caido サイドカー無しで完結**する。コード解析系スキャン
+（`proxy` ツールを使わないフロー）なら、追加の外部依存なしに動かせる。
+
 ### PoC で判明した追加の実挙動（設計メモの補足）
 
 - **base_dir = `Path.cwd()` 制約**: SDK の `LocalDir` 展開は、ソースが CWD 配下でないと
@@ -154,5 +172,6 @@ uv run strix -n -t ./ --scan-mode quick --max-budget 10
 ### 未検証（本 PoC のスコープ外）
 
 - 実 LLM キーでのエンドツーエンドのスキャン完走。
-- caido プロキシ依存フロー（検証ではコード解析系のみ。`proxy` ツールは未使用）。
+- 動的スキャン（live_test）で `proxy` ツールを使うフロー。`local` では caido が無いため
+  トラフィック捕捉系は使えない（コード解析系に限定すれば問題なし）。
 - nmap など外部ツールを要する動的スキャン（ホストに未導入）。
