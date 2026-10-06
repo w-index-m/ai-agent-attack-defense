@@ -109,11 +109,26 @@ uv run --project cairn cairn dispatch --config dispatch.yaml
 
 `type: mock` ワーカーは LLM も実コマンドも使わず、確率的にダミーの Fact/Intent を出すだけ。`execution: local` にすればコンテナも不要（ホストの `python3` サブプロセスで動く）。実標的に向ける前の配線確認に最適。
 
-- `dispatch_mock.yaml` をベースに `runtime.execution: local` を足した設定で `cairn serve` + `cairn dispatch` を起動。
-- `POST /projects` で**到達先の無いダミー origin**（例: `origin: "mock target"`）を登録。
-- fact-intent グラフが OODA で成長していくのを UI/API で観察。**どこへもパケットは飛ばない**。
+検証済み設定: [`dispatch_mock_local.yaml`](dispatch_mock_local.yaml)（`dispatch_mock.yaml` に `runtime.execution: local` + `worker_healthcheck: disabled` を足し、`container:` を除去したもの）。
 
-> この mock スモークは本 Claude セッションの sandbox でも技術的には実行可能（Docker/LLM 不要）。本番の exploitation はラボ側のみ。
+```bash
+# 依存は標準 PyPI から（Cairn の既定は aliyun ミラー固定なので上書き）
+UV_DEFAULT_INDEX="https://pypi.org/simple" uv sync --project cairn
+
+# 1) サーバ
+UV_DEFAULT_INDEX="https://pypi.org/simple" uv run --project cairn cairn serve --host 127.0.0.1 --port 8000
+
+# 2) 到達先の無いダミー project（title は必須）
+curl -s -X POST http://127.0.0.1:8000/projects -H 'Content-Type: application/json' \
+  -d '{"title":"mock-smoke","origin":"mock target (no network)","goal":"mock goal","bootstrap_enabled":true}'
+
+# 3) mock ディスパッチャ（ホストプロセス・攻撃なし）
+UV_DEFAULT_INDEX="https://pypi.org/simple" uv run --project cairn cairn dispatch --config dispatch_mock_local.yaml
+```
+
+- fact-intent グラフが OODA で成長していくのを `GET /projects/{id}` / static UI で観察。**どこへもパケットは飛ばない**。
+
+> **この環境で検証済み（2026-10-06）**: 上記手順で `cairn serve` 起動 → `proj_001` 作成（`origin`/`goal` の 2 Fact）→ mock ディスパッチャ起動で、OODA ループが bootstrap→reason→explore を回し、`f001–f003` のダミー Fact と i001–i005 の Intent を生成。ディスパッチャログに外部 URL/接続は 0 件。**Docker/LLM/標的すべて不要**で完走した。本番の exploitation はラボ側のみ。
 
 ---
 
