@@ -1,0 +1,419 @@
+<title>脆弱性トリアージ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: 診断結果の貼り付け → 件数と攻撃連鎖の対応 → 優先度順の対応リスト。一列で上から下へ読む実務画面 */
+:root{
+  --bg:#f3f6f6; --surface:#ffffff; --surface2:#e9eff0; --line:#d3dcde;
+  --fg:#18262b; --muted:#566a71; --accent:#0f6f68; --accent-fg:#ffffff;
+  --crit:#a3262a; --high:#c0511d; --med:#a57400; --low:#3f6f94; --info:#6b7b82;
+  --crit-bg:#f8e3e3; --high-bg:#fbe9dd; --med-bg:#f8efd2; --low-bg:#e1ecf5; --info-bg:#e8edee;
+  --chain:#7a2e8a; --chain-bg:#efe3f3;
+  --font-display:"Zen Kaku Gothic New","Noto Sans JP",system-ui,sans-serif;
+  --font-body:"Noto Sans JP",system-ui,-apple-system,"Hiragino Sans","Yu Gothic",sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10191c; --surface:#172326; --surface2:#1f2f33; --line:#2c4045;
+    --fg:#e3eef0; --muted:#97aeb4; --accent:#4fc3b8; --accent-fg:#06211f;
+    --crit:#ff8f8f; --high:#ffa070; --med:#e8c25a; --low:#86b9e3; --info:#9db0b6;
+    --crit-bg:#3a1b1d; --high-bg:#3a2417; --med-bg:#352d12; --low-bg:#17293a; --info-bg:#222f33;
+    --chain:#d9a0e8; --chain-bg:#321f3a; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10191c; --surface:#172326; --surface2:#1f2f33; --line:#2c4045;
+  --fg:#e3eef0; --muted:#97aeb4; --accent:#4fc3b8; --accent-fg:#06211f;
+  --crit:#ff8f8f; --high:#ffa070; --med:#e8c25a; --low:#86b9e3; --info:#9db0b6;
+  --crit-bg:#3a1b1d; --high-bg:#3a2417; --med-bg:#352d12; --low-bg:#17293a; --info-bg:#222f33;
+  --chain:#d9a0e8; --chain-bg:#321f3a; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.7;padding-inline:16px;padding-block:20px 48px;margin:0}
+.wrap{max-width:980px;margin-inline:auto;display:flex;flex-direction:column;gap:24px}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;line-height:1.35}
+h1{font-size:26px}
+h2{font-size:17px}
+h3{font-size:15px}
+p{margin:0}
+.lead{color:var(--muted);margin-top:6px;max-width:62ch}
+section{display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+textarea{width:100%;min-height:120px;resize:vertical;font:12px/1.5 var(--font-mono);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,.btn{font:inherit;font-weight:500;border:1px solid var(--line);background:var(--surface2);color:var(--fg);border-radius:4px;padding:7px 14px;cursor:pointer;min-height:36px}
+button.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=search],select{font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:6px 10px;min-height:36px}
+input[type=file]{font:inherit;max-width:100%}
+.note{color:var(--muted);font-size:12.5px}
+.tag{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:3px;white-space:nowrap}
+.src{display:flex;flex-wrap:wrap;gap:6px}
+.src .tag{background:var(--surface2);border:1px solid var(--line);font-weight:500}
+.err{color:var(--crit);font-weight:500}
+.sevbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.sevcell{border-radius:4px;padding:8px 12px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.sevcell b{font-family:var(--font-mono);font-size:22px;font-weight:500}
+.s-critical{background:var(--crit-bg);color:var(--crit)}
+.s-high{background:var(--high-bg);color:var(--high)}
+.s-medium{background:var(--med-bg);color:var(--med)}
+.s-low{background:var(--low-bg);color:var(--low)}
+.s-info{background:var(--info-bg);color:var(--info)}
+.chain{display:flex;flex-direction:column;gap:6px}
+.step{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface)}
+.step .n{font-family:var(--font-mono);color:var(--muted)}
+.step.hit{background:var(--chain-bg);border-color:var(--chain)}
+.step.hit .cnt{color:var(--chain);font-weight:700}
+.step .cnt{font-family:var(--font-mono);color:var(--muted)}
+.filters{display:flex;flex-wrap:wrap;gap:8px}
+.filters input[type=search]{flex:1 1 200px;min-width:0}
+.list{display:flex;flex-direction:column;gap:8px}
+details.f{background:var(--surface);border:1px solid var(--line);border-left-width:5px;border-radius:4px}
+details.f.s-critical{border-left-color:var(--crit)} details.f.s-high{border-left-color:var(--high)}
+details.f.s-medium{border-left-color:var(--med)} details.f.s-low{border-left-color:var(--low)} details.f.s-info{border-left-color:var(--info)}
+details.f{color:var(--fg)}
+details.f.s-critical,details.f.s-high,details.f.s-medium,details.f.s-low,details.f.s-info{background:var(--surface)}
+summary{list-style:none;cursor:pointer;padding:10px 12px;display:grid;grid-template-columns:1fr;gap:4px}
+summary::-webkit-details-marker{display:none}
+.sline{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ttl{font-weight:700;overflow-wrap:anywhere}
+.loc{font-family:var(--font-mono);font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.pri-now{background:var(--crit);color:var(--surface)}
+.pri-week{background:var(--high);color:var(--surface)}
+.pri-plan{background:var(--surface2);color:var(--muted)}
+.chaintag{background:var(--chain-bg);color:var(--chain)}
+.body{padding:4px 14px 14px;display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line)}
+.body h4{margin:8px 0 2px;font-size:12.5px;color:var(--accent);letter-spacing:.04em;font-family:var(--font-display)}
+.body ul{margin:0;padding-left:1.2em}
+.body li{margin:2px 0}
+.raw{font-family:var(--font-mono);font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:8px;overflow-x:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.empty{padding:20px;text-align:center;color:var(--muted)}
+.plan{max-height:260px}
+.foot{color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:12px}
+@media (min-width:640px){ summary{grid-template-columns:1fr auto;align-items:start} }
+@media (prefers-reduced-motion:no-preference){ details.f{transition:border-color .15s} }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>脆弱性トリアージ</h1>
+    <p class="lead">Semgrep、Trivy、gitleaks の診断結果(JSON)を貼ると、優先度順に並べて、直し方と、今回の攻撃連鎖との関係を表示します。</p>
+  </header>
+
+  <section aria-labelledby="h-in">
+    <h2 id="h-in">1. 診断結果を取り込む</h2>
+    <div class="panel">
+      <label for="paste" class="note">JSON を貼り付けるか、ファイルを選びます。ツールの種類は自動で判別します。複数回の取り込みは合算されます。</label>
+      <textarea id="paste" placeholder='例: semgrep --json / trivy fs --format json / gitleaks detect --report-format json の出力'></textarea>
+      <div class="row">
+        <button class="primary" id="btn-parse" type="button">取り込む</button>
+        <label class="btn" for="file">ファイルを選ぶ</label>
+        <input id="file" type="file" accept=".json,application/json" multiple hidden>
+        <button id="btn-sample" type="button">サンプルを読み込む</button>
+        <button id="btn-clear" type="button">全部消す</button>
+      </div>
+      <div id="msg" class="note" role="status"></div>
+      <div id="sources" class="src"></div>
+      <p class="note">解析はこのページの中だけで行われ、診断結果は外部へ送信されません。秘密情報(gitleaks の検出値)は先頭数文字だけに伏せて表示します。</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-sum">
+    <h2 id="h-sum">2. 全体像</h2>
+    <div class="panel">
+      <div id="sevbar" class="sevbar"></div>
+      <div id="summary-note" class="note"></div>
+    </div>
+    <div class="panel">
+      <h3>今回の攻撃連鎖(Gambit 報告の 1 件)との対応</h3>
+      <p class="note">診断結果のうち、攻撃者が実際に突いた種類の弱点に当たるものを数えています。当たるものは優先度を引き上げます。</p>
+      <div id="chain" class="chain"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-list">
+    <h2 id="h-list">3. 対応リスト(優先度順)</h2>
+    <div class="filters">
+      <input id="q" type="search" placeholder="ファイル名・ルール名で絞り込み" aria-label="絞り込み">
+      <select id="f-sev" aria-label="重大度"><option value="">重大度: すべて</option><option value="critical">緊急</option><option value="high">高</option><option value="medium">中</option><option value="low">低</option><option value="info">情報</option></select>
+      <select id="f-tool" aria-label="ツール"><option value="">ツール: すべて</option><option value="semgrep">Semgrep</option><option value="trivy">Trivy</option><option value="gitleaks">gitleaks</option></select>
+      <select id="f-chain" aria-label="攻撃連鎖"><option value="">攻撃連鎖: すべて</option><option value="1">連鎖に関係するもののみ</option></select>
+    </div>
+    <div id="list" class="list"></div>
+  </section>
+
+  <section aria-labelledby="h-plan">
+    <h2 id="h-plan">4. 対応計画のテキスト</h2>
+    <div class="panel">
+      <p class="note">表示中の指摘を、チケットや共有に貼れるテキストにします。</p>
+      <div class="row"><button id="btn-copy" type="button">コピーする</button><span id="copymsg" class="note" role="status"></span></div>
+      <textarea id="plan" class="plan" readonly aria-label="対応計画のテキスト"></textarea>
+    </div>
+  </section>
+
+  <p class="foot">対応方針は一般的な指針です。自社の構成に合わせて確認してください。診断してよい対象は、自社が管理しているものか、書面で許可を得たものだけです。</p>
+</div>
+
+<script>
+(function(){
+"use strict";
+var SEV_ORDER=["critical","high","medium","low","info"];
+var SEV_LABEL={critical:"緊急",high:"高",medium:"中",low:"低",info:"情報"};
+var SEV_W={critical:4,high:3,medium:2,low:1,info:0};
+
+var CHAIN=[
+ "ログイン画面の SQL インジェクション",
+ "OTP が DB に平文で保存(MFA 回避)",
+ "管理画面のアップロードに拡張子検証なし",
+ "sudo がパスワードなしで実行可",
+ "NFS 設定不備と、設定ファイル内の認証情報",
+ "Secrets Manager の全件取得(IAM が広すぎる)",
+ "カード番号の暗号鍵が同じ環境から取得可"
+];
+
+var RULES=[
+ {id:"sqli",re:/sql[-_ ]?inject|sqli|tainted[-_]?sql|sql.*(concat|format|string)|raw[-_ ]?query|execute\(.*%|string[-_]?concat/i,
+  label:"SQL インジェクション",chain:[1],
+  why:"入力値が SQL 文に直接つながっています。ログイン画面や検索で悪用されると、DB の中身の読み出しや認証の回避につながります。今回の連鎖の入口がこの種類でした。",
+  fix:["文字列連結をやめ、プレースホルダ(パラメータ化クエリ)にする","ORM を使う場合も、生のクエリ記述(raw / execute)に変数を埋め込まない","DB 接続用のアカウントは、必要なテーブルへの最小権限にする"],
+  verify:"同じパターンが他の場所にないか、Semgrep のルールで全リポジトリを検索する。修正後に、同じ入力で再テストする。"},
+ {id:"upload",re:/upload|unrestricted[-_ ]?file|file[-_ ]?type|extension|multipart|content[-_]?type.*(valid|check)/i,
+  label:"ファイルアップロードの検証不足",chain:[3],
+  why:"拡張子や中身を検証せずに受け取ると、サーバー上で動くファイル(Web シェルなど)を置かれ、任意のコマンド実行につながります。",
+  fix:["許可する拡張子を許可リスト方式で決め、中身(MIME・先頭バイト)も検証する","保存先は公開領域の外にし、実行権限を付けない","ファイル名は自分で生成し直す(元の名前を使わない)"],
+  verify:"画像以外のファイル(.php、.jsp など)を管理画面から上げて、拒否されることを確認する。"},
+ {id:"nfs",re:/no[-_]?root[-_]?squash|\bnfs\b/i,
+  label:"NFS 共有の設定不備",chain:[5],
+  why:"no_root_squash があると、共有先の root 権限がそのまま通り、サーバーの権限奪取に使われます。",
+  fix:["no_root_squash を外し、root_squash にする","共有できる相手の IP を限定し、読み取り専用で足りるものは ro にする"],
+  verify:"/etc/exports を確認し、他のサーバーから root で書き込めないことを確認する。"},
+ {id:"sudo",re:/sudo|nopasswd/i,
+  label:"sudo の権限が広すぎる",chain:[4],
+  why:"パスワードなしで sudo が使えると、Web アプリの権限を奪われた後、すぐに root まで上がられます。",
+  fix:["NOPASSWD を廃止し、必要なコマンドだけを個別に許可する","Web アプリの実行ユーザーには sudo 権限を与えない"],
+  verify:"sudo -l を実行ユーザーで実行し、許可の範囲を確認する。"},
+ {id:"iam",re:/\biam\b|secretsmanager|secrets[-_ ]?manager|wildcard|"?\*"?:\s*"?\*|admin(istrator)?[-_ ]?access|iam[-_]?policy|s3.*(public|acl)|public[-_]?access/i,
+  label:"クラウド権限(IAM)が広すぎる",chain:[6],
+  why:"権限が広いと、1 台が破られただけで、Secrets Manager の全件取得など、クラウド全体の秘密情報に届きます。",
+  fix:["* を使った許可をやめ、必要なリソースとアクションだけに絞る","Secrets Manager は、アプリごとに必要な秘密 1 つだけを許可する","大量の取得を検知する(CloudTrail のアラート)"],
+  verify:"IAM Access Analyzer などで、使われていない権限と、外部に公開されているものを洗い出す。"},
+ {id:"crypto",re:/encrypt|crypto|\bmd5\b|\bsha-?1\b|weak[-_ ]?hash|\becb\b|hardcoded[-_ ]?key|kms|cipher|key[-_]?(manage|storage)|cc_number|card[-_]?number/i,
+  label:"暗号・鍵の扱い",chain:[7],
+  why:"暗号化したデータと同じ環境に鍵があると、侵入者は両方を手に入れて復号できます。カード番号の保持自体が最大のリスクです。",
+  fix:["カード番号は自社で持たず、決済代行のトークン化を使う","鍵は KMS など別の仕組みに置き、アプリには復号の権限だけを与える","MD5・SHA-1・ECB は、パスワードやデータの保護に使わない"],
+  verify:"鍵の置き場所と、鍵にアクセスできる権限を一覧にし、データと同じ環境にないか確認する。"},
+ {id:"otp",re:/otp|mfa|2fa|one[-_ ]?time|plaintext|clear[-_ ]?text|cleartext|password.*(store|stored|plain)|jwt|session[-_ ]?(fixation|cookie)|insecure[-_ ]?auth/i,
+  label:"認証・OTP の保存方法",chain:[2],
+  why:"ワンタイムパスワードなどが DB に平文で残っていると、DB を読めた人は MFA を回避できます。",
+  fix:["OTP はハッシュ化して保存し、5 分程度で失効させる","試行回数に上限を付け、超えたらロックする","パスワードは bcrypt / argon2 など、遅いハッシュで保存する"],
+  verify:"DB のテーブルを確認し、認証に関わる値が平文で残っていないか見る。"},
+ {id:"secret",re:/secret|hardcoded|hard-coded|password|api[-_ ]?key|token|credential|private[-_ ]?key|aws[-_]|gcp|generic[-_]api|access[-_]?key/i,
+  label:"秘密情報がコードや設定に残っている",chain:[5],
+  why:"設定ファイルやコードに認証情報があると、1 か所が見えただけで、次のシステムに進まれます。今回の連鎖でも、wp-config の認証情報が使われました。",
+  fix:["その情報は、すでに漏れたものとして、直ちに無効化して作り直す","Git の履歴からも消す(消すだけでは履歴に残る)","秘密情報は環境変数やシークレット管理サービスから渡す","コミット前のチェック(pre-commit)と CI に gitleaks を入れる"],
+  verify:"無効化後に、古い値で接続できないことを確認する。履歴の検索も行う。"},
+ {id:"xss",re:/xss|cross[-_ ]?site[-_ ]?scripting|innerhtml|dangerouslysetinnerhtml|unescaped|document\.write|content[-_]?security[-_]?policy|\bcsp\b|\bsri\b|integrity/i,
+  label:"XSS・スクリプト読み込みの管理",chain:null,payment:true,
+  why:"他人のスクリプトを実行できる状態は、決済ページへのスキマー(カード窃取コード)の挿入と同じ入口になります。",
+  fix:["出力時にエスケープする(テンプレートの自動エスケープを使う)","CSP で読み込めるスクリプトの出どころを制限する(最初は Report-Only)","外部スクリプトには SRI(integrity)を付ける","決済ページは決済代行のホスト型にする"],
+  verify:"決済ページのスクリプトの一覧を作り、許可していないものが混ざっていないか確認する。"},
+ {id:"rce",re:/command[-_ ]?inject|os[-_]?command|\bexec\b|\beval\b|deserializ|subprocess|shell[-_]?true|ssrf|path[-_]?traversal|directory[-_]?traversal|\brce\b/i,
+  label:"コマンド実行・パス操作",chain:[3],
+  why:"入力値がコマンドやファイルパスに使われると、サーバー上で任意の操作をされます。",
+  fix:["コマンドを組み立てず、引数を配列で渡す API を使う","パスは正規化し、許可したディレクトリの外に出られないことを確認する","eval や安全でないデシリアライズをやめる"],
+  verify:"区切り文字(; | ..)を含む入力で、動作が変わらないことを確認する。"},
+ {id:"container",re:/root|privileged|user\b.*(0|root)|latest|healthcheck|run[-_]as/i,
+  label:"コンテナ・実行ユーザー",chain:[4],
+  why:"root で動くコンテナや特権付きの設定は、侵入後の権限上昇を容易にします。",
+  fix:["USER 命令で一般ユーザーにする","privileged や不要な capability をやめる","イメージのタグは固定する(latest を使わない)"],
+  verify:"Dockerfile と実行設定を確認する。"}
+];
+var FALLBACK={id:"general",label:"一般的な指摘",chain:null,
+  why:"診断ツールが検出した指摘です。内容と該当箇所を確認してください。",
+  fix:["指摘の説明と、ツールが示す修正方法に従う","修正後、同じツールで再診断して消えたことを確認する"],
+  verify:"CI で毎回回し、再発していないことを確認する。"};
+
+var CVE_RULE={id:"cve",label:"使っている部品の既知の脆弱性",chain:null,
+  why:"部品(ライブラリ・OS パッケージ)に、公開済みの脆弱性があります。公開済みなので、悪用の方法も知られています。",
+  fix:["修正版が出ていれば、そのバージョンに更新する","修正版がなければ、代替の部品、回避策、影響範囲の確認を行う","更新後に、動作確認とビルドの再実行を行う"],
+  verify:"Dependabot などで毎日スキャンし、新しい公開に気づける状態にする。"};
+
+var SAMPLE_SEMGREP={results:[
+ {check_id:"python.django.security.injection.tainted-sql-string",path:"shop/views/login.py",start:{line:42},extra:{severity:"ERROR",message:"ユーザー入力が SQL 文字列に直接連結されています。",lines:"cur.execute(\"SELECT * FROM users WHERE name='\"+name+\"'\")"}},
+ {check_id:"python.flask.security.unsafe-file-upload",path:"admin/upload.py",start:{line:18},extra:{severity:"ERROR",message:"アップロードされたファイルの拡張子を検証していません。",lines:"f.save(os.path.join(UPLOAD_DIR, f.filename))"}},
+ {check_id:"javascript.browser.security.insecure-innerhtml",path:"static/checkout.js",start:{line:77},extra:{severity:"WARNING",message:"innerHTML に未エスケープの値を代入しています。",lines:"el.innerHTML = params.msg"}},
+ {check_id:"python.lang.security.audit.dangerous-subprocess-use",path:"tools/export.py",start:{line:9},extra:{severity:"WARNING",message:"shell=True で外部入力を渡しています。",lines:"subprocess.call(cmd, shell=True)"}},
+ {check_id:"python.lang.best-practice.unused-import",path:"shop/utils.py",start:{line:1},extra:{severity:"INFO",message:"未使用の import があります。",lines:"import os"}}
+]};
+var SAMPLE_TRIVY={Results:[
+ {Target:"requirements.txt",Class:"lang-pkgs",Vulnerabilities:[
+  {VulnerabilityID:"CVE-2024-00001",PkgName:"example-web",InstalledVersion:"2.1.0",FixedVersion:"2.1.5",Severity:"HIGH",Title:"リモートからの任意コード実行"},
+  {VulnerabilityID:"CVE-2023-00002",PkgName:"example-parser",InstalledVersion:"1.0.3",FixedVersion:"",Severity:"MEDIUM",Title:"細工した入力による無限ループ"}]},
+ {Target:"deploy/iam.tf",Class:"config",Misconfigurations:[
+  {ID:"AVD-AWS-0057",Title:"IAM ポリシーがワイルドカードで全リソースを許可している",Message:"Action: secretsmanager:* / Resource: *",Resolution:"必要なアクションとリソースだけに絞る",Severity:"HIGH"}]},
+ {Target:"/etc/sudoers.d/app",Class:"config",Misconfigurations:[
+  {ID:"CUSTOM-SUDO-1",Title:"NOPASSWD の sudo 設定",Message:"app ALL=(ALL) NOPASSWD: ALL",Resolution:"NOPASSWD を外し、必要なコマンドだけを許可する",Severity:"CRITICAL"}]}
+]};
+var SAMPLE_GITLEAKS=[
+ {RuleID:"generic-api-key",Description:"設定ファイル内の認証情報",File:"wp-config.php",StartLine:31,Secret:"EXAMPLEFAKEKEY0123456789"},
+ {RuleID:"aws-access-token",Description:"AWS アクセスキー",File:"deploy/.env.sample",StartLine:4,Secret:"AKIAEXAMPLEFAKE00000"}
+];
+
+var findings=[]; var sources=[];
+var $=function(id){return document.getElementById(id)};
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]})}
+function mask(s){s=String(s||"");return s.length<=4?"****":s.slice(0,3)+"…("+s.length+"文字・伏せ字)"}
+
+function mapSemgrepSev(s){s=String(s||"").toUpperCase();if(s==="ERROR"||s==="HIGH")return"high";if(s==="CRITICAL")return"critical";if(s==="WARNING"||s==="MEDIUM")return"medium";if(s==="INFO"||s==="LOW")return"low";return"info"}
+function mapTrivySev(s){s=String(s||"").toLowerCase();return SEV_ORDER.indexOf(s)>=0?s:"info"}
+
+function parseOne(json){
+  var out=[],tool=null;
+  if(Array.isArray(json)&&json.length&&json[0]&&(json[0].RuleID!==undefined||json[0].Secret!==undefined)){
+    tool="gitleaks";
+    json.forEach(function(r){out.push({tool:tool,sev:"high",ruleId:r.RuleID||"secret",title:r.Description||r.RuleID||"秘密情報",loc:(r.File||"")+(r.StartLine?":"+r.StartLine:""),detail:"検出値: "+mask(r.Secret),raw:"",secret:true})});
+  } else if(Array.isArray(json)&&json.length===0){ tool="gitleaks"; }
+  else if(json&&Array.isArray(json.results)){
+    tool="semgrep";
+    json.results.forEach(function(r){var e=r.extra||{};out.push({tool:tool,sev:mapSemgrepSev(e.severity),ruleId:r.check_id||"",title:(r.check_id||"").split(".").slice(-1)[0]||"Semgrep の指摘",loc:(r.path||"")+(r.start&&r.start.line?":"+r.start.line:""),detail:e.message||"",raw:e.lines&&e.lines!=="requires login"?e.lines:""})});
+  } else if(json&&Array.isArray(json.Results)){
+    tool="trivy";
+    json.Results.forEach(function(res){
+      (res.Vulnerabilities||[]).forEach(function(v){out.push({tool:tool,sev:mapTrivySev(v.Severity),ruleId:v.VulnerabilityID||"",title:(v.VulnerabilityID||"")+" "+(v.PkgName||""),loc:(res.Target||"")+" ("+(v.PkgName||"")+" "+(v.InstalledVersion||"")+")",detail:(v.Title||v.Description||"")+(v.FixedVersion?"\n修正版: "+v.FixedVersion:"\n修正版: まだありません"),raw:"",cve:true,fixed:v.FixedVersion||""})});
+      (res.Misconfigurations||[]).forEach(function(m){out.push({tool:tool,sev:mapTrivySev(m.Severity),ruleId:m.ID||"",title:m.Title||m.ID||"設定の指摘",loc:res.Target||"",detail:(m.Message||"")+(m.Resolution?"\n推奨: "+m.Resolution:""),raw:""})});
+      (res.Secrets||[]).forEach(function(x){out.push({tool:tool,sev:mapTrivySev(x.Severity||"HIGH"),ruleId:x.RuleID||"secret",title:x.Title||"秘密情報",loc:(res.Target||"")+(x.StartLine?":"+x.StartLine:""),detail:"検出値は伏せています",raw:"",secret:true})});
+    });
+  }
+  return {tool:tool,items:out};
+}
+
+function classify(f){
+  if(f.cve) return CVE_RULE;
+  var hay=f.ruleId+" "+f.title+" "+f.detail+" "+f.loc;
+  for(var i=0;i<RULES.length;i++){ if(RULES[i].re.test(hay)) return RULES[i]; }
+  if(f.secret) return RULES.filter(function(r){return r.id==="secret"})[0];
+  return FALLBACK;
+}
+function enrich(f){
+  var r=classify(f); f.rule=r;
+  var chain=r.chain||[]; f.chain=chain;
+  var score=SEV_W[f.sev]+(chain.length?1.5:0)+(r.payment?1:0)+(f.cve&&f.fixed?0.3:0);
+  if(f.secret) score+=0.5;
+  f.score=score;
+  f.pri=score>=4?"now":(score>=2.5?"week":"plan");
+  return f;
+}
+function priLabel(p){return p==="now"?"今すぐ":(p==="week"?"今週中":"計画的に")}
+
+function addJson(text,name){
+  var json;
+  try{json=JSON.parse(text)}catch(e){return "JSON として読めませんでした: "+name}
+  var r=parseOne(json);
+  if(!r.tool) return "対応していない形式です(Semgrep / Trivy / gitleaks の JSON): "+name;
+  r.items.forEach(function(f){findings.push(enrich(f))});
+  sources.push({name:name,tool:r.tool,n:r.items.length});
+  return "";
+}
+function setMsg(t,isErr){var m=$("msg");m.textContent=t||"";m.className=isErr?"err":"note"}
+
+function filtered(){
+  var q=$("q").value.trim().toLowerCase(),s=$("f-sev").value,t=$("f-tool").value,c=$("f-chain").value;
+  return findings.filter(function(f){
+    if(s&&f.sev!==s)return false; if(t&&f.tool!==t)return false; if(c&&!f.chain.length)return false;
+    if(q&&(f.title+" "+f.loc+" "+f.ruleId+" "+f.rule.label).toLowerCase().indexOf(q)<0)return false;
+    return true;
+  }).sort(function(a,b){return b.score-a.score||SEV_W[b.sev]-SEV_W[a.sev]});
+}
+
+function renderSources(){
+  $("sources").innerHTML=sources.map(function(s){return "<span class=\"tag\">"+esc(s.tool)+" · "+esc(s.name)+" · "+s.n+"件</span>"}).join("");
+}
+function renderSummary(){
+  var cnt={};SEV_ORDER.forEach(function(s){cnt[s]=0});findings.forEach(function(f){cnt[f.sev]++});
+  $("sevbar").innerHTML=SEV_ORDER.map(function(s){return "<div class=\"sevcell s-"+s+"\"><span>"+SEV_LABEL[s]+"</span><b>"+cnt[s]+"</b></div>"}).join("");
+  var nChain=findings.filter(function(f){return f.chain.length}).length;
+  var nNow=findings.filter(function(f){return f.pri==="now"}).length;
+  $("summary-note").textContent=findings.length?("合計 "+findings.length+" 件。うち「今すぐ」対応が "+nNow+" 件、攻撃連鎖に当たるものが "+nChain+" 件です。"):"診断結果を取り込むと、ここに件数が出ます。";
+  var hits=CHAIN.map(function(){return 0});
+  findings.forEach(function(f){f.chain.forEach(function(i){hits[i-1]++})});
+  $("chain").innerHTML=CHAIN.map(function(c,i){
+    var h=hits[i];
+    return "<div class=\"step"+(h?" hit":"")+"\"><span class=\"n\">"+(i+1)+"</span><span>"+esc(c)+"</span><span class=\"cnt\">"+(h?h+"件該当":"該当なし")+"</span></div>";
+  }).join("");
+}
+function renderList(){
+  var items=filtered(), box=$("list");
+  if(!items.length){box.innerHTML="<div class=\"empty\">"+(findings.length?"条件に合う指摘はありません。":"診断結果を取り込むと、ここに優先度順の対応リストが出ます。")+"</div>";return}
+  box.innerHTML=items.map(function(f){
+    var r=f.rule;
+    var chainTag=f.chain.length?"<span class=\"tag chaintag\">連鎖 "+f.chain.join("・")+"</span>":(r.payment?"<span class=\"tag chaintag\">決済ページ</span>":"");
+    return "<details class=\"f s-"+f.sev+"\"><summary><div><div class=\"sline\"><span class=\"tag s-"+f.sev+"\">"+SEV_LABEL[f.sev]+"</span><span class=\"tag pri-"+f.pri+"\">"+priLabel(f.pri)+"</span>"+chainTag+"<span class=\"tag\" style=\"background:var(--surface2);color:var(--muted)\">"+esc(f.tool)+"</span></div><div class=\"ttl\">"+esc(f.title)+"</div><div class=\"loc\">"+esc(f.loc)+"</div></div><div class=\"note\">"+esc(r.label)+"</div></summary>"+
+      "<div class=\"body\">"+
+      (f.detail?"<div><h4>ツールの指摘</h4><div style=\"white-space:pre-wrap;overflow-wrap:anywhere\">"+esc(f.detail)+"</div></div>":"")+
+      (f.raw?"<div class=\"raw\">"+esc(f.raw)+"</div>":"")+
+      "<div><h4>何が問題か</h4>"+esc(r.why)+"</div>"+
+      (f.chain.length?"<div><h4>攻撃連鎖との関係</h4>連鎖の段階 "+f.chain.map(function(i){return i+"「"+esc(CHAIN[i-1])+"」"}).join("、")+" に当たります。この弱点を塞ぐと、連鎖がそこで切れます。</div>":"")+
+      "<div><h4>直し方</h4><ul>"+r.fix.map(function(x){return "<li>"+esc(x)+"</li>"}).join("")+"</ul></div>"+
+      "<div><h4>直った確認</h4>"+esc(r.verify)+"</div>"+
+      "</div></details>";
+  }).join("");
+}
+function planText(){
+  var items=filtered();
+  if(!items.length)return "";
+  var lines=["# 脆弱性の対応計画("+items.length+"件)",""];
+  ["now","week","plan"].forEach(function(p){
+    var g=items.filter(function(f){return f.pri===p});
+    if(!g.length)return;
+    lines.push("## "+priLabel(p)+"("+g.length+"件)");
+    g.forEach(function(f){
+      lines.push("- ["+SEV_LABEL[f.sev]+"] "+f.title+" — "+f.loc+(f.chain.length?"【攻撃連鎖 "+f.chain.join("・")+"】":""));
+      lines.push("  - 分類: "+f.rule.label);
+      lines.push("  - 対応: "+f.rule.fix[0]);
+      lines.push("  - 確認: "+f.rule.verify);
+    });
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+function renderAll(){renderSources();renderSummary();renderList();$("plan").value=planText()}
+
+function loadSample(){
+  findings=[];sources=[];
+  addJson(JSON.stringify(SAMPLE_SEMGREP),"サンプル semgrep.json");
+  addJson(JSON.stringify(SAMPLE_TRIVY),"サンプル trivy.json");
+  addJson(JSON.stringify(SAMPLE_GITLEAKS),"サンプル gitleaks.json");
+  setMsg("サンプル(架空のデータ)を表示しています。自分の結果を取り込む前に「全部消す」を押してください。",false);
+  renderAll();
+}
+$("btn-parse").addEventListener("click",function(){
+  var t=$("paste").value.trim(); if(!t){setMsg("JSON を貼り付けてください。",true);return}
+  var e=addJson(t,"貼り付け"); if(e){setMsg(e,true);return}
+  $("paste").value="";setMsg("取り込みました。",false);renderAll();
+});
+$("file").addEventListener("change",function(ev){
+  var files=Array.prototype.slice.call(ev.target.files||[]); var pending=files.length; var errs=[];
+  if(!pending)return;
+  files.forEach(function(file){
+    var rd=new FileReader();
+    rd.onload=function(){var e=addJson(String(rd.result),file.name); if(e)errs.push(e); if(--pending===0){setMsg(errs.length?errs.join(" / "):"取り込みました。",!!errs.length);renderAll();ev.target.value=""}};
+    rd.onerror=function(){errs.push("読み込めませんでした: "+file.name); if(--pending===0){setMsg(errs.join(" / "),true);renderAll()}};
+    rd.readAsText(file);
+  });
+});
+$("btn-sample").addEventListener("click",loadSample);
+$("btn-clear").addEventListener("click",function(){findings=[];sources=[];setMsg("消しました。",false);renderAll()});
+["q","f-sev","f-tool","f-chain"].forEach(function(id){$(id).addEventListener("input",function(){renderList();$("plan").value=planText()})});
+$("btn-copy").addEventListener("click",function(){
+  var ta=$("plan"),msg=$("copymsg");
+  function fallback(){ta.focus();ta.select();msg.textContent="自動でコピーできませんでした。選択したテキストをコピーしてください。"}
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(ta.value).then(function(){msg.textContent="コピーしました。"},fallback)}
+    else fallback();
+  }catch(e){fallback()}
+});
+loadSample();
+})();
+</script>

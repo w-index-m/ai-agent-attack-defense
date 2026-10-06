@@ -1,0 +1,4 @@
+netcheck/netcheck.log
+__pycache__/
+results/
+node_modules/

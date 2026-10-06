@@ -1,0 +1,6 @@
+title = "gitleaks config"
+[extend]
+useDefault = true
+[allowlist]
+description = "sample data and docs"
+paths = ['''samples/.*''', '''docs/.*''']

@@ -1,0 +1,44 @@
+name: security-scan
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 18 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Prepare output dir
+        run: mkdir -p results
+      - name: Semgrep (code)
+        run: |
+          docker run --rm -v "$PWD:/src" semgrep/semgrep \
+            semgrep scan --config auto --json --output /src/results/semgrep.json /src || true
+      - name: Trivy (dependencies / config / secrets)
+        run: |
+          docker run --rm -v "$PWD:/src" aquasec/trivy:latest \
+            fs --scanners vuln,misconfig,secret --format json --output /src/results/trivy.json /src || true
+      - name: gitleaks (secrets)
+        run: |
+          docker run --rm -v "$PWD:/src" zricethezav/gitleaks:latest \
+            detect --source /src --config /src/.gitleaks.toml --report-format json \
+            --report-path /src/results/gitleaks.json --exit-code 0 || true
+      - name: ZAP baseline (only if STAGING_URL is set)
+        if: ${{ vars.STAGING_URL != '' }}
+        run: |
+          chmod 777 results
+          docker run --rm -v "$PWD/results:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "${{ vars.STAGING_URL }}" -J zap.json || true
+      - name: Summarize
+        run: python3 scripts/summarize.py results --fail-on "${{ vars.FAIL_ON || 'none' }}" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-scan-results
+          path: results/
