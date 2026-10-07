@@ -1,10 +1,7 @@
----
-title: "Cyber Verification Program 申請パッケージ"
-subtitle: "ai-agent-attack-defense — 防御研究・統制証拠一式"
-date: "2026-10-06"
----
-
 # Cyber Verification Program 申請パッケージ
+
+*ai-agent-attack-defense — 防御研究・統制証拠一式 ／ 2026-10-06*
+
 
 **プロジェクト**: `ai-agent-attack-defense`（w-index-m）
 **目的**: Gambit Security レポート（2026-09-22）の AI エージェント攻撃（Strix / Cairn / Hermes）を題材にした
