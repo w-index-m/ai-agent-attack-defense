@@ -3,6 +3,8 @@
 Gambit レポートの攻撃連鎖（偵察→侵入→統括/事後）を、**防御側の観測点と対策**に振って整理したもの。
 攻撃手順のレシピではなく、「何が観測され、どこで止められるか」に焦点を当てる。
 
+> 検知/防御タグ **R1–R7 / ③** とガバナンス **G1–G6** の正式な定義は [`../shared/taxonomy.json`](../shared/taxonomy.json)（唯一の定義）にあり、各ツールの追従は CI の `tools/check_consistency.py` が検査する。
+
 出典: [Gambit Security](https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company) /
 各ツール: [Strix](https://github.com/usestrix/strix) / [Cairn](https://github.com/oritera/Cairn) / [Hermes](https://github.com/NousResearch/hermes-agent)
 

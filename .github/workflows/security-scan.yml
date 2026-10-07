@@ -20,6 +20,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 定義のズレ検知: shared/taxonomy.json を唯一の定義として、各ツール
+  # (netcheck / vuln_triage / detections) が追従しているかを確認する。
+  # 「片方だけ更新して他方を忘れる最新化漏れ」をここで止める。Docker 不要で速い。
+  consistency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: 整合性チェック（最新化漏れの検出）
+        run: |
+          set -o pipefail
+          python3 -I tools/check_consistency.py | tee -a "$GITHUB_STEP_SUMMARY"
+
   scan:
     runs-on: ubuntu-latest
     timeout-minutes: 30
