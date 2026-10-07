@@ -1,0 +1,25 @@
+{
+  "rule_id": "aad-r1-llm-egress",
+  "name": "[R1] Server-zone host contacting an external LLM API",
+  "description": "Outbound to an external LLM API from a server/production host. Autonomous AI-agent harnesses need continuous LLM inference; egress from a host with no approved LLM use is high-signal. Tune labels.src_zone and the domain allowlist to your environment.",
+  "type": "query",
+  "language": "kuery",
+  "query": "destination.domain:(\"api.openai.com\" or \"api.anthropic.com\" or \"api.openrouter.ai\" or \"openrouter.ai\" or \"api.deepseek.com\") and labels.src_zone:(\"server\" or \"production\" or \"dmz\")",
+  "index": ["logs-network.*", "logs-*", "filebeat-*", "packetbeat-*"],
+  "from": "now-10m",
+  "interval": "5m",
+  "severity": "high",
+  "risk_score": 73,
+  "enabled": false,
+  "author": ["ai-agent-attack-defense"],
+  "references": ["https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company"],
+  "false_positives": ["Hosts with an approved LLM integration — allowlist them."],
+  "tags": ["AI-agent", "egress", "R1"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0011", "name": "Command and Control", "reference": "https://attack.mitre.org/tactics/TA0011/" },
+      "technique": [ { "id": "T1041", "name": "Exfiltration Over C2 Channel", "reference": "https://attack.mitre.org/techniques/T1041/" } ]
+    }
+  ]
+}

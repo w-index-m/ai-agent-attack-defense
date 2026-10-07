@@ -1,0 +1,25 @@
+{
+  "rule_id": "aad-r6-correlation-eql",
+  "name": "[R6] Agent chain: recon tool then another tool under one parent (EQL)",
+  "description": "Representative single-index correlation (EQL sequence): the same parent process runs a recon tool and then a different offensive tool within a few minutes — the fast, chained behavior of an autonomous agent. True cross-index correlation (R1 egress + R2 container + R7 tooling) is best built with Elastic's rule-on-rule / alert correlation; see this folder's README.",
+  "type": "eql",
+  "language": "eql",
+  "query": "sequence by process.parent.entity_id with maxspan=5m\n  [process where event.type == \"start\" and process.name == \"nmap\"]\n  [process where event.type == \"start\" and process.name in (\"ffuf\", \"gobuster\", \"nikto\", \"sqlmap\", \"hydra\", \"nuclei\", \"wpscan\", \"msfconsole\")]",
+  "index": ["logs-endpoint.events.process-*", "auditbeat-*", "winlogbeat-*"],
+  "from": "now-10m",
+  "interval": "5m",
+  "severity": "high",
+  "risk_score": 75,
+  "enabled": false,
+  "author": ["ai-agent-attack-defense"],
+  "references": ["https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company"],
+  "false_positives": ["Authorized scanning pipelines — allowlist the orchestrator process/host."],
+  "tags": ["AI-agent", "correlation", "R6"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0002", "name": "Execution", "reference": "https://attack.mitre.org/tactics/TA0002/" },
+      "technique": [ { "id": "T1059", "name": "Command and Scripting Interpreter", "reference": "https://attack.mitre.org/techniques/T1059/" } ]
+    }
+  ]
+}

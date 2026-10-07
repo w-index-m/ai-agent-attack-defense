@@ -1,0 +1,26 @@
+{
+  "rule_id": "aad-r3-recon-burst",
+  "name": "[R3] Admin/sensitive path enumeration burst (recon)",
+  "description": "A single source produced a burst of 4xx responses against admin/sensitive endpoints — reconnaissance (Strix-style). Threshold rule: tune the count to your baseline and allowlist approved scanner source IPs.",
+  "type": "threshold",
+  "language": "kuery",
+  "query": "http.response.status_code:(401 or 403 or 404) and url.path:(*admin* or *wp-login* or *phpmyadmin* or *manager\\/html* or *\\/console*)",
+  "threshold": { "field": ["source.ip"], "value": 30 },
+  "index": ["logs-nginx.*", "logs-apache.*", "logs-web.*", "filebeat-*"],
+  "from": "now-6m",
+  "interval": "5m",
+  "severity": "medium",
+  "risk_score": 47,
+  "enabled": false,
+  "author": ["ai-agent-attack-defense"],
+  "references": ["https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company"],
+  "false_positives": ["Authorized vulnerability scanners / monitoring — allowlist their source IPs.", "Misconfigured links causing broad 404s."],
+  "tags": ["AI-agent", "recon", "R3"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0043", "name": "Reconnaissance", "reference": "https://attack.mitre.org/tactics/TA0043/" },
+      "technique": [ { "id": "T1595", "name": "Active Scanning", "reference": "https://attack.mitre.org/techniques/T1595/" } ]
+    }
+  ]
+}

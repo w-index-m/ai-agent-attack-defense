@@ -1,0 +1,25 @@
+{
+  "rule_id": "aad-r4-messaging-c2",
+  "name": "[R4] Server-zone host contacting a messaging API (possible C2)",
+  "description": "Outbound to a messaging platform API (Telegram/Discord/Slack/Signal) from a server/production host. Hermes-style orchestration can use messaging as a C2/report channel. Tune labels.src_zone and allowlist approved ChatOps integrations.",
+  "type": "query",
+  "language": "kuery",
+  "query": "destination.domain:(\"api.telegram.org\" or \"discord.com\" or \"discordapp.com\" or \"slack.com\" or \"hooks.slack.com\") and labels.src_zone:(\"server\" or \"production\" or \"dmz\")",
+  "index": ["logs-network.*", "logs-*", "filebeat-*", "packetbeat-*"],
+  "from": "now-10m",
+  "interval": "5m",
+  "severity": "high",
+  "risk_score": 73,
+  "enabled": false,
+  "author": ["ai-agent-attack-defense"],
+  "references": ["https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company"],
+  "false_positives": ["Approved alerting/ChatOps integrations — allowlist these hosts/destinations."],
+  "tags": ["AI-agent", "c2", "R4"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0011", "name": "Command and Control", "reference": "https://attack.mitre.org/tactics/TA0011/" },
+      "technique": [ { "id": "T1071", "name": "Application Layer Protocol", "reference": "https://attack.mitre.org/techniques/T1071/" } ]
+    }
+  ]
+}
