@@ -1,0 +1,40 @@
+# 認可ラボ用の隔離ネットワーク例（docker compose）
+# 目的: Cairn サーバ／ワーカー／やられ対象を「外部に出られない内部ネット」に閉じ込める。
+#
+#   docker compose -f lab-compose.example.yml up -d
+#
+# ポイント:
+#   - internal: true のネットワークは NAT/ゲートウェイを持たず、インターネットへ出られない。
+#   - LLM が外部 API の場合はこのネットだけでは通信できない。その場合は
+#     (a) ローカルLLM をこのネット内に置く、または
+#     (b) LLM ホストだけを許可する allowlist プロキシを別途用意し、そこ経由に限定する。
+#   - 対象(target)は「自分が用意した、やられ役の」コンテナに置き換える。第三者イメージを無認可で使わない。
+
+networks:
+  cairn_lab_net:
+    driver: bridge
+    internal: true          # ★ 外部到達を遮断（隔離の要）
+    ipam:
+      config:
+        - subnet: 10.77.0.0/24
+
+services:
+  cairn-server:
+    image: python:3.12-slim   # 実際には Cairn を入れたイメージ/ホストで serve する
+    command: ["sleep", "infinity"]   # placeholder: 実運用は `cairn serve --host 0.0.0.0 --port 8000`
+    networks:
+      cairn_lab_net:
+        ipv4_address: 10.77.0.5
+    # ports は公開しない（ラボ内からのみアクセス）
+
+  # やられ対象（自分で用意したもの）。例としてプレースホルダ。
+  target:
+    image: "<YOUR_OWN_VULNERABLE_TARGET_IMAGE>"
+    networks:
+      cairn_lab_net:
+        ipv4_address: 10.77.0.10
+    # 対象も外部に出さない。スナップショット/使い捨て前提。
+
+# ワーカーは Cairn dispatcher が per-project コンテナとして起動する。
+# dispatch.yaml の container.network_mode に "cairn_lab_net" を指定すると
+# このネットに参加し、対象(10.77.0.10)にだけ到達できる構成になる。

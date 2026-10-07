@@ -1,0 +1,43 @@
+title: Admin/sensitive path enumeration burst (recon)
+id: 7b1f0a2c-1d3e-4a6b-9c01-r3reconburst0
+status: experimental
+description: >
+  Detects scanning-style enumeration of admin/sensitive endpoints with a high
+  rate of 401/403/404 responses from a single source, consistent with the
+  reconnaissance stage (Strix). Tune the count/timeframe to your baseline.
+references:
+  - https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company
+author: ai-agent-attack-defense
+date: 2026/10/06
+logsource:
+  category: webserver
+detection:
+  selection_status:
+    status_code:
+      - 401
+      - 403
+      - 404
+  selection_paths:
+    uri_path|contains:
+      - '/admin'
+      - '/administrator'
+      - '/wp-login.php'
+      - '/wp-admin/'
+      - '/phpmyadmin/'
+      - '/manager/html'
+      - '/console'
+  timeframe: 1m
+  condition: selection_status and selection_paths | count() by src_ip > 30
+fields:
+  - src_ip
+  - uri_path
+  - status_code
+  - user_agent
+falsepositives:
+  - Authorized vulnerability scanners / monitoring (allowlist their source IPs).
+  - Misconfigured links causing broad 404s.
+level: medium
+tags:
+  - attack.reconnaissance
+  - attack.t1595
+  - attack.t1046

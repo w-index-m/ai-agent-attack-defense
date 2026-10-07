@@ -1,62 +1,43 @@
-# 診断の自動実行セット(GitHub Actions)
+# security-scan — index (English)
 
-コード、部品、設定、秘密情報の診断を、変更のたびと毎日、自動で回します。結果は JSON で保存され、「脆弱性トリアージ」ページに読み込めます。
+日本語版は [`README.ja.md`](README.ja.md) / Japanese index: see `README.ja.md`.
 
-## 中身
+A defensive research, detection, and governance bundle built around the AI-agent
+attack harnesses from the Gambit Security report (2026-09-22): **Strix / Cairn / Hermes**.
+**Detection and defense design only** — no attack execution steps, no safety-bypass
+techniques. Use only against assets you own or are authorized to test.
 
-| ファイル | 役割 |
+## Start here
+
+- **[`dashboard.html`](dashboard.html)** — integrated dashboard (open in a browser,
+  offline, no external calls): landscape of offensive AI agents → detection coverage →
+  preventive controls → CVP tiers → asset links.
+
+## Documents
+
+| File | Contents |
 |---|---|
-| `.github/workflows/security-scan.yml` | 診断を回すワークフロー |
-| `scripts/summarize.py` | 結果を集計し、要約を出す。基準を超えたら失敗させることもできる(Python 3、追加のインストール不要) |
-| `.gitleaks.toml` | 秘密情報の検出ルールの例外設定 |
-| `.pre-commit-config.yaml` | コミット前に秘密情報を止める設定(手元用) |
+| [`defense-detection-notes.md`](defense-detection-notes.md) (JA) / [`.en.md`](defense-detection-notes.en.md) (EN) | Cross-tool defense & detection notes: SOC operational layer (data-source mapping, detection rules R1–R7, MITRE ATT&CK, triage) and the broader offensive-AI-agent landscape. |
+| [`detections/`](detections/) | Detection rule implementations: Sigma / Falco / Datadog (R1–R7). Tune thresholds/allowlists per environment. |
+| [`strix-local-backend-notes.md`](strix-local-backend-notes.md) | Strix execution-flow analysis and a Docker-free local backend design. |
+| [`strix-local-poc/`](strix-local-poc/) | PoC for the above (patch, verification scripts, results). |
+| [`cairn-lab/`](cairn-lab/) | Runbook and real config for running Cairn in an authorized, isolated lab; plus a no-attack mock config. |
+| [`cvp-readiness.md`](cvp-readiness.md) (JA) / [`.en.md`](cvp-readiness.en.md) (EN) | Anthropic Cyber Verification Program tier mapping and application readiness. |
+| [`cvp-package/`](cvp-package/) | Application package (HTML / PDF), including the dashboard PDF. |
 
-## 動かすツール
+## Detection quick reference (by priority)
 
-- **Semgrep**: コードの弱点(SQL インジェクションなど)
-- **Trivy**: 使っている部品の既知の脆弱性、設定の不備(sudo、IAM など)、秘密情報
-- **gitleaks**: 秘密情報の混入(Git の履歴を含む)
-- **ZAP baseline**: 動いている Web アプリへの受け身の診断。**検証環境の URL を設定したときだけ**動く
+1. **R1 / R4** — LLM / messaging API egress from server-zone hosts (top priority)
+2. **R2** — privileged / host-net / unknown-image container start
+3. **R7** — one parent process running many security tools in a short window
+   (**the behavioral core that survives even a local-LLM setup**)
+4. **R3** — recon-style web enumeration burst
+5. **R5** — new persistence (cron / systemd)
+6. **R6** — correlation that ties the chain together
 
-最初の 3 つは、リポジトリを読むだけで、ネットワーク越しの攻撃はしません。
+## Languages
 
-## 導入手順
-
-1. このセットのファイルを、診断したいリポジトリの同じ場所にコピーする
-2. リポジトリに push する。`security-scan` が動き、結果が「Actions」に出る
-3. 最初は **報告だけ**(失敗させない)で動かし、件数を見て、直す順番を決める
-4. 直し終わった種類から、失敗させる基準を付ける(下の設定)
-
-## 設定(リポジトリの Settings → Secrets and variables → Actions → Variables)
-
-| 変数名 | 値の例 | 意味 |
-|---|---|---|
-| `FAIL_ON` | `none`(既定) / `critical` / `high` / `secret` | その重大度以上が 1 件でもあれば、ワークフローを失敗させる。`secret` は秘密情報が 1 件でもあれば失敗 |
-| `STAGING_URL` | `https://stg.example.com` | 設定すると ZAP baseline が動く。**ダミーデータの検証環境だけ**を指定する |
-
-## 結果の見方
-
-- ワークフローの実行画面の「Summary」に、件数と緊急・高の指摘が出る
-- 実行画面の「Artifacts」から `security-scan-results` をダウンロードし、中の JSON を「脆弱性トリアージ」ページに読み込むと、優先度順の対応リストになる
-
-## 手元(ローカル)で要約だけ見る
-
-```
-python3 scripts/summarize.py results
-python3 scripts/summarize.py results --fail-on high
-```
-
-## 守ること
-
-- 診断してよい対象は、自社が管理しているものか、書面で許可を得たものだけ
-- ZAP は、**本番に向けない**。攻撃用の自動ツールは、DB の変更や削除までやることがある
-- ワークフローの権限は `contents: read` だけにしてある。広げない
-- Docker イメージのタグは `latest` にしてある。運用では、バージョンかダイジェストで固定し、定期的に更新する(CI 自体も狙われるため)
-- 秘密情報が見つかったら、消すだけでは足りない。その値は漏れたものとして、無効化して作り直す
-
-## できていないこと(確認が必要な点)
-
-- このセットは、GitHub 上の実環境ではまだ動かしていません。`summarize.py` だけ、サンプルの結果で動作を確認しました
-- Docker イメージのコマンドや引数は、各ツールの一般的な使い方に沿っていますが、バージョンによって変わることがあります。最初の実行で失敗したら、ログのエラーを確認してください
-- Semgrep の `--config auto` は、ルールを取得するために外部へ接続します。接続できない環境では、ルールをファイルで用意してください
-- GitLab や Jenkins など、GitHub Actions 以外で使う場合は、`run:` の中身を移せば同じコマンドで動きます
+- Narrative notes and runbooks are authored in Japanese; English mirrors are provided
+  for the main outward-facing docs (`*.en.md`) and this README.
+- `detections/` rules keep **English descriptions** for SIEM portability; their meaning
+  is explained in `detections/README.md` and the notes.

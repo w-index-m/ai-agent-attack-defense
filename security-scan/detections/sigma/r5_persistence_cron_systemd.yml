@@ -1,0 +1,39 @@
+title: New cron/systemd persistence created
+id: 7b1f0a2c-1d3e-4a6b-9c01-r5persistence0
+status: experimental
+description: >
+  Detects creation/modification of cron entries or systemd timer/service units,
+  used by autonomous agents (Hermes-style) to persist scheduled automation.
+  Correlate the creating process lineage with other stages.
+references:
+  - https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company
+author: ai-agent-attack-defense
+date: 2026/10/06
+logsource:
+  product: linux
+  category: file_event
+detection:
+  selection_paths:
+    target_file|startswith:
+      - '/etc/cron.'
+      - '/var/spool/cron/'
+      - '/etc/systemd/system/'
+      - '/etc/crontab'
+  selection_unit:
+    target_file|endswith:
+      - '.timer'
+      - '.service'
+      - 'crontab'
+  condition: selection_paths or selection_unit
+fields:
+  - target_file
+  - user
+  - process_name
+  - parent_process_name
+falsepositives:
+  - Legitimate configuration management (Ansible/Puppet/Chef) and package installs.
+level: medium
+tags:
+  - attack.persistence
+  - attack.t1053.003
+  - attack.t1053.006

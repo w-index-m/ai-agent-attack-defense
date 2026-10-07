@@ -1,0 +1,40 @@
+title: Server-zone host contacting an external LLM API
+id: 7b1f0a2c-1d3e-4a6b-9c01-r1llmegress00
+status: experimental
+description: >
+  Detects outbound connections from server/production hosts to known external
+  LLM API endpoints. Autonomous AI-agent attack harnesses (Strix/Cairn/Hermes)
+  require continuous LLM inference, so LLM-API egress from a host that has no
+  legitimate LLM use is a high-signal indicator. Tune src-zone and the domain
+  allowlist to your environment.
+references:
+  - https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company
+author: ai-agent-attack-defense
+date: 2026/10/06
+logsource:
+  category: proxy
+detection:
+  selection_domain:
+    dest_host:
+      - 'api.openai.com'
+      - 'api.anthropic.com'
+      - 'api.openrouter.ai'
+      - 'openrouter.ai'
+      - 'api.deepseek.com'
+  selection_zone:
+    src_network_zone:
+      - 'server'
+      - 'production'
+      - 'dmz'
+  condition: selection_domain and selection_zone
+fields:
+  - src_ip
+  - dest_host
+  - user_agent
+  - bytes_out
+falsepositives:
+  - Hosts with a legitimate, approved LLM integration (allowlist these).
+level: high
+tags:
+  - attack.command_and_control
+  - attack.t1041

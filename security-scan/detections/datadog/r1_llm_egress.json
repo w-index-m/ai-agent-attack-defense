@@ -1,0 +1,18 @@
+{
+  "name": "[R1] Server-zone host contacting an external LLM API",
+  "type": "log_detection",
+  "message": "Outbound to an external LLM API from a server/production host. Autonomous AI-agent harnesses need continuous LLM inference; egress from a host with no approved LLM use is high-signal. Verify the host's business purpose; if not approved, contain (block egress) and inspect processes/containers.\n\nTune: define @network.client.zone and allowlist approved LLM hosts.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1041", "tactic:command-and-control"],
+  "queries": [
+    {
+      "name": "llm_egress",
+      "query": "source:(proxy OR firewall OR dns) @network.destination.name:(api.openai.com OR api.anthropic.com OR api.openrouter.ai OR openrouter.ai OR api.deepseek.com) @network.client.zone:(server OR production OR dmz)",
+      "aggregation": "count",
+      "groupByFields": ["@network.client.ip"]
+    }
+  ],
+  "cases": [
+    { "name": "LLM egress from server zone", "status": "high", "condition": "llm_egress > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

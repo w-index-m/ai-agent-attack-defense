@@ -1,0 +1,40 @@
+title: Server-zone host contacting a messaging API (possible C2)
+id: 7b1f0a2c-1d3e-4a6b-9c01-r4messagingc2
+status: experimental
+description: >
+  Detects outbound connections from server/production hosts to messaging
+  platform APIs (Telegram/Discord/Slack/Signal). Hermes-style orchestration
+  can use messaging gateways as a command/report channel; such egress from a
+  server/production host is a strong anomaly. Tune src-zone and allowlist.
+references:
+  - https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company
+author: ai-agent-attack-defense
+date: 2026/10/06
+logsource:
+  category: proxy
+detection:
+  selection_domain:
+    dest_host:
+      - 'api.telegram.org'
+      - 'discord.com'
+      - 'discordapp.com'
+      - 'slack.com'
+      - 'hooks.slack.com'
+      - 'textsecure-service.whispersystems.org'
+  selection_zone:
+    src_network_zone:
+      - 'server'
+      - 'production'
+      - 'dmz'
+  condition: selection_domain and selection_zone
+fields:
+  - src_ip
+  - dest_host
+  - bytes_out
+falsepositives:
+  - Approved alerting/ChatOps integrations (allowlist these hosts/destinations).
+level: high
+tags:
+  - attack.command_and_control
+  - attack.t1071
+  - attack.t1102

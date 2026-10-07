@@ -1,0 +1,60 @@
+# Cairn dispatcher — 隔離ラボ実設定（local 実行 / ローカルLLM / egress ゼロ）
+# 構成: local 実行（ワーカーはホストプロセス、ホストの codex CLI を再利用）
+#       ローカルLLM（OpenAI 互換エンドポイント）に接続 → 外部通信なし
+#       既定の隔離ネット（10.77.0.0/24 internal、runbook / lab-compose 参照）
+#
+# ★ 使う前に 2 か所だけ埋める:
+#     1) workers[].env.CODEX_MODEL      … ローカルで配信しているモデル名
+#     2) workers[].env.CODEX_BASE_URL   … ローカルLLM の OpenAI 互換 URL
+#   （API キーはローカルLLM では不要。多くの実装はダミー値を受け付ける。）
+#
+# 前提（runbook の実行前チェックリスト参照）:
+#   - このホスト（dispatcher＋server）と対象・ローカルLLM はすべて隔離セグメント上。
+#   - local 実行はサンドボックスなしでホスト権限で動く。認可済み環境でのみ使用。
+#   - codex CLI がホストにインストール済み・PATH 上にあること（local 実行は host CLI を再利用）。
+#   - まず dispatch_mock_local.yaml で攻撃なしスモークを通してから本設定へ。
+
+# server は同一ホストで serve する前提（local 実行では dispatcher はホスト上で動かす）。
+server: "http://127.0.0.1:8000"
+
+runtime:
+  execution: local              # ワーカーをホストプロセスで実行（コンテナを使わない）
+  worker_healthcheck: disabled  # local 実行では base_url を叩かず、起動時に CLI の PATH を確認
+  max_workers: 2                # まず小さく。ホストの能力に合わせて調整
+  max_running_projects: 1
+  max_project_workers: 2
+  interval: 3
+  healthcheck_timeout: 15
+  prompt_group: "default"
+
+tasks:
+  bootstrap:
+    timeout: 120
+    conclude_timeout: 30
+  reason:
+    timeout: 45
+    max_intents: 2              # 1 reason あたりの新規 intent 上限（保守的）
+  explore:
+    timeout: 600
+    conclude_timeout: 120
+
+local:
+  workspace_root: "/data/cairn-runs"   # プロジェクトごとに <workspace_root>/<project_id>/ が作られる
+  completed_action: keep               # 事後調査のため keep（不要なら remove）
+
+# ローカルLLM への接続はここで一括注入（全 local worker プロセスにマージされる）。
+# egress ゼロにするため、エンドポイントは隔離ネット内 or localhost に限定すること。
+common_env:
+  # ローカルモデルがキー不要でも、CLI がキー存在を要求する場合があるのでダミーを置く。
+  OPENAI_API_KEY: "sk-local-no-egress"
+  # 外部プロキシは設定しない（＝インターネットへ出さない）。
+
+workers:
+  - name: "local-codex"
+    type: "codex"                        # ホストの codex CLI を使用（OpenAI 互換のローカルLLM向け）
+    task_types: [bootstrap, reason, explore]
+    max_running: 1
+    priority: 0
+    env:
+      CODEX_MODEL: "<LOCAL_MODEL_NAME>"          # 例: qwen2.5-coder:32b / llama3.1:70b 等
+      CODEX_BASE_URL: "<LOCAL_LLM_OPENAI_BASE>"  # 例: http://127.0.0.1:8001/v1 または http://10.77.0.20:11434/v1
