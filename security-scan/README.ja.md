@@ -15,6 +15,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | ファイル | 内容 |
 |---|---|
 | [`defense-detection-notes.md`](defense-detection-notes.md) | 3ツール横断の防御・検知ノート。SOC 運用レイヤー（データソース対応、検知ルール R1–R7、MITRE ATT&CK、トリアージ）と、攻撃用AIエージェントの広域マップ（§6）。 |
+| [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md) | 防御の4層（予防・検知・応答・復旧）と、外部ロードマップ案の対応づけ・評価・不足分の補い方。R1–R7 と ③ の区別、カーネルFIM 解説つき。 |
 | [`detections/`](detections/) | 検知ルールの実装：Sigma / Falco / Datadog（R1–R7）。閾値・allowlist は環境でチューニング。 |
 | [`strix-local-backend-notes.md`](strix-local-backend-notes.md) | Strix の実行フロー解析と、Docker 不要ローカル実行の設計。 |
 | [`strix-local-poc/`](strix-local-poc/) | 上記の PoC（パッチ・検証スクリプト・結果）。 |
