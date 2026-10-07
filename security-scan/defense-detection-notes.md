@@ -207,6 +207,23 @@ note: ローカルLLM 利用で LLM egress(R1) が出ないエージェント（
 LLM 利用ガバナンス（プロンプト/ツール呼び出しの監査、安全機構の除去・迂回の試行検知）で補う。本ノートは
 その「兆候の存在」を指摘するに留め、具体的な回避手法は扱わない。
 
+## 3.1 MITRE ATLAS / OWASP-LLM への接続（補足）
+
+**主軸は ATT&CK**（攻撃エージェントの“IT への行為”は古典的 TTP にそのまま乗るため、対応が強い）。
+一方 **ATLAS** と **OWASP Top 10 for LLM** は観点が異なるので、1:1 ではなく**“接続点”**として示す。
+正確さのため **ID は公式マトリクスで要確認**（[atlas.mitre.org](https://atlas.mitre.org) / [genai.owasp.org](https://genai.owasp.org)）。
+
+- **MITRE ATLAS**：主に「**AI システムそのもの**への/を使った敵対的脅威」。本件（AIが“攻撃者”として普通のITを攻める）とは向きが違うが、接続点はある。
+  - 攻撃側が**自分の LLM を兵器化**する行為（安全機構の回避）＝ ATLAS の *LLM Jailbreak* / *LLM Prompt Injection*（例: AML.T0054 / AML.T0051、※要確認）→ 本ノートのガバナンス層（T1562 相当・G1–G6）で“兆候”を捉える。
+  - **被害側が LLM 推論 API を露出**（`netcheck` の 11434 等）＝攻撃面。外部からの推論悪用は ATLAS の *ML Model Inference API Access* 系に対応 → 露出は **③**、不審な推論呼び出しは **R1 の裏返し**。
+- **OWASP Top 10 for LLM（2025）**：主に「**自組織の LLM アプリ**を守る」観点。接続点：
+  - **LLM06 Excessive Agency**（自律エージェントが過大な権限で行動）＝本件の脅威モデルそのもの → 封じ込めは最小権限・ツール制限、検知は **R7/R2・相関 R6**。
+  - **LLM02 Sensitive Information Disclosure**（情報持ち出し）→ **R1/R4** と DLP の相関。
+  - **LLM01 Prompt Injection / LLM10 Unbounded Consumption**（露出 LLM への注入・濫用）→ 露出は **③**、濫用の兆候は **R1**。
+
+> まとめ：**ATT&CK＝攻撃者の“行為”の共通語（強い対応）**、**ATLAS＝AI を巡る脅威の地図（接続点）**、
+> **OWASP-LLM＝自組織 LLM アプリの守り（接続点）**。新ルールには、まず ATT&CK ID、該当すれば ATLAS/OWASP-LLM ID を併記する。
+
 ## 4. SOC トリアージ手順（優先度順）
 
 1. **R1/R4 ヒット** → 送信元ホストの業務用途を確認。正規でなければ即封じ込め（egress 遮断）＋プロセス/コンテナ調査。
