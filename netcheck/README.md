@@ -17,6 +17,8 @@ python3 netcheck.py
 - HTTP の通常の応答ヘッダ(CSP、HSTS、Cookie の属性など)と、HTTPS 証明書の期限・検証
 - 管理画面らしき URL(/admin、/wp-admin/ など 8 件)が応答するか。状態コードを見るだけで、ログインはしない
 - 開いていると危険なポート(データベース、NFS、Docker API、Redis など)への注意と、直し方の表示
+- **AIエージェント攻撃を意識したポートも追加**：コンテナ/オーケストレーション(Docker TLS 2376、etcd 2379、Kubernetes API 6443、kubelet 10250、Consul 8500、Nomad 4646)、ローカルLLM 推論 API(Ollama 11434、LM Studio 1234)、管理/監視ダッシュボード(Kibana 5601、RabbitMQ 15672、Prometheus 9090、Grafana/開発 3000、レジストリ/開発 5000)
+- **検知/防御タグ(R1–R7 / ③)**：各指摘に「関連する検知・防御」のタグが付きます。例：LLM API 露出→**R1**(推論/egress の口)、コンテナ/オーケストレーション露出→**R2**、管理画面・バージョン露出→**R3**(偵察の標的)、DB の直結露出→**③**(攻撃面最小化)。意味は `../security-scan/defense-detection-notes.md` を参照
 
 ## やらないこと
 
