@@ -8,6 +8,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 
 - **[`dashboard.html`](dashboard.html)** — 統合ダッシュボード（ブラウザで開くだけ・オフライン・外部通信なし）。
   攻撃エージェントの俯瞰 → 検知カバレッジ → 予防コントロール → CVP 対応 → 資産リンクを 1 枚で。
+- **[`dashboard-local-llm.html`](dashboard-local-llm.html)** — 上記＋「AIに質問」を**自前の LLM**（ローカルの Ollama/LM Studio、または OpenAI 互換エンドポイント）で動かすローカル版。claude.ai のクオータ不要。接続設定はブラウザに保存、通信は指定した LLM のみ。file:// から叩くため CORS 許可が必要（Ollama: `OLLAMA_ORIGINS=*` 等）。
 
 ## ドキュメント
 

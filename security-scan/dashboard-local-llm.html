@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI防御ダッシュボード 自前LLM</title>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f4f6f6; --surface:#ffffff; --surface2:#eef2f2; --line:#d6dedf;
+  --ink:#0b0b0b; --ink2:#52514e; --muted:#7c8a8c;
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100;  /* ① ④ ⑤ ⑥ */
+  --good:#1a8f4c; --warn:#b26a00; --crit:#c23934;
+  --chipbg:#eef2f2;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  color-scheme: dark;
+  --bg:#10191c; --surface:#172326; --surface2:#1f2f33; --line:#2c4045;
+  --ink:#ffffff; --ink2:#c3c2b7; --muted:#92a7ab;
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500;
+  --good:#4fc38a; --warn:#e8b55a; --crit:#ff8f8f;
+  --chipbg:#1f2f33;
+}}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#10191c; --surface:#172326; --surface2:#1f2f33; --line:#2c4045;
+  --ink:#ffffff; --ink2:#c3c2b7; --muted:#92a7ab;
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500;
+  --good:#4fc38a; --warn:#e8b55a; --crit:#ff8f8f;
+  --chipbg:#1f2f33;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.65 system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 64px;}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:6px}
+h1{font-size:22px;margin:0}
+.sub{color:var(--ink2);font-size:13px;margin:2px 0 0}
+.btn{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:8px;padding:7px 12px;cursor:pointer}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0}
+nav a{font-size:13px;text-decoration:none;color:var(--ink2);border:1px solid var(--line);
+  border-radius:999px;padding:5px 12px;background:var(--surface)}
+nav a:hover{color:var(--ink);border-color:var(--muted)}
+section{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;margin:16px 0}
+h2{font-size:17px;margin:0 0 4px}
+h2 .en{font-size:12px;color:var(--muted);font-weight:500;margin-left:6px}
+.note{color:var(--ink2);font-size:13px;margin:2px 0 14px}
+.grid{display:grid;gap:12px}
+@media(min-width:720px){.grid.c2{grid-template-columns:1fr 1fr}.grid.c4{grid-template-columns:repeat(4,1fr)}}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--surface2)}
+.card.lane{border-top:4px solid var(--c1)}
+.card.t1{border-top-color:var(--c1)} .card.t4{border-top-color:var(--c2)}
+.card.t5{border-top-color:var(--c3)} .card.t6{border-top-color:var(--c4)}
+.card h3{margin:0 0 4px;font-size:14px}
+.card .cap{font-size:12px;color:var(--muted)}
+.tools{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.chip{font-size:12px;background:var(--chipbg);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
+.chip.abuse{border-color:var(--crit);color:var(--crit)}
+.flag{font-size:11px;font-weight:700;color:var(--crit);border:1px solid var(--crit);border-radius:5px;padding:0 5px;margin-left:4px}
+table{border-collapse:collapse;width:100%;font-size:13px;margin-top:6px}
+th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+th{background:var(--surface2);position:sticky;top:0}
+td.c{text-align:center;font-size:15px}
+.yes{color:var(--good);font-weight:700}
+.part{color:var(--warn);font-weight:700}
+.no{color:var(--muted)}
+.pri{display:inline-block;min-width:20px;text-align:center;border-radius:5px;font-size:11px;font-weight:700;padding:1px 6px;color:#fff}
+.sev-high{background:var(--crit)} .sev-med{background:var(--warn)} .sev-low{background:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--ink2);margin-top:10px}
+.legend b{color:var(--ink)}
+ul.tight{margin:6px 0;padding-left:20px} ul.tight li{margin:3px 0}
+.tier{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)}
+.tier:last-child{border-bottom:none}
+.tier .b{min-width:120px;font-weight:700}
+a.src{color:var(--c1)}
+.sc{overflow-x:auto}
+.foot{color:var(--muted);font-size:12px;margin-top:10px}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:var(--chipbg);padding:1px 5px;border-radius:4px}
+.rowhi{outline:2px solid var(--c1);outline-offset:-2px}
+.btn.pr{background:var(--c3);color:#fff;border-color:var(--c3);font-weight:600}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+textarea,input.f{width:100%;font:inherit;font-size:14px;background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);border-radius:8px;padding:9px}
+textarea{min-height:68px;resize:vertical}
+.ans{white-space:pre-wrap;background:var(--surface2);border:1px solid var(--line);border-radius:8px;
+  padding:12px;margin-top:10px;font-size:14px;min-height:20px}
+.seeds{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.seed{font-size:12.5px;cursor:pointer;background:var(--chipbg);border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--ink)}
+.askrow{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.cfg{display:grid;gap:8px;margin:4px 0 10px}
+@media(min-width:720px){.cfg{grid-template-columns:2fr 1fr 1fr}}
+.cfg label{font-size:12px;color:var(--ink2);display:flex;flex-direction:column;gap:3px}
+details.cfgwrap{border:1px dashed var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px}
+details.cfgwrap summary{cursor:pointer;font-size:13px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="wrap viz-root">
+<header>
+  <div>
+    <h1>AI攻撃エージェント 防御ダッシュボード（自前LLM版）</h1>
+    <p class="sub">Defensive dashboard for offensive AI agents — 自前の LLM（ローカル/OpenAI互換）で質問できるローカル完結版</p>
+  </div>
+  <button class="btn" id="theme">🌓 テーマ切替</button>
+</header>
+
+<nav>
+  <a href="#ask">💬 AIに質問（自前LLM）</a>
+  <a href="#map">① 攻撃エージェント マップ</a>
+  <a href="#cov">② 検知カバレッジ</a>
+  <a href="#ctl">③ 予防コントロール</a>
+  <a href="#gov">④ スキル機構とガバナンス</a>
+  <a href="#cvp">⑤ CVP 対応</a>
+  <a href="#assets">⑥ リポジトリ資産</a>
+</nav>
+
+<!-- ASK (自前LLM) -->
+<section id="ask">
+  <h2>💬 AIに質問（自前LLM） <span class="en">Your own LLM</span></h2>
+  <p class="note">この防御データ（マップ・検知R1–R7・ガバナンスG1–G6・予防）を文脈に、<b>あなたの LLM</b> が回答します。claude.ai のクオータは使いません。OpenAI 互換エンドポイント（ローカルの Ollama / LM Studio / vLLM、または OpenRouter 等）に対応。</p>
+  <details class="cfgwrap">
+    <summary>⚙️ 接続設定（初回だけ入力。ブラウザに保存されます）</summary>
+    <div class="cfg">
+      <label>エンドポイント（OpenAI互換 base URL）
+        <input class="f" id="cfg-url" placeholder="http://localhost:11434/v1">
+      </label>
+      <label>モデル名
+        <input class="f" id="cfg-model" placeholder="llama3.1 など">
+      </label>
+      <label>API キー（ローカルは空でOK）
+        <input class="f" id="cfg-key" type="password" placeholder="sk-... （任意）">
+      </label>
+    </div>
+    <p class="foot" style="margin:0">
+      例：Ollama → URL <code>http://localhost:11434/v1</code>・モデル <code>llama3.1</code>／
+      LM Studio → <code>http://localhost:1234/v1</code>。
+      ブラウザ(file://)から叩くため <b>CORS 許可</b>が必要（Ollama: <code>OLLAMA_ORIGINS=*</code>、LM Studio: CORS を ON）。
+      キーはこの端末の localStorage に保存され、外部には送りません（指定した LLM 以外へは送信しません）。
+    </p>
+  </details>
+  <div class="seeds" id="seeds"></div>
+  <textarea id="q" placeholder="例: ローカルLLM型のエージェントはどう検知する？ / R7 を Splunk SPL にするには？"></textarea>
+  <div class="askrow">
+    <button class="btn pr" id="askbtn">質問する</button>
+    <span class="foot" id="askstatus" style="margin:0"></span>
+  </div>
+  <div class="ans" id="ans" hidden></div>
+</section>
+
+<!-- ① MAP -->
+<section id="map">
+  <h2>① 攻撃用AIエージェント マップ <span class="en">Landscape</span></h2>
+  <p class="note">Gambit の 3 ツールは「分業チェーン型」の一例。タイプで整理すると防御の当てはめが見通せる。<span class="flag">悪用報告/疑い</span> は注意喚起。</p>
+  <div class="grid c2">
+    <div class="card lane t1">
+      <h3>① 分業チェーン型 <span class="cap">Division-of-labor chain（Gambit の事例）</span></h3>
+      <div class="cap">役割を別ツールで分担（統括 / 偵察 / 侵入）</div>
+      <div class="tools">
+        <span class="chip">Hermes <span class="cap">統括・事後</span></span>
+        <span class="chip">Strix <span class="cap">偵察・脆弱性</span></span>
+        <span class="chip">Cairn <span class="cap">自律侵入</span></span>
+      </div>
+    </div>
+    <div class="card lane t4">
+      <h3>④ E2E 自律ペンテスト型 <span class="cap">End-to-end autonomous</span></h3>
+      <div class="cap">偵察〜実行〜検証を単体で完結（多くはマルチエージェント・Kali コンテナ）</div>
+      <div class="tools">
+        <span class="chip">PentAGI</span>
+        <span class="chip abuse">Villager<span class="flag">悪用</span></span>
+        <span class="chip abuse">ARTEX AI<span class="flag">疑い</span></span>
+        <span class="chip">NeuroSploit</span>
+        <span class="chip">PentestAgent</span>
+        <span class="chip">Pentest-Swarm</span>
+        <span class="chip">Decepticon</span>
+        <span class="chip">Shannon</span>
+        <span class="chip">hackingBuddyGPT</span>
+      </div>
+    </div>
+    <div class="card lane t5">
+      <h3>⑤ 攻撃基盤・フレームワーク型 <span class="cap">Attack framework</span></h3>
+      <div class="cap">エージェントに多数ツールを持たせる土台（MCP 等で 150+ ツール統括）</div>
+      <div class="tools">
+        <span class="chip abuse">HexStrike AI<span class="flag">悪用</span></span>
+        <span class="chip">CAI</span>
+        <span class="chip">TARS</span>
+      </div>
+    </div>
+    <div class="card lane t6">
+      <h3>⑥ 対話型アシスタント型 <span class="cap">Interactive assistant</span></h3>
+      <div class="cap">人が主導し AI が提案/実行支援（自律モードを持つ物も）</div>
+      <div class="tools">
+        <span class="chip">PentestGPT</span>
+        <span class="chip">Pentest Copilot</span>
+      </div>
+    </div>
+  </div>
+  <p class="foot">類型整理は 三輪信雄氏(@NobMiwa) の公開まとめを参照。個別ツールの分類・能力は変化するため挙動ベースで扱う。</p>
+</section>
+
+<!-- ② COVERAGE -->
+<section id="cov">
+  <h2>② 検知カバレッジ マトリクス <span class="en">Detection coverage</span></h2>
+  <p class="note">タイプ別チップを押すと、その型に効く検知行がハイライトされます。検知の土台は共通（LLM推論・スキャン・ツール実行・C2）なので R1–R7 が横展開で効きます。</p>
+  <div class="tools" style="margin-bottom:10px">
+    <span class="chip" style="border-color:var(--c1);cursor:pointer" data-type="t1">① 分業チェーン</span>
+    <span class="chip" style="border-color:var(--c2);cursor:pointer" data-type="t4">④ E2E</span>
+    <span class="chip" style="border-color:var(--c3);cursor:pointer" data-type="t5">⑤ 基盤</span>
+    <span class="chip" style="border-color:var(--c4);cursor:pointer" data-type="t6">⑥ アシスタント</span>
+    <span class="chip" style="cursor:pointer" data-type="all">すべて表示</span>
+  </div>
+  <div class="sc">
+  <table id="covtab">
+    <thead>
+      <tr><th>ID</th><th>検知 / Signal</th><th>データソース</th><th>優先度</th>
+        <th class="c">①</th><th class="c">④</th><th class="c">⑤</th><th class="c">⑥</th></tr>
+    </thead>
+    <tbody>
+      <tr data-t="t1 t4 t5"><td>R1</td><td>サーバ系→外部LLM API への egress</td><td>proxy / DNS / NetFlow</td><td><span class="pri sev-high">高</span></td>
+        <td class="c yes">●</td><td class="c part">○</td><td class="c part">○</td><td class="c no">—</td></tr>
+      <tr data-t="t1 t4 t5"><td>R2</td><td>特権cap / host net / privileged コンテナ起動</td><td>container audit / Falco</td><td><span class="pri sev-med">中</span></td>
+        <td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c no">—</td></tr>
+      <tr data-t="t1 t4 t5 t6"><td>R3</td><td>管理画面パス列挙バースト（4xx多発）</td><td>web / WAF</td><td><span class="pri sev-med">中</span></td>
+        <td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c part">○</td></tr>
+      <tr data-t="t1"><td>R4</td><td>サーバ→メッセージングAPI（C2的）</td><td>proxy / DNS</td><td><span class="pri sev-high">高</span></td>
+        <td class="c yes">●</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
+      <tr data-t="t1 t4"><td>R5</td><td>永続化（cron / systemd）の新規作成</td><td>host (auditd/sysmon)</td><td><span class="pri sev-med">中</span></td>
+        <td class="c yes">●</td><td class="c part">○</td><td class="c no">—</td><td class="c no">—</td></tr>
+      <tr data-t="t1 t4 t5 t6"><td>R7</td><td>1親プロセスが多種セキュリティツールを短時間連続実行<br><span class="cap">ローカルLLM型でも残る“挙動の核”</span></td><td>EDR / process telemetry</td><td><span class="pri sev-high">高</span></td>
+        <td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c part">○</td></tr>
+      <tr data-t="t1 t4 t5 t6"><td>R6</td><td>相関（R3＋R1＋(R2 or R7)＋任意R4/R5）</td><td>SIEM 相関</td><td><span class="pri sev-high">高</span></td>
+        <td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c part">○</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="legend">
+    <span><b class="yes">●</b> 主に効く</span>
+    <span><b class="part">○</b> 条件付き/補助</span>
+    <span><b class="no">—</b> 低適用</span>
+    <span><b>優先度</b> <span class="pri sev-high">高</span> <span class="pri sev-med">中</span> <span class="pri sev-low">低</span></span>
+  </div>
+  <p class="foot"><b>勘所：</b> ローカルLLM対応型（PentAGI/Villager 等）は R1(egress) を回避できる → <b>R7（多ツール連続実行）とR2（コンテナ）</b>に重心。基盤型（HexStrike＝MCPで多ツール統括）も R7 が核。</p>
+</section>
+
+<!-- ③ CONTROLS -->
+<section id="ctl">
+  <h2>③ 予防コントロール <span class="en">Preventive controls</span></h2>
+  <p class="note">検知の前段で効く固定策。優先度順。</p>
+  <ul class="tight">
+    <li><b>送信ドメイン allowlist</b> — サーバ系からの LLM/メッセージングは既定遮断。</li>
+    <li><b>コンテナ admission control</b> — 特権cap・host net・未署名/未知イメージを禁止。</li>
+    <li><b>攻撃面最小化</b> — 管理画面の隔離、DB/サービスをネット直結にしない（<code>netcheck</code> の RISKY ポート群）。</li>
+    <li><b>決済・機微ページの CSP</b> — skimmer/カード窃取コード注入の防止。</li>
+    <li><b>LLM 利用の監査・ガバナンス</b> — 安全機構の除去/迂回の試行を検知・通報。</li>
+  </ul>
+</section>
+
+<!-- ④ SKILLS & GOVERNANCE -->
+<section id="gov">
+  <h2>④ スキル機構とガバナンス <span class="en">Skills & governance / T1562</span></h2>
+  <p class="note">ネットワーク/ホストの検知(R1–R7)では捕まえにくい「エージェント/LLM の使い方そのもの」を統制・監査する層。MITRE <b>T1562（防御の無効化）</b>に対応。</p>
+  <div class="grid c2">
+    <div class="card"><h3>スキルとは／なぜ危険か</h3>
+      <p class="cap" style="line-height:1.6">スキル＝エージェントに後付けする「指示＋ツール権限＋ワークフロー」の束。Hermes は自己改善ループで自動生成・改良する。危険なのは、スキル内容を<b>“信頼された上位の指示＋権限”として取り込む</b>点。Gambit の事例では本体コードを変えず、攻撃用スキル(121中78が攻撃目的)＋<b>自身の安全フィルタを外すスキル</b>を上乗せしただけで司令塔化した。実質「信頼された指示＋権限を外部注入する口」＝<b>サプライチェーン＋プロンプトインジェクション</b>の二重の攻撃面。</p>
+    </div>
+    <div class="card"><h3>ガバナンスが要求すること</h3>
+      <ul class="tight" style="font-size:13px">
+        <li><b>不可変の安全層</b>：安全強制をスキル/モデルの外側で（書き換え不能に）。CVPの“不変の一線”が実例。</li>
+        <li><b>スキル allowlist・出所管理</b>：署名/レビュー済みのみ許可、未知は既定で停止。</li>
+        <li><b>ツール権限の最小化＋ブローカー経由</b>：権限はポリシーが決める。拡大は人の承認。</li>
+        <li><b>改ざん耐性の監査ログ</b>：プロンプト/ツール/スキル/安全設定変更を追記のみで記録。</li>
+        <li><b>高リスク操作は人間承認(HITL)</b>。</li>
+        <li><b>検知と相関(R6)</b>：下の監査イベントを R1/R4/R7 と突き合わせる。</li>
+      </ul>
+    </div>
+  </div>
+  <h3 style="margin:14px 0 2px;font-size:14px">監査イベント G1–G6（ガバナンス層）</h3>
+  <p class="note">ネットワーク/ホストの R1–R7 とは観測点が異なり、<b>アプリ/監査ログ層</b>（エージェント監査ログ・スキルレジストリ・LLM/ツールゲートウェイ・ログ基盤）で見る。</p>
+  <div class="sc"><table><thead>
+    <tr><th>ID</th><th>監査イベント</th><th>データソース</th><th>優先度</th><th>対応</th></tr>
+  </thead><tbody>
+    <tr><td>G1</td><td>スキルの導入・自動生成・自己改変</td><td>エージェント監査ログ / スキルレジストリ</td><td><span class="pri sev-high">高</span></td><td>出所・署名・レビューを確認。未承認は隔離。</td></tr>
+    <tr><td>G2</td><td>安全設定/ガードレールの変更・無効化の試行</td><td>ポリシーゲートウェイ</td><td><span class="pri sev-high">高</span></td><td>外側の安全層で拒否。試行を即エスカレーション。</td></tr>
+    <tr><td>G3</td><td>プロンプト/ツール呼び出しに迂回意図</td><td>LLMゲートウェイ監査</td><td><span class="pri sev-high">高</span></td><td>ガバナンス審査。セッションを保全。</td></tr>
+    <tr><td>G4</td><td>監査ログの欠落・停止</td><td>ログ基盤ヘルス</td><td><span class="pri sev-high">高</span></td><td>ログ自体への攻撃を疑い復旧・保全。</td></tr>
+    <tr><td>G5</td><td>ツール権限の拡大要求/付与</td><td>ツールブローカー監査</td><td><span class="pri sev-med">中</span></td><td>最小権限に照合。拡大は人の承認。</td></tr>
+    <tr><td>G6</td><td>サブエージェント大量スポーン/権限拡大の構成変更</td><td>プロセス/エージェント・テレメトリ</td><td><span class="pri sev-med">中</span></td><td>R7 と相関。</td></tr>
+  </tbody></table></div>
+  <p class="foot">兆候の存在と対応方針のみ。安全機構の回避方法は含めない。詳細は <code>defense-detection-notes.md</code> §7。</p>
+</section>
+
+<!-- ⑤ CVP -->
+<section id="cvp">
+  <h2>⑤ CVP（Cyber Verification Program）対応 <span class="en">Anthropic</span></h2>
+  <p class="note">活動をどのティアで正規化するか。詳細は <code>cvp-readiness.md</code>。</p>
+  <div class="tier"><div class="b">Defense Access</div><div>防御（SOC/IR/マルウェア解析/脆弱性検証）。<b>個人研究者も可・審査数日</b>。本リポの防御ツール＋解析＋検知ルールが射程。</div></div>
+  <div class="tier"><div class="b">Red Team Access</div><div>認可されたペンテスト（組織のみ・数週間）。Cairn ラボ運用はここ。隔離設計・ランブック・mock検証が統制証拠。</div></div>
+  <div class="tier"><div class="b">Specialized Access</div><div>安全重要システム（電力/通信/金融/政府網）。米政府連携が必要。</div></div>
+  <p class="foot">不変の一線：物理被害・大規模妨害・ランサム・安全系無効化はブロック対象。</p>
+</section>
+
+<!-- ⑤ ASSETS -->
+<section id="assets">
+  <h2>⑥ リポジトリ資産 <span class="en">Repository assets</span></h2>
+  <div class="grid c2">
+    <div class="card"><h3>防御ツール</h3><ul class="tight">
+      <li><code>vuln_triage.html</code> — スキャナ結果のトリアージ</li>
+      <li><code>netcheck/</code> — 確認専用チェック（攻撃なし）</li>
+      <li><code>scripts/summarize.py</code> — 結果集計</li>
+      <li><code>.github/workflows/security-scan.yml</code> — CI（Semgrep/Trivy/gitleaks）</li>
+    </ul></div>
+    <div class="card"><h3>解析・設計</h3><ul class="tight">
+      <li><code>defense-detection-notes.md</code> — 防御・検知ノート（R1–R7）</li>
+      <li><code>detections/</code> — Sigma / Falco / Datadog ルール</li>
+      <li><code>strix-local-backend-notes.md</code> + <code>strix-local-poc/</code></li>
+      <li><code>cairn-lab/</code> — 認可ラボ・ランブック＋実設定</li>
+    </ul></div>
+    <div class="card"><h3>CVP</h3><ul class="tight">
+      <li><code>cvp-readiness.md</code> — ティア対応・申請準備</li>
+      <li><code>cvp-package/</code> — 申請パッケージ（HTML/PDF）</li>
+    </ul></div>
+    <div class="card"><h3>このダッシュボード</h3><ul class="tight">
+      <li><code>dashboard.html</code> — オフライン版（AI質問なし）</li>
+      <li><code>dashboard-local-llm.html</code> — <b>本ファイル</b>。自前LLMで質問可。通信は指定した LLM のみ。</li>
+    </ul></div>
+  </div>
+</section>
+
+<p class="foot">検知・防御の設計に限定。攻撃の実行手順や安全機構の回避方法は含めない。出典は各 md を参照。</p>
+</div>
+
+<script>
+// テーマ切替（localStorage は try/catch）
+(function(){
+  var root=document.documentElement, key="aad-theme";
+  try{var s=localStorage.getItem(key); if(s) root.setAttribute("data-theme",s);}catch(e){}
+  document.getElementById("theme").addEventListener("click",function(){
+    var cur=root.getAttribute("data-theme");
+    var next = cur==="dark" ? "light" : (cur==="light" ? "dark" :
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark"));
+    root.setAttribute("data-theme",next);
+    try{localStorage.setItem(key,next);}catch(e){}
+  });
+})();
+// カバレッジ行のタイプ別ハイライト
+(function(){
+  var rows=[].slice.call(document.querySelectorAll('#covtab tbody tr'));
+  function apply(t){
+    rows.forEach(function(r){
+      var on = (t==="all") || (r.getAttribute("data-t")||"").indexOf(t)>=0;
+      r.style.opacity = on ? "1" : "0.28";
+      r.classList.toggle("rowhi", t!=="all" && on);
+    });
+  }
+  [].slice.call(document.querySelectorAll('[data-type]')).forEach(function(c){
+    c.addEventListener("click",function(){apply(c.getAttribute("data-type"));});
+  });
+})();
+// AIに質問（自前LLM / OpenAI互換エンドポイント）
+(function(){
+  var KB = [
+    "あなたはAI攻撃エージェントに対する防御/検知の専門アシスタント。日本語で簡潔に、検知・防御の観点のみ回答する。",
+    "攻撃の実行手順・エクスプロイト・安全機構の回避方法は提供しない（防御目的に限定）。",
+    "【攻撃エージェント類型】①分業チェーン(Hermes統括/Strix偵察/Cairn侵入, Gambitの事例) ④E2E自律(PentAGI, Villager[悪用], ARTEX[疑い], NeuroSploit, PentestAgent, Pentest-Swarm, Decepticon, Shannon, hackingBuddyGPT) ⑤攻撃基盤(HexStrike[悪用,MCP150+ツール], CAI, TARS) ⑥対話型(PentestGPT, Pentest Copilot)。",
+    "【検知ルール】R1=サーバ系→外部LLM API egress(高,proxy/DNS)。R2=特権/NET_RAW/host net/privilegedコンテナ起動(中,container audit/Falco)。R3=管理画面パス列挙バースト4xx(中,web/WAF)。R4=サーバ→メッセージングAPI(Telegram/Discord/Slack/Signal)=C2的(高)。R5=cron/systemd永続化作成(中,host)。R6=相関(R3+R1+(R2 or R7)[+R4/R5])。R7=1親プロセスが多種セキュリティツールを短時間連続実行(高,EDR)。R7はローカルLLM利用でR1が出ない型でも残る挙動の核。",
+    "【優先度】R1/R4→R2→R7→R3→R5→R6(相関)。",
+    "【予防】送信ドメインallowlist / コンテナadmission control / 攻撃面最小化 / 決済ページCSP / LLM利用ガバナンス。",
+    "【スキル機構】スキル=後付けの指示＋ツール権限＋ワークフロー。Hermesは自己改善ループで自動生成。危険性は“信頼された上位指示＋権限”として取り込む点。Gambitでは本体コード不変で攻撃用スキル(121中78)＋安全フィルタ除去スキルを上乗せし司令塔化。サプライチェーン＋プロンプトインジェクションの二重攻撃面。安全強制はスキル/モデルの外側に固定するのが堅牢。※攻撃スキルや除去手順は扱わない。",
+    "【ガバナンス(T1562)/監査イベント】G1 スキル導入・自動生成・自己改変 G2 安全設定/ガードレール変更・無効化の試行 G3 プロンプト/ツール呼び出しに迂回意図 G4 監査ログ欠落・停止 G5 ツール権限拡大要求/付与 G6 サブエージェント大量スポーン/権限拡大。アプリ/監査ログ層で観測。",
+    "【CVP】Defense(防御・個人可・数日) / Red Team(認可ペンテスト・組織のみ・数週間) / Specialized(安全重要・米政府連携)。物理被害/大規模妨害/ランサム/安全系無効化は常時ブロック。",
+    "SIEM移植(Sigma/Falco/Datadog/Elastic/Splunk等)を聞かれたら、R1–R7の意味に即した検知クエリの考え方を示し、閾値・allowlistは環境でチューニングする旨を添える。"
+  ].join("\n");
+  var SEEDS=["ローカルLLM型はどう検知する？","R7をSplunk SPLにするには？","優先度が高い検知トップ3は？","HexStrike系(基盤型)の防御の勘所は？","ガバナンスG1–G6の運用のコツは？"];
+  var $=function(i){return document.getElementById(i);};
+  var LS={url:"aad-llm-url",model:"aad-llm-model",key:"aad-llm-key"};
+  function load(id,k,def){try{var v=localStorage.getItem(k);$(id).value=(v!=null?v:def||"");}catch(e){$(id).value=def||"";}}
+  function save(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+  load("cfg-url",LS.url,"http://localhost:11434/v1");
+  load("cfg-model",LS.model,"");
+  load("cfg-key",LS.key,"");
+  ["cfg-url","cfg-model","cfg-key"].forEach(function(id){var k=id==="cfg-url"?LS.url:id==="cfg-model"?LS.model:LS.key;
+    $(id).addEventListener("change",function(){save(k,$(id).value.trim());});});
+  var seeds=$("seeds");
+  SEEDS.forEach(function(s){var b=document.createElement("span");b.className="seed";b.textContent=s;
+    b.addEventListener("click",function(){$("q").value=s;$("q").focus();});seeds.appendChild(b);});
+  async function ask(){
+    var text=($("q").value||"").trim(); if(!text) return;
+    var base=($("cfg-url").value||"").trim().replace(/\/+$/,"");
+    var model=($("cfg-model").value||"").trim();
+    var key=($("cfg-key").value||"").trim();
+    if(!base||!model){$("ans").hidden=false;$("ans").textContent="接続設定（エンドポイントURL とモデル名）を入力してください。⚙️ の欄を開いて設定できます。";return;}
+    $("askbtn").disabled=true;$("askstatus").textContent="考え中…";$("ans").hidden=false;$("ans").textContent="";
+    try{
+      var headers={"Content-Type":"application/json"};
+      if(key) headers["Authorization"]="Bearer "+key;
+      var r=await fetch(base+"/chat/completions",{method:"POST",headers:headers,
+        body:JSON.stringify({model:model,messages:[{role:"system",content:KB},{role:"user",content:text}],stream:false,temperature:0.2})});
+      if(!r.ok){var t=await r.text();throw new Error("HTTP "+r.status+" "+t.slice(0,200));}
+      var j=await r.json();
+      var out=(j.choices&&j.choices[0]&&(j.choices[0].message&&j.choices[0].message.content))||j.content||"(空の応答)";
+      $("ans").textContent=out;$("askstatus").textContent="";
+    }catch(err){
+      $("ans").textContent="エラー: "+(err&&err.message?err.message:err)+
+        "\n\n確認：①エンドポイントURL/モデル名 ②ローカルLLMが起動しているか ③CORS許可（Ollama: OLLAMA_ORIGINS=*、LM Studio: CORS ON）。file:// から叩くと CORS でブロックされることがあります。";
+      $("askstatus").textContent="";
+    }finally{$("askbtn").disabled=false;}
+  }
+  $("askbtn").addEventListener("click",ask);
+  $("q").addEventListener("keydown",function(e){if((e.metaKey||e.ctrlKey)&&e.key==="Enter")ask();});
+})();
+</script>
+</body>
+</html>
