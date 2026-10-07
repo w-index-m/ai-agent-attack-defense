@@ -27,10 +27,13 @@ UA = "netcheck/1.0 (internal asset check; read-only)"
 
 DEFAULT_ALLOWED = ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
 STANDARD_PORTS = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1433,
-                  2049, 3000, 3306, 3389, 5432, 5900, 6379, 8000, 8080, 8443, 8888, 9200, 11211, 27017]
-EXTENDED_PORTS = sorted(set(STANDARD_PORTS + [81, 88, 389, 636, 1521, 2375, 5000, 5601, 5985, 7001,
-                                              8081, 8181, 9000, 9090, 15672]))
-HTTP_PORTS = {80, 81, 3000, 5000, 5601, 7001, 8000, 8080, 8081, 8181, 8888, 9000, 9090, 9200, 15672}
+                  2049, 3000, 3306, 3389, 5432, 5900, 6379, 8000, 8080, 8443, 8888, 9200, 11211, 27017,
+                  2375, 2376, 11434]
+EXTENDED_PORTS = sorted(set(STANDARD_PORTS + [81, 88, 389, 636, 1521, 5000, 5601, 5985, 7001,
+                                              8081, 8181, 9000, 9090, 15672,
+                                              1234, 2379, 4646, 6443, 8500, 10250]))
+HTTP_PORTS = {80, 81, 3000, 5000, 5601, 7001, 8000, 8080, 8081, 8181, 8888, 9000, 9090, 9200, 15672,
+              1234, 4646, 8500, 11434}
 HTTPS_PORTS = {443, 8443}
 BANNER_PORTS = {21, 22, 25, 110, 143, 3306}
 ADMIN_PATHS = ["/admin", "/administrator", "/wp-admin/", "/wp-login.php", "/phpmyadmin/",
@@ -56,6 +59,39 @@ RISKY = {
     9200: ("high", "Elasticsearch が開いている", "認証なしで、データを読めることがあります。", "接続元を限定し、認証を有効にする。"),
     11211: ("high", "memcached が開いている", "認証がなく、データの読み出しや攻撃への悪用があります。", "接続元を限定する。"),
     27017: ("high", "MongoDB が開いている", "認証なしで、データを読めることがあります。", "接続元を限定し、認証を有効にする。"),
+    # --- コンテナ / オーケストレーション（露出するとコンテナ奪取・クラスタ侵害に直結）---
+    2376: ("high", "Docker API(TLS)が開いている", "TLS でも、証明書/認証が緩いと外からコンテナ操作ができます。", "接続元を限定し、クライアント証明書認証を必須にする。"),
+    2379: ("high", "etcd が開いている", "Kubernetes のデータストア。クラスタの秘密情報が読まれる恐れがあります。", "接続元を限定し、認証・TLS を必須にする。"),
+    6443: ("high", "Kubernetes API が開いている", "クラスタの制御面です。設定不備で乗っ取りに直結します。", "接続元を限定し、匿名アクセスを無効化、RBAC を徹底する。"),
+    10250: ("high", "kubelet API が開いている", "ノード上のコンテナ操作の入口になり得ます。", "接続元を限定し、匿名・読み取り専用ポートを無効化する。"),
+    8500: ("high", "Consul が開いている", "サービス構成・鍵が読まれる恐れがあります。", "接続元を限定し、ACL を有効にする。"),
+    4646: ("medium", "Nomad が開いている", "ジョブ実行基盤の制御面です。", "接続元を限定し、ACL を有効にする。"),
+    5000: ("medium", "レジストリ/開発サーバが開いている(5000)", "Docker レジストリや開発用サーバが外から届く状態のことがあります。", "本番で不要なら閉じ、必要なら認証と接続元制限を付ける。"),
+    # --- LLM 推論 API の露出（R1 の“egress/推論の口”が外から直接叩ける状態）---
+    11434: ("high", "ローカルLLM API(Ollama等)が開いている", "認証なしで外から推論を実行・悪用され得ます。R1(LLM egress)の裏返しで、推論の口が露出している状態。", "localhost/VPN 内に限定し、CORS/接続元を絞る。公開しない。"),
+    1234: ("medium", "ローカルLLM API(LM Studio等)が開いている", "認証なしで外から推論を実行され得ます。", "localhost/VPN 内に限定する。公開しない。"),
+    # --- 管理/監視ダッシュボード（偵察の標的。R3 相当の露出）---
+    5601: ("medium", "Kibana が開いている", "ログ閲覧の管理画面が外から届く状態です(偵察の標的)。", "認証を必須にし、接続元を限定する。"),
+    15672: ("medium", "RabbitMQ 管理画面が開いている", "キュー基盤の管理画面が外から届く状態です。", "既定認証を変更し、接続元を限定する。"),
+    9090: ("low", "Prometheus が開いている", "メトリクスから内部構成が読まれ、偵察に使われ得ます。", "接続元を限定し、認証を前段に置く。"),
+    3000: ("low", "Grafana/開発サーバが開いている(3000)", "ダッシュボードや開発サーバが外から届く状態のことがあります。", "認証を必須にし、接続元を限定する。"),
+}
+
+# ポート→関連する検知/防御の参照(R1–R7 / ③予防)。netcheck は“露出(攻撃面)”を観測し、
+# それが防御側のどのルール/コントロールに対応するかをタグで示す。詳細は
+# security-scan/defense-detection-notes.md を参照。
+PORT_RULE = {
+    # コンテナ/オーケストレーション → R2(特権/コンテナ露出)
+    2375: "R2", 2376: "R2", 2379: "R2", 6443: "R2", 10250: "R2", 8500: "R2", 4646: "R2",
+    # LLM 推論 API の露出 → R1(LLM egress/推論の口)
+    11434: "R1", 1234: "R1",
+    # 管理/監視ダッシュボード・開発サーバ → R3(偵察の標的)
+    5601: "R3", 15672: "R3", 9090: "R3", 3000: "R3", 5000: "R3",
+    # DB/サービスのネット直結露出 → ③攻撃面最小化
+    1433: "③", 1521: "③", 3306: "③", 5432: "③", 6379: "③", 9200: "③",
+    11211: "③", 27017: "③", 2049: "③",
+    # 平文/旧式プロトコル・遠隔操作 → ③最小露出・堅牢化
+    21: "③", 23: "③", 111: "③", 135: "③", 139: "③", 445: "③", 3389: "③", 5900: "③",
 }
 EOL_HINTS = [  # (正規表現, 説明)
     (re.compile(r"PHP/(5|7)\.", re.I), "PHP 5/7 系はサポートが終了しています"),
@@ -194,8 +230,8 @@ def tls_info(ip, port, timeout=3.0):
         return {"ok": None, "reason": str(e)}
 
 
-def add(findings, sev, title, detail, fix, port=None):
-    findings.append({"sev": sev, "title": title, "detail": detail, "fix": fix, "port": port})
+def add(findings, sev, title, detail, fix, port=None, r=""):
+    findings.append({"sev": sev, "title": title, "detail": detail, "fix": fix, "port": port, "r": r})
 
 
 def check_host(name, ip, ports, cfg, admin_check, progress):
@@ -221,12 +257,12 @@ def check_host(name, ip, ports, cfg, admin_check, progress):
         res["open"].append({"port": p, "banner": banner})
         if p in RISKY:
             sev, t, d, fx = RISKY[p]
-            add(f, sev, t, d, fx, p)
+            add(f, sev, t, d, fx, p, PORT_RULE.get(p, ""))
         for rx, msg in EOL_HINTS:
             if banner and rx.search(banner):
-                add(f, "medium", "古いバージョンの可能性(%s)" % banner, msg, "サポート中のバージョンに更新する。", p)
+                add(f, "medium", "古いバージョンの可能性(%s)" % banner, msg, "サポート中のバージョンに更新する。", p, "R3")
         if p in BANNER_PORTS and banner:
-            add(f, "info", "接続時にバージョン情報が見える(ポート %d)" % p, banner, "不要な情報は表示しない設定にする。", p)
+            add(f, "info", "接続時にバージョン情報が見える(ポート %d)" % p, banner, "不要な情報は表示しない設定にする。", p, "R3")
 
     open_ports = {o["port"] for o in res["open"]}
     for p in sorted(open_ports & (HTTP_PORTS | HTTPS_PORTS)):
@@ -238,14 +274,14 @@ def check_host(name, ip, ports, cfg, admin_check, progress):
         res["http"].append(info)
         srv = " ".join(x for x in (h.get("server", ""), h.get("x-powered-by", "")) if x)
         if re.search(r"\d+\.\d+", srv):
-            add(f, "low", "応答にバージョン情報が出ている(ポート %d)" % p, srv, "Server / X-Powered-By のバージョン表示を消す。", p)
+            add(f, "low", "応答にバージョン情報が出ている(ポート %d)" % p, srv, "Server / X-Powered-By のバージョン表示を消す。", p, "R3")
         for rx, msg in EOL_HINTS:
             if srv and rx.search(srv):
-                add(f, "medium", "古いバージョンの可能性(%s)" % srv, msg, "サポート中のバージョンに更新する。", p)
+                add(f, "medium", "古いバージョンの可能性(%s)" % srv, msg, "サポート中のバージョンに更新する。", p, "R3")
         if "content-security-policy" not in h:
             add(f, "medium", "CSP がない(ポート %d)" % p,
                 "他人のスクリプトの実行を制限する設定がありません。決済ページでは、カード窃取コードの挿入を防ぐ要になります。",
-                "まず Content-Security-Policy-Report-Only で、読み込み元を洗い出してから、CSP を有効にする。", p)
+                "まず Content-Security-Policy-Report-Only で、読み込み元を洗い出してから、CSP を有効にする。", p, "③CSP")
         if "x-frame-options" not in h and "frame-ancestors" not in h.get("content-security-policy", ""):
             add(f, "low", "クリックジャッキング対策のヘッダがない(ポート %d)" % p, "他のサイトに埋め込まれて操作される可能性があります。",
                 "X-Frame-Options か、CSP の frame-ancestors を設定する。", p)
@@ -281,9 +317,9 @@ def check_host(name, ip, ports, cfg, admin_check, progress):
                     if st in (200, 401):
                         add(f, "medium", "管理画面らしき URL が応答している: %s(ポート %d, 状態 %d)" % (path, p, st),
                             "ログインはせず、応答の状態だけを見ています。",
-                            "社内ネットワークや VPN、IP 制限の内側に置き、多要素認証を付ける。", p)
+                            "社内ネットワークや VPN、IP 制限の内側に置き、多要素認証を付ける。", p, "R3")
                     elif st in (301, 302, 303, 307, 308):
-                        add(f, "info", "管理画面らしき URL がリダイレクトされる: %s(ポート %d)" % (path, p), "", "公開が必要か確認する。", p)
+                        add(f, "info", "管理画面らしき URL がリダイレクトされる: %s(ポート %d)" % (path, p), "", "公開が必要か確認する。", p, "R3")
     res["findings"].sort(key=lambda x: ["critical", "high", "medium", "low", "info"].index(x["sev"]))
     return res
 
@@ -404,6 +440,7 @@ button.pr{background:var(--ac);color:var(--acf);border-color:var(--ac);font-weig
 .warn{background:var(--mb);color:var(--fg);border-left:4px solid var(--med);padding:10px 12px;border-radius:4px}
 .bar{height:8px;background:var(--s2);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ac);width:0}
 .tag{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:3px}
+.rtag{display:inline-block;font-size:11px;font-weight:700;padding:1px 6px;border-radius:3px;margin-left:6px;border:1px solid var(--ln);color:var(--mu)}
 .critical{background:var(--cb);color:var(--crit)}.high{background:var(--hb);color:var(--high)}.medium{background:var(--mb);color:var(--med)}.low{background:var(--lb);color:var(--low)}.info{background:var(--ib);color:var(--info)}
 .sv{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px}.sv div{border-radius:4px;padding:6px 10px;display:flex;justify-content:space-between}
 details{border:1px solid var(--ln);border-left-width:5px;border-radius:4px;background:var(--sf)}summary{cursor:pointer;padding:8px 12px}
@@ -447,7 +484,7 @@ function render(j){
   $("sv").innerHTML=SEV.map(function(s){return'<div class="'+s+'"><span>'+LB[s]+'</span><b>'+c[s]+"</b></div>"}).join("");
   $("res").innerHTML=j.results.map(function(h){
     var op=h.open.length?'<div class="sc"><table><tr><th>ポート</th><th>表示(バナー)</th></tr>'+h.open.map(function(o){return"<tr><td>"+o.port+"</td><td><code>"+esc(o.banner)+"</code></td></tr>"}).join("")+"</table></div>":'<p class="n">開いているポートはありません(応答なし)。</p>';
-    var fs=h.findings.map(function(f){return'<details class="'+f.sev+'"><summary><span class="tag '+f.sev+'">'+LB[f.sev]+"</span> "+esc(f.title)+'</summary><div class="b">'+(f.detail?"<h4>内容</h4>"+esc(f.detail):"")+"<h4>直し方</h4>"+esc(f.fix)+"</div></details>"}).join("");
+    var fs=h.findings.map(function(f){return'<details class="'+f.sev+'"><summary><span class="tag '+f.sev+'">'+LB[f.sev]+"</span> "+esc(f.title)+(f.r?'<span class="rtag">'+esc(f.r)+"</span>":"")+'</summary><div class="b">'+(f.detail?"<h4>内容</h4>"+esc(f.detail):"")+"<h4>直し方</h4>"+esc(f.fix)+(f.r?'<h4>関連する検知/防御</h4>'+esc(f.r)+"（security-scan/defense-detection-notes.md）":"")+"</div></details>"}).join("");
     return'<div style="margin-top:14px"><h2>'+esc(h.name)+' <span class="n">'+esc(h.ip)+"</span></h2>"+op+'<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">'+(fs||'<p class="n">指摘はありません。</p>')+"</div></div>"}).join("");
   $("sq").textContent=j.sqli_note;$("out").hidden=false;
 }
