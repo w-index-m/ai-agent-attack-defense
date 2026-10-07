@@ -1,0 +1,110 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>全体像</title>
+<style>
+:root{
+  --bg:#f3f6f6; --sf:#ffffff; --ln:#d3dcde; --fg:#18262b; --mu:#566a71;
+  --ac:#0f6f68; --acf:#fff;
+  --prev:#0f6f68; --det:#3f6f94; --resp:#c0511d; --rec:#7a2e8a;
+  --prev-bg:#e3f0ef; --det-bg:#e1ecf5; --resp-bg:#fbe9dd; --rec-bg:#efe3f3;
+  --chain:#a57400; --chain-bg:#f8efd2;
+  --found-bg:#eef3f3;
+  --font:"Hiragino Sans","Yu Gothic","Noto Sans JP",system-ui,sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);padding:28px 30px}
+.fig{width:1180px;margin:auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:22px;line-height:1.3}
+h1 small{font-size:13px;color:var(--mu);font-weight:400;display:block;margin-top:3px}
+.chain{background:var(--chain-bg);border:1px solid var(--chain);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chain b{color:var(--chain);font-size:13px}
+.chain .seq{font-size:12.5px;color:var(--fg);font-family:var(--mono)}
+.arrow{text-align:center;color:var(--mu);font-size:16px;margin:-6px 0}
+.cols{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.card{background:var(--sf);border:1px solid var(--ln);border-top-width:5px;border-radius:8px;padding:12px 13px;display:flex;flex-direction:column;gap:9px;min-height:232px}
+.card.prev{border-top-color:var(--prev)} .card.det{border-top-color:var(--det)}
+.card.resp{border-top-color:var(--resp)} .card.rec{border-top-color:var(--rec)}
+.card h2{font-size:15px;display:flex;align-items:baseline;gap:7px}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:4px}
+.t-prev{background:var(--prev-bg);color:var(--prev)} .t-det{background:var(--det-bg);color:var(--det)}
+.t-resp{background:var(--resp-bg);color:var(--resp)} .t-rec{background:var(--rec-bg);color:var(--rec)}
+.sub{font-size:11.5px;color:var(--mu)}
+.item{border:1px solid var(--ln);border-radius:6px;padding:7px 9px;background:var(--bg)}
+.item .nm{font-size:12.5px;font-weight:700;font-family:var(--mono)}
+.item .ds{font-size:11px;color:var(--mu);margin-top:1px;line-height:1.5}
+.pill{font-size:9.5px;font-weight:700;padding:0 5px;border-radius:3px;margin-left:5px;vertical-align:middle}
+.repo{background:#e3f0ef;color:#0f6f68} .ext{background:#eceff0;color:#6b7b82;border:1px solid var(--ln)}
+.found{background:var(--found-bg);border:1px solid var(--ln);border-radius:8px;padding:11px 14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.found .lead{font-size:12px;font-weight:700;color:var(--ac);white-space:nowrap}
+.found .box{font-size:11.5px;color:var(--fg);background:var(--sf);border:1px solid var(--ln);border-radius:6px;padding:5px 9px}
+.found .box b{font-family:var(--mono)}
+.legend{font-size:11px;color:var(--mu);display:flex;gap:14px;flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.note{font-size:11px;color:var(--mu)}
+</style></head>
+<body><div class="fig">
+
+  <h1>ai-agent-attack-defense ── 全体像（防御の4層 × ツール）
+    <small>攻撃用AIエージェント（Strix / Cairn / Hermes ほか）を、防御側の「予防・検知・応答・復旧」に振り分けて守る</small>
+  </h1>
+
+  <div class="chain">
+    <b>攻撃連鎖（Gambit）</b>
+    <span class="seq">① SQLi → ② OTP平文 → ③ アップロード→Webシェル → ④ sudo昇格 → ⑤ NFS/認証情報 → ⑥ IAM全取得 → ⑦ カード鍵</span>
+  </div>
+  <div class="arrow">▼ これを各層で止める</div>
+
+  <div class="cols">
+    <div class="card prev">
+      <h2>予防 <span class="tag t-prev">③ / ③CSP</span></h2>
+      <div class="sub">攻撃を成立させない（攻撃面を減らす・塞ぐ）</div>
+      <div class="item"><div class="nm">netcheck<span class="pill repo">本リポ</span></div>
+        <div class="ds">露出確認：ポート／管理面（vCenter・ESXi）／LLM API。確認専用。</div></div>
+      <div class="item"><div class="nm">予防策ノート §5<span class="pill repo">本リポ</span></div>
+        <div class="ds">送信allowlist・最小権限・CSP・既知unauth-RCEへの備え。</div></div>
+    </div>
+
+    <div class="card det">
+      <h2>検知 <span class="tag t-det">R1–R7</span></h2>
+      <div class="sub">起きたことを見つける（SOC／SIEM）</div>
+      <div class="item"><div class="nm">detections/<span class="pill repo">本リポ</span></div>
+        <div class="ds">Sigma / Falco / Datadog / Elastic（R1–R7・相関R6）。</div></div>
+      <div class="item"><div class="nm">defense-detection-notes<span class="pill repo">本リポ</span></div>
+        <div class="ds">R1–R7 の意味・MITRE ATT&CK・トリアージ手順。</div></div>
+    </div>
+
+    <div class="card resp">
+      <h2>応答 <span class="tag t-resp">R3→遮断</span></h2>
+      <div class="sub">見つけたら止める・封じ込める</div>
+      <div class="item"><div class="nm">自動IP BAN<span class="pill ext">外部案</span></div>
+        <div class="ds">CrowdSec など。偵察・Exploit バーストに応答。</div></div>
+      <div class="item"><div class="nm">プロセス/コンテナ遮断<span class="pill ext">外部案</span></div>
+        <div class="ds">Falco Sidekick 等。※まずアラートのみから段階導入。</div></div>
+    </div>
+
+    <div class="card rec">
+      <h2>復旧 <span class="tag t-rec">resilience</span></h2>
+      <div class="sub">壊されても元に戻す</div>
+      <div class="item"><div class="nm">不変(WORM)バックアップ<span class="pill ext">外部案</span></div>
+        <div class="ds">S3 Object Lock 等（VSS は真の不変でない）。</div></div>
+      <div class="item"><div class="nm">復元テスト<span class="pill ext">外部案</span></div>
+        <div class="ds">定期的に“本当に戻せるか”を確認。</div></div>
+    </div>
+  </div>
+
+  <div class="found">
+    <span class="lead">横断・土台 ▸</span>
+    <span class="box"><b>vuln_triage.html</b>（CI結果の優先度付け：予防↔検知）</span>
+    <span class="box"><b>dashboard</b>（検知の可視化）</span>
+    <span class="box"><b>shared/taxonomy.json</b> ＝唯一の定義</span>
+    <span class="box"><b>CI consistency guard</b>（最新化漏れを自動検出）</span>
+    <span class="box">ガバナンス <b>G1–G6</b>（権限・監査の健全性）</span>
+  </div>
+
+  <div class="legend">
+    <span><span class="pill repo">本リポ</span> このリポジトリの実装</span>
+    <span><span class="pill ext">外部案</span> 外部ロードマップ案（defense-layers-and-roadmap.md で評価）</span>
+    <span class="note">※ R1–R7＝検知、③＝予防。対策は「予防・検知・応答・復旧」の4層で1セット。</span>
+  </div>
+
+</div></body></html>

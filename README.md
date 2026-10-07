@@ -3,6 +3,10 @@
 Study materials and small defensive tools based on the Gambit Security report (2026-09-22) on AI-agent attacks against online retailers (Strix / Cairn / Hermes).
 Use these **only on systems you own or are authorized to test**.
 
+![Overview: the four defense layers (prevent / detect / respond / recover) and which tool covers each](overview-figure.png)
+
+> Big picture: countermeasures form one set across **prevent (③) → detect (R1–R7) → respond → recover**. See [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) for the mapping and [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) for plain-language term definitions.
+
 | Path | What it is | How to test |
 |---|---|---|
 | `vuln_triage.html` | Browser page: load Semgrep / Trivy / gitleaks JSON, get priority, fixes and a plan. Runs locally, nothing is uploaded. Secrets are masked. | Open the file in a browser, drop a JSON report. |
@@ -17,6 +21,7 @@ Use these **only on systems you own or are authorized to test**.
    - `STAGING_URL`: a **staging** URL you own. Leave unset to skip ZAP. Never point it at production or third parties.
 3. Results: job summary and the `security-scan-results` artifact (JSON). Feed those JSON files into `vuln_triage.html`.
 4. Offline test of the summarizer: `python3 scripts/summarize.py <dir-with-json> --fail-on high`.
+5. Ship scan results to a SIEM: `--format elastic --out scan.ndjson` (ECS NDJSON) or `--format datadog --out scan.json` (Datadog Logs JSON). This feeds CI findings into the same platform where the R1–R7 detection rules live.
 
 ## Status / unverified
 - `summarize.py` and `netcheck.py` were tested locally (exit codes, refusals, a scan of 127.0.0.1).
@@ -29,6 +34,10 @@ Use these **only on systems you own or are authorized to test**.
 
 Gambit Security レポート（2026-09-22）の、オンライン小売を狙った AI エージェント攻撃（Strix / Cairn / Hermes）を題材にした、**学習教材と小さな防御ツール**の集まりです。
 **自分が所有している、または許可を得た対象にのみ使用してください。**
+
+![全体像：防御の4層（予防・検知・応答・復旧）と、どのツールがどこを担うか](overview-figure.png)
+
+> 全体像：対策は「**予防(③) → 検知(R1–R7) → 応答 → 復旧**」の4層で1セットです。各対策の対応づけは [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md)、用語のやさしい解説は [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) を参照。
 
 ## ツール一覧
 
