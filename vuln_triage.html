@@ -236,10 +236,10 @@ var FALLBACK={id:"general",label:"一般的な指摘",chain:null,
   fix:["指摘の説明と、ツールが示す修正方法に従う","修正後、同じツールで再診断して消えたことを確認する"],
   verify:"CI で毎回回し、再発していないことを確認する。"};
 
-var CVE_RULE={id:"cve",label:"使っている部品の既知の脆弱性",chain:null,
-  why:"部品(ライブラリ・OS パッケージ)に、公開済みの脆弱性があります。公開済みなので、悪用の方法も知られています。",
-  fix:["修正版が出ていれば、そのバージョンに更新する","修正版がなければ、代替の部品、回避策、影響範囲の確認を行う","更新後に、動作確認とビルドの再実行を行う"],
-  verify:"Dependabot などで毎日スキャンし、新しい公開に気づける状態にする。"};
+var CVE_RULE={id:"cve",label:"使っている部品・製品の既知の脆弱性",chain:null,
+  why:"部品(ライブラリ・OS パッケージ)や製品に、公開済みの脆弱性があります。公開済みなので悪用の方法も知られ、自律型の攻撃ツールの格好の標的になります。特に『認証不要で遠隔コード実行(unauth RCE)』や、管理面(例: 仮想基盤 vCenter の VMSA 級、最大 CVSS 9.8)に関わるものは最優先です。",
+  fix:["ベンダのセキュリティアドバイザリ(例: VMSA / GHSA / ディストリの security) を確認し、修正版に更新する","修正版がなければ、代替・回避策・影響範囲を確認し、該当サービスの露出を信頼ネット内に限定する(netcheck で露出確認)","認証不要・RCE・管理面に関わるものから先に対応する","更新後に、動作確認とビルドの再実行を行う"],
+  verify:"Dependabot などで毎日スキャンし、ベンダのアドバイザリ配信も購読して、新しい公開に気づける状態にする。"};
 
 var SAMPLE_SEMGREP={results:[
  {check_id:"python.django.security.injection.tainted-sql-string",path:"shop/views/login.py",start:{line:42},extra:{severity:"ERROR",message:"ユーザー入力が SQL 文字列に直接連結されています。",lines:"cur.execute(\"SELECT * FROM users WHERE name='\"+name+\"'\")"}},
