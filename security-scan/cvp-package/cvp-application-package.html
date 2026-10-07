@@ -4,8 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <meta name="dcterms.date" content="2026-10-06" />
-  <title>CVP ���������������������</title>
+  <title>00-cover</title>
   <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -104,13 +103,10 @@ hr { border: none; border-top: 2px solid #d3dcde; margin: 1.6em 0; page-break-af
 </style>
 </head>
 <body>
-<header id="title-block-header">
-<h1 class="title">CVP ���������������������</h1>
-<p class="subtitle">ai-agent-attack-defense — 防御研究・統制証拠一式</p>
-<p class="date">2026-10-06</p>
-</header>
 <h1 id="cyber-verification-program-申請パッケージ">Cyber Verification
 Program 申請パッケージ</h1>
+<p><em>ai-agent-attack-defense — 防御研究・統制証拠一式 ／
+2026-10-06</em></p>
 <p><strong>プロジェクト</strong>:
 <code>ai-agent-attack-defense</code>（w-index-m） <strong>目的</strong>:
 Gambit Security レポート（2026-09-22）の AI エージェント攻撃（Strix /
@@ -593,11 +589,23 @@ note: 自動化エージェントの常駐化。作成プロセス系統を併�
 <pre><code>correlation (時系列・同一アセット or 同一オペレータ):
   R3 (偵察バースト)  AND
   R1 (継続的な LLM egress) AND
-  (R2 (特権コンテナ) OR 連続自動ツール実行) AND
+  (R2 (特権コンテナ) OR R7 連続ツール実行) AND
   任意で R4/R5
 window: 数十分〜数時間
 action: 「自律 AI エージェント攻撃」候補として優先度最上位でエスカレーション
 note: 本キャンペーンの本質は“各単体は既知挙動でも、連鎖が速く広い”こと。相関が最大の武器。</code></pre>
+<p><strong>R7.
+1プロセス/エージェントが多数のセキュリティツールを短時間に連続実行</strong></p>
+<pre><code>logsource: edr / process_telemetry (sysmon / auditd / ebpf)
+detection:
+  親プロセス（またはツール実行を仲介するプロセス）から、
+  短時間に多種のセキュリティツールが子プロセスとして起動:
+    nmap, ffuf, nikto, sqlmap, hydra, msfconsole, nuclei, gobuster, wpscan, ...
+  threshold: 同一 parent から 5分に異なるツール &gt;= N 種（N は環境ベースライン）
+condition: distinct_tool_count_by_parent &gt;= N
+note: ローカルLLM 利用で LLM egress(R1) が出ないエージェント（PentAGI/Villager 系）でも、
+      この「人手を超える速度・多様さでのツール連続実行」は残る。MCP で 150+ ツールを
+      束ねる基盤型（HexStrike 系）にも効く。Kali ベースのコンテナ内実行なら R2 と相関。</code></pre>
 <h2 id="3-mitre-attck-対応検知の棚卸し用">3. MITRE ATT&amp;CK
 対応（検知の棚卸し用）</h2>
 <table>
@@ -684,6 +692,216 @@ control）。</li>
 </ul>
 <blockquote>
 <p>すべて検知・防御の設計に限定。攻撃の実行手順や安全機構の回避方法は本ノートに含めない。</p>
+</blockquote>
+<hr />
+<h1 id="6-攻撃用-ai-エージェントの広域マップと防御の当てはめ">6. 攻撃用
+AI エージェントの広域マップと防御の当てはめ</h1>
+<p>Gambit の 3
+ツール（Strix/Cairn/Hermes）は「分業チェーン型」の一例にすぎない。実際には
+AI
+ペンテスト/攻撃エージェントは多数あり、タイプで整理すると防御の当てはめが見通せる。
+<strong>朗報は、種類が増えても観測できる挙動の土台が共通</strong>（LLM
+推論の呼び出し・スキャン・ツール実行・任意で C2） であること。したがって
+R1–R7
+の検知が<strong>横展開でほぼカバー</strong>でき、ツールごとに作り直す必要はない。</p>
+<h2 id="61-タイプ別マップ防御観点">6.1 タイプ別マップ（防御観点）</h2>
+<table>
+<thead>
+<tr class="header">
+<th>類型</th>
+<th>代表例</th>
+<th>性質</th>
+<th>主に効く検知</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>①分業チェーン型</td>
+<td>Hermes＋Strix＋Cairn</td>
+<td>役割を別ツールで分担（統括/偵察/侵入）</td>
+<td>R1 R3 R2 R4 R5 R7＋相関R6</td>
+</tr>
+<tr class="even">
+<td>④E2E 自律ペンテスト型</td>
+<td>PentAGI, Villager, PentestAgent, Pentest-Swarm, hackingBuddyGPT
+等</td>
+<td>偵察〜実行〜検証を単体で完結（多くはマルチエージェント・Kali
+コンテナ）</td>
+<td>R7 R2 R3（＋ローカルLLMでなければ R1）</td>
+</tr>
+<tr class="odd">
+<td>⑤攻撃基盤・フレームワーク型</td>
+<td>HexStrike AI, CAI, TARS</td>
+<td>エージェントに多数ツールを持たせる土台（MCP 等で 150+
+ツール統括）</td>
+<td>R7（多ツール連続実行）R2 R3</td>
+</tr>
+<tr class="even">
+<td>⑥対話型アシスタント型</td>
+<td>PentestGPT, Pentest Copilot</td>
+<td>人が主導し AI が提案/実行支援（自律モードを持つ物も）</td>
+<td>R3 R7（自律時）／人手主導のため相対的に低速</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>類型名は一般的な整理の一例。個々の製品の分類や能力は変化するため、固定視せず挙動ベースで扱う。</p>
+</blockquote>
+<h2 id="62-新タイプで効きやすい検知の勘所">6.2
+新タイプで効きやすい検知の勘所</h2>
+<ul>
+<li><strong>ローカルLLM 対応型（PentAGI/Ollama、Villager/DeepSeek
+ローカル等）は R1(LLM egress) を回避できる。</strong> →
+<strong>R7（人手を超える速度・多様さのツール連続実行）とR2（Kali
+等コンテナ）</strong> に重心を移す。</li>
+<li><strong>基盤・フレームワーク型（HexStrike 等）は MCP
+で大量ツールを束ねる。</strong> → 1
+プロセス/エージェント配下での<strong>多種ツール子プロセスの集中</strong>を
+R7 で捉える。</li>
+<li><strong>E2E 型は Kali
+ベースのコンテナ内で実行</strong>することが多い。 → 未知/Kali
+系イメージ＋特権の起動を R2 で、内部の多ツール実行を R7 で、相関は R6
+で。</li>
+<li>どの類型でも <strong>攻撃面最小化・egress
+allowlist・特権コンテナ禁止（§5）</strong>
+が前段の固定策として効く。</li>
+</ul>
+<h2 id="63-悪用が報告懸念されている例注意喚起">6.3
+悪用が報告/懸念されている例（注意喚起）</h2>
+<ul>
+<li><strong>Villager</strong>（Cyberspike, Kali＋DeepSeek, PyPI で 1万超
+DL）: 旧 AsyncRAT 配布インフラとの関連が指摘され、 「次の Cobalt
+Strike」化が懸念。</li>
+<li><strong>HexStrike AI</strong>（OSS, MCP で 150+ ツール統括）: Citrix
+の CVE-2025-7775 等を<strong>数分で</strong>悪用する用途が
+攻撃者フォーラムで共有されたと報告。</li>
+<li><strong>ARTEX AI / Villager</strong>:
+実攻撃での悪用が報告・疑いあり（三輪信雄氏の整理より）。</li>
+</ul>
+<blockquote>
+<p>これらは「存在と危険性の注意喚起」。本ノートは検知・防御に限定し、各ツールの入手・実行・悪用手順は扱わない。</p>
+</blockquote>
+<h2 id="64-まとめ">6.4 まとめ</h2>
+<p>攻撃側の“カタログ”は増え続けるが、<strong>防御は挙動ベースで一般化できる</strong>。本リポジトリの検知
+（<code>detections/</code> の R1–R7 と相関 R6）と予防（§5）は、Gambit の
+3 ツールに限らず ④⑤⑥の多くに横展開できる。優先度は
+<strong>R1/R4（egress）→ R2（特権コンテナ）→ R7（多ツール連続実行）→
+R3（偵察）→ R5（永続化）→ R6（相関）</strong>。</p>
+<p>参考: 攻撃用 AI エージェントの類型整理は 三輪信雄氏(@NobMiwa)
+の公開まとめを参照した。 個別ツールの出典は本ノート冒頭および §6.3
+の記述に準ずる。</p>
+<hr />
+<h1 id="7-スキル機構とガバナンスt1562-の押さえどころ">7.
+スキル機構とガバナンス（T1562 の押さえどころ）</h1>
+<p>ネットワーク(R1/R4)・ホスト(R2/R5/R7)の検知は「何が起きたか」を外側から観測する。これに対し、
+<strong>エージェント／LLM
+の“使い方そのもの”を統制・監査する層</strong>が必要になる領域がある。MITRE
+**T1562 （Impair Defenses＝防御の無効化）**に当たる動きで、Hermes
+の「自身の安全フィルタ除去」のように、
+ネットワークやホストの単純なシグナルでは捕まえにくい。</p>
+<h2 id="71-スキルとは何かなぜ兵器化の入口になるのか">7.1
+スキルとは何か、なぜ兵器化の入口になるのか</h2>
+<p>エージェント基盤の「スキル」は、エージェントに後付けできる<strong>能力の束</strong>で、主に3要素から成る——
+<strong>指示（プロンプト断片）</strong>、そのスキルが使ってよい<strong>ツールの利用権</strong>、複数ステップの<strong>ワークフロー</strong>。
+Hermes
+はさらに、作業経験から<strong>スキルを自動生成し、使いながら改良し、セッションをまたいで蓄積する</strong>
+自己改善ループを持つ。これ自体は正当で便利な機能である。</p>
+<p>危険なのは、エージェントが<strong>スキルの内容を“信頼できる上位の指示＋権限付与”として取り込む</strong>点にある。
+Gambit の事例では、攻撃者は Hermes
+本体のコードを一行も変えず、<strong>攻撃用スキルを大量に（121 個中 78
+個が攻撃目的）上乗せ</strong>し、そのうち 1
+つに「<strong>自身の安全フィルタを外す</strong>」役割を持たせただけで、
+良性の汎用アシスタントを攻撃の司令塔に変えた。つまりスキルは、実質的に「<strong>信頼された指示＋ツール権限を
+外部から注入する口</strong>」であり、防御上は<strong>サプライチェーン</strong>（無審査のスキル取り込み）と
+<strong>プロンプトインジェクション</strong>（スキルの文章が判断を上書き）の二重の攻撃面になる。</p>
+<blockquote>
+<p>構造的な理由だけ述べる：安全強制を**スキル/モデル層の外側（スキルから触れない場所）**に置かない設計だと、
+スキルが「安全チェックを無視せよ」と指示する余地が生まれる。堅牢な設計は安全強制を外側に固定する。
+本ノートは除去の具体手順は扱わない。</p>
+</blockquote>
+<h2 id="72-ガバナンスが具体的に要求していること">7.2
+ガバナンスが具体的に要求していること</h2>
+<ol type="1">
+<li><strong>不可変の安全層</strong>：安全強制をエージェント内部ではなく、外側のゲートウェイ／プロバイダ側で行い、
+スキルやプロンプトから書き換えられないようにする。CVP
+の“不変の一線”（物理被害・大規模妨害・
+ランサム・安全系無効化は常にブロック）がこの実例。</li>
+<li><strong>スキルの出所管理・allowlist</strong>：署名済み・レビュー済みのスキルだけを許可し、出所を記録、
+未知スキルの取り込みは既定で止める。社内レジストリで一元管理（＝サプライチェーン対策）。</li>
+<li><strong>ツール権限の最小化＋ブローカー経由</strong>：エージェントに直接ツールを握らせず、ポリシーを強制する
+仲介（ブローカー）越しに使わせる。権限拡大は人の承認を挟む。</li>
+<li><strong>改ざん耐性のある監査ログ</strong>：プロンプト・ツール呼び出し・スキルのロード/生成/自己改変・安全設定の
+変更を記録し、追記のみ／外部保管で改ざんに備える。ログの欠落・停止自体が異常シグナル。</li>
+<li><strong>高リスク操作は人間承認（HITL）</strong>：権限昇格・外部送信・破壊的操作はゲートで止める。</li>
+<li><strong>検知との相関</strong>：下記ガバナンス・シグナルを R1/R4/R7
+等と時系列で突き合わせ（R6）、
+“自律エージェントの始動”として束ねて見る。</li>
+</ol>
+<h2 id="73-監査イベント一覧ガバナンス層r1r7-と同じ粒度">7.3
+監査イベント一覧（ガバナンス層・R1–R7 と同じ粒度）</h2>
+<p>これらは主に<strong>アプリ/監査ログ層</strong>（エージェントの監査ログ、スキルレジストリ、LLM/ツールのゲートウェイ、
+ログ基盤のヘルス）で観測する。ネットワーク/ホストの R1–R7
+とは観測点が異なる。</p>
+<table>
+<thead>
+<tr class="header">
+<th>ID</th>
+<th>監査イベント / Signal</th>
+<th>データソース</th>
+<th>優先度</th>
+<th>対応</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>G1</td>
+<td>スキルの導入・自動生成・自己改変</td>
+<td>エージェント監査ログ / スキルレジストリ</td>
+<td>高</td>
+<td>出所・署名・レビュー有無を確認。未承認なら隔離。</td>
+</tr>
+<tr class="even">
+<td>G2</td>
+<td>安全設定・ガードレールの変更/無効化の試行</td>
+<td>ポリシーゲートウェイ / エージェント設定ログ</td>
+<td>高</td>
+<td>外側の安全層で拒否。試行自体を即エスカレーション。</td>
+</tr>
+<tr class="odd">
+<td>G3</td>
+<td>プロンプト/ツール呼び出しに安全機構の迂回意図</td>
+<td>LLM ゲートウェイ監査</td>
+<td>高</td>
+<td>ガバナンス審査。該当セッションを保全。</td>
+</tr>
+<tr class="even">
+<td>G4</td>
+<td>監査ログの欠落・停止</td>
+<td>ログ基盤ヘルス</td>
+<td>高</td>
+<td>ログ自体への攻撃を疑い、記録経路を復旧・保全。</td>
+</tr>
+<tr class="odd">
+<td>G5</td>
+<td>ツール権限の拡大要求/付与</td>
+<td>ツールブローカー監査</td>
+<td>中</td>
+<td>最小権限に照合。拡大は人の承認を要求。</td>
+</tr>
+<tr class="even">
+<td>G6</td>
+<td>サブエージェントの大量スポーン／権限を広げる構成変更</td>
+<td>プロセス/エージェント・テレメトリ</td>
+<td>中</td>
+<td>乱立・権限拡大のパターンを R7 と相関。</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>G1–G6 はネットワーク/ホストの
+Sigma/Falco/Datadog（<code>detections/</code>）ではなく、<strong>ガバナンス/監査の層</strong>で
+実装する。各組織のエージェント基盤・ログ基盤のスキーマに合わせて配線する。本ノートは兆候の存在と
+対応方針のみを示し、安全機構の回避方法は一切含めない。</p>
 </blockquote>
 <h1 id="cairn-動作確認ランブック自分の隔離ラボ認可済み前提">Cairn
 動作確認ランブック（自分の隔離ラボ・認可済み前提）</h1>
@@ -795,10 +1013,10 @@ allowlist）。可能なら<strong>ローカルモデル</strong>にして egres
 <li>Cairn を動かすホスト（ワーカー）もスナップショット可能にする。</li>
 </ol>
 <h3 id="32-インストール">3.2 インストール</h3>
-<div class="sourceCode" id="cb8"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/oritera/Cairn <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> Cairn</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> sync <span class="at">--project</span> cairn</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co"># container モードなら worker イメージを取得（この時だけ egress 必要）</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> pull ghcr.io/oritera/cairn-worker-container:latest</span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/oritera/Cairn <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> Cairn</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> sync <span class="at">--project</span> cairn</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="co"># container モードなら worker イメージを取得（この時だけ egress 必要）</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="ex">docker</span> pull ghcr.io/oritera/cairn-worker-container:latest</span></code></pre></div>
 <h3 id="33-設定dispatchyaml">3.3 設定（<code>dispatch.yaml</code>）</h3>
 <p><code>dispatch.example.yaml</code> をコピーして編集。最低限：</p>
 <ul>
@@ -822,16 +1040,16 @@ allowlist）。可能なら<strong>ローカルモデル</strong>にして egres
 まず安全スモーク（mock・攻撃なし）</h3>
 <p>実標的に向ける前に、エンジンが回ることをモックで確認（§4 参照）。</p>
 <h3 id="35-本番実行">3.5 本番実行</h3>
-<div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1) サーバ</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run <span class="at">--project</span> cairn cairn serve <span class="at">--host</span> 0.0.0.0 <span class="at">--port</span> 8000</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2) プロジェクト作成（origin=ラボ対象, goal=目標）: POST /projects</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> POST http://<span class="op">&lt;</span>server<span class="op">&gt;</span>:8000/projects <span class="dt">\</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;Content-Type: application/json&#39;</span> <span class="dt">\</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{&quot;origin&quot;:&quot;target http://10.77.0.10&quot;,&quot;goal&quot;:&quot;get a shell&quot;,&quot;bootstrap_enabled&quot;:true}&#39;</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 3) ディスパッチャ起動（ワーカーが OODA ループを回し始める）</span></span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run <span class="at">--project</span> cairn cairn dispatch <span class="at">--config</span> dispatch.yaml</span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 1) サーバ</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run <span class="at">--project</span> cairn cairn serve <span class="at">--host</span> 0.0.0.0 <span class="at">--port</span> 8000</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 2) プロジェクト作成（origin=ラボ対象, goal=目標）: POST /projects</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> POST http://<span class="op">&lt;</span>server<span class="op">&gt;</span>:8000/projects <span class="dt">\</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">-H</span> <span class="st">&#39;Content-Type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{&quot;origin&quot;:&quot;target http://10.77.0.10&quot;,&quot;goal&quot;:&quot;get a shell&quot;,&quot;bootstrap_enabled&quot;:true}&#39;</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="co"># 3) ディスパッチャ起動（ワーカーが OODA ループを回し始める）</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run <span class="at">--project</span> cairn cairn dispatch <span class="at">--config</span> dispatch.yaml</span></code></pre></div>
 <h3 id="36-観測記録">3.6 観測・記録</h3>
 <ul>
 <li><code>GET /projects/{id}</code> で fact-intent
@@ -859,18 +1077,18 @@ allowlist）。可能なら<strong>ローカルモデル</strong>にして egres
 に <code>runtime.execution: local</code> +
 <code>worker_healthcheck: disabled</code>
 を足し、<code>container:</code> を除去したもの）。</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 依存は標準 PyPI から（Cairn の既定は aliyun ミラー固定なので上書き）</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="va">UV_DEFAULT_INDEX</span><span class="op">=</span><span class="st">&quot;https://pypi.org/simple&quot;</span> <span class="ex">uv</span> sync <span class="at">--project</span> cairn</span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 1) サーバ</span></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="va">UV_DEFAULT_INDEX</span><span class="op">=</span><span class="st">&quot;https://pypi.org/simple&quot;</span> <span class="ex">uv</span> run <span class="at">--project</span> cairn cairn serve <span class="at">--host</span> 127.0.0.1 <span class="at">--port</span> 8000</span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 2) 到達先の無いダミー project（title は必須）</span></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> POST http://127.0.0.1:8000/projects <span class="at">-H</span> <span class="st">&#39;Content-Type: application/json&#39;</span> <span class="dt">\</span></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{&quot;title&quot;:&quot;mock-smoke&quot;,&quot;origin&quot;:&quot;mock target (no network)&quot;,&quot;goal&quot;:&quot;mock goal&quot;,&quot;bootstrap_enabled&quot;:true}&#39;</span></span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co"># 3) mock ディスパッチャ（ホストプロセス・攻撃なし）</span></span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="va">UV_DEFAULT_INDEX</span><span class="op">=</span><span class="st">&quot;https://pypi.org/simple&quot;</span> <span class="ex">uv</span> run <span class="at">--project</span> cairn cairn dispatch <span class="at">--config</span> dispatch_mock_local.yaml</span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># 依存は標準 PyPI から（Cairn の既定は aliyun ミラー固定なので上書き）</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="va">UV_DEFAULT_INDEX</span><span class="op">=</span><span class="st">&quot;https://pypi.org/simple&quot;</span> <span class="ex">uv</span> sync <span class="at">--project</span> cairn</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># 1) サーバ</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="va">UV_DEFAULT_INDEX</span><span class="op">=</span><span class="st">&quot;https://pypi.org/simple&quot;</span> <span class="ex">uv</span> run <span class="at">--project</span> cairn cairn serve <span class="at">--host</span> 127.0.0.1 <span class="at">--port</span> 8000</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="co"># 2) 到達先の無いダミー project（title は必須）</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-s</span> <span class="at">-X</span> POST http://127.0.0.1:8000/projects <span class="at">-H</span> <span class="st">&#39;Content-Type: application/json&#39;</span> <span class="dt">\</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">-d</span> <span class="st">&#39;{&quot;title&quot;:&quot;mock-smoke&quot;,&quot;origin&quot;:&quot;mock target (no network)&quot;,&quot;goal&quot;:&quot;mock goal&quot;,&quot;bootstrap_enabled&quot;:true}&#39;</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="co"># 3) mock ディスパッチャ（ホストプロセス・攻撃なし）</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="va">UV_DEFAULT_INDEX</span><span class="op">=</span><span class="st">&quot;https://pypi.org/simple&quot;</span> <span class="ex">uv</span> run <span class="at">--project</span> cairn cairn dispatch <span class="at">--config</span> dispatch_mock_local.yaml</span></code></pre></div>
 <ul>
 <li>fact-intent グラフが OODA で成長していくのを
 <code>GET /projects/{id}</code> / static UI
@@ -992,26 +1210,26 @@ NET_ADMIN/NET_RAW（<code>nmap -sS</code> 等の raw socket
 版へ差し替えるだけで成立する。</p>
 <h2 id="実装案新バックエンド-15-行">実装案（新バックエンド ~15 行）</h2>
 <p><code>strix/runtime/backends.py</code> に追加:</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> _unix_local_backend(</span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>, image, manifest, exposed_ports, bind_mounts<span class="op">=</span><span class="va">None</span>,</span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>):</span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># image と bind_mounts は使わない（ホスト FS がそのまま workspace）</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> agents.sandbox.sandboxes.unix_local <span class="im">import</span> (</span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>        UnixLocalSandboxClient, UnixLocalSandboxClientOptions,</span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    )</span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> UnixLocalSandboxClient()</span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    options <span class="op">=</span> UnixLocalSandboxClientOptions(exposed_ports<span class="op">=</span>exposed_ports)</span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    session <span class="op">=</span> <span class="cf">await</span> client.create(options<span class="op">=</span>options, manifest<span class="op">=</span>manifest)</span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> session.start()</span>
-<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> client, session</span>
-<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="co"># bind mount 非対応（= manifest entries 経由でソースを materialize）</span></span>
-<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>register_backend(<span class="st">&quot;local&quot;</span>, _unix_local_backend, supports_bind_mounts<span class="op">=</span><span class="va">False</span>)</span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode python"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> _unix_local_backend(</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>, image, manifest, exposed_ports, bind_mounts<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>):</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># image と bind_mounts は使わない（ホスト FS がそのまま workspace）</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> agents.sandbox.sandboxes.unix_local <span class="im">import</span> (</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>        UnixLocalSandboxClient, UnixLocalSandboxClientOptions,</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> UnixLocalSandboxClient()</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    options <span class="op">=</span> UnixLocalSandboxClientOptions(exposed_ports<span class="op">=</span>exposed_ports)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    session <span class="op">=</span> <span class="cf">await</span> client.create(options<span class="op">=</span>options, manifest<span class="op">=</span>manifest)</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">await</span> session.start()</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> client, session</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a><span class="co"># bind mount 非対応（= manifest entries 経由でソースを materialize）</span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>register_backend(<span class="st">&quot;local&quot;</span>, _unix_local_backend, supports_bind_mounts<span class="op">=</span><span class="va">False</span>)</span></code></pre></div>
 <p>起動:</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">STRIX_RUNTIME_BACKEND</span><span class="op">=</span>local</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">STRIX_LLM</span><span class="op">=</span><span class="st">&quot;anthropic/claude-sonnet-5-5&quot;</span>   <span class="co"># LiteLLM の model id</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">LLM_API_KEY</span><span class="op">=</span>...</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run strix <span class="at">-n</span> <span class="at">-t</span> ./ <span class="at">--scan-mode</span> quick <span class="at">--max-budget</span> 10</span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">STRIX_RUNTIME_BACKEND</span><span class="op">=</span>local</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">STRIX_LLM</span><span class="op">=</span><span class="st">&quot;anthropic/claude-sonnet-5-5&quot;</span>   <span class="co"># LiteLLM の model id</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">LLM_API_KEY</span><span class="op">=</span>...</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="ex">uv</span> run strix <span class="at">-n</span> <span class="at">-t</span> ./ <span class="at">--scan-mode</span> quick <span class="at">--max-budget</span> 10</span></code></pre></div>
 <p><code>get_backend()</code> が <code>STRIX_RUNTIME_BACKEND</code>
 で分岐するため、既存の Docker 経路には触れない。</p>
 <h2 id="注意点ここが実質的な作業">注意点（ここが実質的な作業）</h2>
