@@ -3,6 +3,8 @@
 `../defense-detection-notes.md` の検知ロジック（R1–R6）を、実スタック向けに具体化したもの。
 **検知コンテンツのみ**で、攻撃手順や安全機構の回避方法は含まない。
 
+> 下の網羅表は [`../../shared/taxonomy.json`](../../shared/taxonomy.json) の `detections_coverage` を人間向けに表したもの。両者のズレ（ルールファイルの過不足）は CI の整合性チェック（`tools/check_consistency.py`）が検出する。タグの追加手順は [`../../shared/README.md`](../../shared/README.md) を参照。
+
 | ルール | 意味 | Sigma | Falco | Datadog | Elastic |
 |---|---|---|---|---|---|
 | R1 | サーバ系から LLM API への外向き通信 | ✅ | — | ✅ | ✅ |

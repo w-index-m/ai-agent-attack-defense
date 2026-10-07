@@ -1,0 +1,56 @@
+{
+  "_comment": "このリポジトリ全体で共有する唯一の定義（single source of truth）。検知/防御タグ・攻撃連鎖・対応スキャナ・検知ルールの網羅表をここで一元管理する。各ツール（netcheck / vuln_triage / detections / ダッシュボード / ノート）はこの定義に合わせる。ズレは tools/check_consistency.py が CI で検出する。変更したら shared/README.md の手順に従うこと。",
+  "version": 1,
+
+  "detection_tags": {
+    "R1": {"kind": "detection", "name": "サーバ系ホストから LLM API への外向き通信"},
+    "R2": {"kind": "detection", "name": "特権 cap / host ネットのコンテナ起動"},
+    "R3": {"kind": "detection", "name": "偵察的 Web アクセス（列挙バースト）"},
+    "R4": {"kind": "detection", "name": "サーバからのメッセージング API 通信（C2 的チャネル）"},
+    "R5": {"kind": "detection", "name": "永続化の新規作成（cron / systemd timer）"},
+    "R6": {"kind": "detection", "name": "自律エージェントの相関検知（連鎖を束ねる）"},
+    "R7": {"kind": "detection", "name": "多数のセキュリティツールの短時間連続実行"},
+    "③": {"kind": "control", "name": "攻撃面最小化（ネット直結の露出を断つ）"},
+    "③CSP": {"kind": "control", "name": "CSP による読み込み制御"}
+  },
+
+  "governance_events": {
+    "G1": "権限昇格・安全機構の無効化の試み",
+    "G2": "承認フローの迂回",
+    "G3": "スコープ外資産への到達",
+    "G4": "監査ログの欠落・改ざん",
+    "G5": "権限の拡大（過剰付与）",
+    "G6": "サブエージェントの大量スポーン／権限を広げる構成変更"
+  },
+
+  "attack_chain": [
+    "ログイン画面の SQL インジェクション",
+    "OTP が DB に平文で保存(MFA 回避)",
+    "管理画面のアップロードに拡張子検証なし",
+    "sudo がパスワードなしで実行可",
+    "NFS 設定不備と、設定ファイル内の認証情報",
+    "Secrets Manager の全件取得(IAM が広すぎる)",
+    "カード番号の暗号鍵が同じ環境から取得可"
+  ],
+
+  "triage_scanners": ["semgrep", "trivy", "gitleaks", "sarif", "netcheck"],
+
+  "detections_coverage": {
+    "_comment": "各検知タグ R1–R7 を、どの検知バックエンドで実装しているか（present = 専用コンテンツあり）。detections/README.md の網羅表と一致させる。sigma/datadog/elastic は r{n}_*.{ext} のファイル有無で、falco は単一ファイル内の R{n} 参照で検証する。",
+    "backends": {
+      "sigma":   {"dir": "security-scan/detections/sigma",   "ext": "yml",  "mode": "per_tag_file"},
+      "datadog": {"dir": "security-scan/detections/datadog", "ext": "json", "mode": "per_tag_file"},
+      "elastic": {"dir": "security-scan/detections/elastic", "ext": "json", "mode": "per_tag_file"},
+      "falco":   {"dir": "security-scan/detections/falco",   "ext": "yaml", "mode": "combined_file"}
+    },
+    "matrix": {
+      "R1": {"sigma": true,  "datadog": true,  "elastic": true,  "falco": false},
+      "R2": {"sigma": true,  "datadog": false, "elastic": true,  "falco": true},
+      "R3": {"sigma": true,  "datadog": true,  "elastic": true,  "falco": false},
+      "R4": {"sigma": true,  "datadog": true,  "elastic": true,  "falco": false},
+      "R5": {"sigma": true,  "datadog": false, "elastic": true,  "falco": true},
+      "R6": {"sigma": false, "datadog": false, "elastic": true,  "falco": false},
+      "R7": {"sigma": true,  "datadog": false, "elastic": true,  "falco": true}
+    }
+  }
+}
