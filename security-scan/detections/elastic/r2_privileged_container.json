@@ -1,0 +1,25 @@
+{
+  "rule_id": "aad-r2-privileged-container",
+  "name": "[R2] Privileged / raw-socket / host-network container started",
+  "description": "Container started privileged, on the host network, or with NET_RAW/NET_ADMIN — consistent with Cairn/Strix worker sandboxes. Correlate with unknown image names. Field names vary by data source (Falco, auditbeat, k8s audit); adjust to your mapping.",
+  "type": "query",
+  "language": "kuery",
+  "query": "event.category:\"container\" and (container.security_context.privileged:true or process.args:(\"--privileged\" or \"--net=host\" or \"--network=host\") or process.args:(\"NET_RAW\" or \"NET_ADMIN\" or \"cap_net_raw\" or \"cap_net_admin\"))",
+  "index": ["logs-container.*", "logs-falco.*", "auditbeat-*", "logs-kubernetes.*"],
+  "from": "now-10m",
+  "interval": "5m",
+  "severity": "medium",
+  "risk_score": 47,
+  "enabled": false,
+  "author": ["ai-agent-attack-defense"],
+  "references": ["https://github.com/oritera/Cairn"],
+  "false_positives": ["Legitimate network tooling / CNI / monitoring agents — allowlist images."],
+  "tags": ["AI-agent", "container", "R2"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0002", "name": "Execution", "reference": "https://attack.mitre.org/tactics/TA0002/" },
+      "technique": [ { "id": "T1610", "name": "Deploy Container", "reference": "https://attack.mitre.org/techniques/T1610/" } ]
+    }
+  ]
+}

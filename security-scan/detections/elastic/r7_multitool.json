@@ -1,0 +1,30 @@
+{
+  "rule_id": "aad-r7-multitool",
+  "name": "[R7] Rapid multi-tool security tooling execution by one parent",
+  "description": "One parent process spawning many DISTINCT security tools in a short window — the behavioral core of autonomous AI pentest agents (E2E agents, and MCP frameworks orchestrating 150+ tools). Persists even with a LOCAL LLM and no egress (R1). Threshold rule keyed on process.parent.entity_id with a cardinality floor on process.name; tune the cardinality value to your baseline.",
+  "type": "threshold",
+  "language": "kuery",
+  "query": "process.name:(\"nmap\" or \"ffuf\" or \"gobuster\" or \"nikto\" or \"sqlmap\" or \"hydra\" or \"nuclei\" or \"wpscan\" or \"msfconsole\" or \"medusa\" or \"enum4linux\")",
+  "threshold": {
+    "field": ["process.parent.entity_id"],
+    "value": 1,
+    "cardinality": [ { "field": "process.name", "value": 5 } ]
+  },
+  "index": ["logs-endpoint.events.process-*", "auditbeat-*", "winlogbeat-*"],
+  "from": "now-6m",
+  "interval": "5m",
+  "severity": "high",
+  "risk_score": 73,
+  "enabled": false,
+  "author": ["ai-agent-attack-defense"],
+  "references": ["https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company"],
+  "false_positives": ["Authorized scanning pipelines / scheduled security scans — allowlist the orchestrator.", "A human pentester working fast — correlate with authorization/scope."],
+  "tags": ["AI-agent", "execution", "R7", "local-llm-resistant"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0002", "name": "Execution", "reference": "https://attack.mitre.org/tactics/TA0002/" },
+      "technique": [ { "id": "T1059", "name": "Command and Scripting Interpreter", "reference": "https://attack.mitre.org/techniques/T1059/" } ]
+    }
+  ]
+}

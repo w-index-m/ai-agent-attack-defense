@@ -1,0 +1,25 @@
+{
+  "rule_id": "aad-r5-persistence",
+  "name": "[R5] New cron/systemd persistence created",
+  "description": "Creation/modification of cron entries or systemd timer/service units — used by autonomous agents (Hermes-style) to persist scheduled automation. Correlate the creating process lineage with other stages.",
+  "type": "query",
+  "language": "kuery",
+  "query": "event.category:\"file\" and event.type:(\"creation\" or \"change\") and file.path:(\"/etc/crontab\" or /etc/cron.* or /var/spool/cron/* or /etc/systemd/system/*)",
+  "index": ["logs-endpoint.events.file-*", "auditbeat-*", "logs-system.*"],
+  "from": "now-10m",
+  "interval": "5m",
+  "severity": "medium",
+  "risk_score": 47,
+  "enabled": false,
+  "author": ["ai-agent-attack-defense"],
+  "references": ["https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company"],
+  "false_positives": ["Configuration management (Ansible/Puppet/Chef) and package installs."],
+  "tags": ["AI-agent", "persistence", "R5"],
+  "threat": [
+    {
+      "framework": "MITRE ATT&CK",
+      "tactic": { "id": "TA0003", "name": "Persistence", "reference": "https://attack.mitre.org/tactics/TA0003/" },
+      "technique": [ { "id": "T1053", "name": "Scheduled Task/Job", "reference": "https://attack.mitre.org/techniques/T1053/" } ]
+    }
+  ]
+}
