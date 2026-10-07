@@ -63,7 +63,7 @@
 | SRI（Subresource Integrity） | 外部スクリプトが改ざんされていないかを指紋で確認する仕組み。 |
 | FIM（ファイル改ざん検知） | 重要ファイルの変更・新規設置・削除を見張る仕組み。「カーネルレベル」はOSの通知機能でリアルタイムに捕まえる。Wazuh では Syscheck。本リポ記号では R5。 |
 | eBPF | Linux カーネル内で安全にプログラムを動かす技術。低負荷で挙動を監視できる（Falco などが利用）。 |
-| WORM（Write Once Read Many） | 一度書いたら消せない保存方式。ランサム対策になる。例：S3 Object Lock（Windows の VSS は管理者権限で消せるので“真のWORM”ではない）。 |
+| WORM（Write Once Read Many） | 一度書いたら消せない保存方式。ランサム対策になる。例：オブジェクトストレージの Object Lock／不変化（AWS S3 Object Lock・Azure 不変BLOB・GCP Bucket Lock・WORM NAS 等）。Windows の VSS は管理者権限で消せるので“真のWORM”ではない。 |
 | MFA / 2FA / OTP | 多要素認証。パスワードに加え、ワンタイムコード等で本人確認を強める。OTP を平文保存すると意味が薄れる。 |
 | IAM | クラウドの「誰が何をできるか」の権限管理。広すぎると1台破られただけで全体に波及。 |
 | NFS / no_root_squash | ファイル共有の仕組みと、その危険な設定。`no_root_squash` があると共有先の root 権限が通ってしまう。 |

@@ -57,7 +57,7 @@ R1–R7（＝検知の中身）の早見は [`README.ja.md`](README.ja.md) を�
    → まず `Content-Security-Policy-Report-Only` で検証してから本番。本命は**決済代行のホスト型フィールド**
    （カード情報が DOM に乗らない構成）。
 2. **Windows VSS は真の WORM ではない**。管理者権限で削除可能で、ランサムは定番で消す。
-   S3 Object Lock（compliance）は本物の不変。VSS を同列に置かない。
+   オブジェクトストレージの不変化（例: S3 Object Lock の compliance モード、Azure 不変BLOB、GCP Bucket Lock、WORM NAS）は本物の不変。VSS を同列に置かない。
    → 別アカウント／オフライン／MFA 削除＋**復元テスト**まで含めて意味を持つ。
 3. **`chmod -R 644` は技術的に誤り**。ディレクトリは実行（traverse）ビットが要るため一括 644 で入れなくなる。
    → 「ファイル 644・ディレクトリ 755」。キャッシュ/セッション等の書込が要る場所は除外。
@@ -78,6 +78,23 @@ R1–R7（＝検知の中身）の早見は [`README.ja.md`](README.ja.md) を�
 - **連鎖②⑤**：OTP/秘密情報の保存方法、データベースのネット直結遮断。
 
 → **「この案（予防・復旧）＋本リポのノート（egress検知 R1/R4・特権 R2・相関 R6・IAM/秘密情報）」で1枚**にすると穴が埋まる。
+
+---
+
+## 付録: クラウド/環境別の対応（製品名は変わる、役割は共通）
+
+本リポのツール（netcheck / vuln_triage / detections）は**クラウド非依存**。AWS 固有ではない。
+一部の例に AWS 名が出るのは、元の Gambit 事例が AWS だったため。**役割は共通で、製品名が環境ごとに変わるだけ**：
+
+| 役割 | AWS | Azure | GCP | オンプレ/汎用 |
+|---|---|---|---|---|
+| 不変バックアップ(WORM) | S3 Object Lock | Blob 不変ストレージ(immutability) | Cloud Storage Bucket Lock / 保持ポリシー | WORM対応NAS・テープ・Veeam immutable・MinIO Object Lock |
+| 権限管理(IAM) | AWS IAM | Entra ID + RBAC | Cloud IAM | Active Directory/LDAP + 最小権限 |
+| 秘密情報管理 | Secrets Manager | Key Vault | Secret Manager | HashiCorp Vault |
+| 監査ログ | CloudTrail | Azure Monitor / Activity Log | Cloud Audit Logs | SIEM(Elastic 等)へ集約 |
+
+> 攻撃連鎖⑥の「IAM 全取得」「Secrets Manager 全件取得」も、上の対応で読み替えれば各環境に当てはまる。
+> 検知ルール R1–R7 も、クラウドの監査ログ(CloudTrail/Activity Log/Audit Logs)やホスト/ネットワークのログに載せ替えて使う。
 
 ---
 
