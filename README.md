@@ -1,4 +1,15 @@
+<!--
+Suggested GitHub "About" (set in the repo page → About ⚙️):
+  Defensive detection pack for autonomous AI-agent attacks — exposure checks,
+  triage, and detection rules (R1–R7) mapped to MITRE ATT&CK. Authorized use only.
+Suggested Topics:
+  defensive-security detection-engineering ai-security blue-team threat-detection
+  sigma falco siem llm-security security-tools
+-->
+
 # ai-agent-attack-defense
+
+**An open, defensive detection pack for autonomous AI-agent attacks** — exposure checks, triage, and detection rules (**R1–R7**) mapped to **MITRE ATT&CK / ATLAS** and **OWASP Top 10 for LLM**, organized as *prevent → detect → respond → recover*. Detection/defense design only.
 
 Study materials and small defensive tools based on the Gambit Security report (2026-09-22) on AI-agent attacks against online retailers (Strix / Cairn / Hermes).
 Use these **only on systems you own or are authorized to test**.
@@ -31,6 +42,8 @@ Use these **only on systems you own or are authorized to test**.
 ---
 
 # 日本語版（概要）
+
+**自律型AIエージェント攻撃を“検知する”ためのオープンな防御パック**です。露出確認・トリアージ・検知ルール（**R1–R7**）を、**MITRE ATT&CK / ATLAS** と **OWASP Top 10 for LLM** に対応づけ、*予防→検知→応答→復旧* で整理しています。検知・防御の設計に限定。
 
 Gambit Security レポート（2026-09-22）の、オンライン小売を狙った AI エージェント攻撃（Strix / Cairn / Hermes）を題材にした、**学習教材と小さな防御ツール**の集まりです。
 **自分が所有している、または許可を得た対象にのみ使用してください。**
