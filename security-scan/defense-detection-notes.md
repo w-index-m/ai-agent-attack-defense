@@ -294,7 +294,11 @@ AI ペンテスト/攻撃エージェントは多数あり、タイプで整理�
   「次の Cobalt Strike」化が懸念。
 - **HexStrike AI**（OSS, MCP で 150+ ツール統括）: Citrix の CVE-2025-7775 等を**数分で**悪用する用途が
   攻撃者フォーラムで共有されたと報告。
-- **ARTEX AI / Villager**: 実攻撃での悪用が報告・疑いあり（三輪信雄氏の整理より）。
+- **ARTEX**（[Autumn-27/ARTEX](https://github.com/Autumn-27/ARTEX), AGPL-3.0, 百度BSRC「Agent+」優勝）:
+  planner/worker＋共有グラフ（**Cairn に最も近い**）＋Hermes 型スキル＋MCP の**ハイブリッド**。
+  記録型 MITM プロキシ・内蔵ガバナンス（承認ゲート/破壊的 deny/スコープ強制/LLM 記録）が特徴。
+  韓国・金融機関の侵害での痕跡が**報道（未確定）**。一次情報の静的解析と R1–R7/G1–G6 対応は
+  [`artex-analysis.ja.md`](artex-analysis.ja.md) / [`.en.md`](artex-analysis.en.md) 参照。
 
 > これらは「存在と危険性の注意喚起」。本ノートは検知・防御に限定し、各ツールの入手・実行・悪用手順は扱わない。
 
