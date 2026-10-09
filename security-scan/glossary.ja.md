@@ -81,6 +81,8 @@
 | Semgrep / Trivy / gitleaks | コード診断 / 脆弱性・設定・秘密情報スキャン / 秘密情報検出の各ツール。 |
 | ZAP / nmap | Web アプリ診断 / ポートスキャンの定番ツール。 |
 | SARIF | 静的解析結果の標準フォーマット。CodeQL などが出力、`vuln_triage` が取り込める。 |
+| zgrab2 | ZMap プロジェクトのアプリ層スキャナ。対象へ実際に接続して、バナーや TLS などの応答を JSON Lines で記録する。許可範囲の制限は持たないので、自分の資産だけに使う（`scripts/zgrab2_guard.py` で対象を絞る）。 |
+| JSON Lines | 1 行に 1 つの JSON を並べた形式（zgrab2 などが出力）。`vuln_triage` はそのまま読める。 |
 
 ## 脆弱性・公開情報の用語
 

@@ -83,14 +83,14 @@ def main():
         errors.append("vuln_triage.html: 未定義の検知/防御タグ %r。shared/taxonomy.json の detection_tags に追加してください。" % t)
 
     # 2. vuln_triage の対応スキャナが taxonomy と一致するか ---------------------
-    parse_tools = set(re.findall(r"tool\s*=\s*\"([a-z]+)\"", vt_src))
+    parse_tools = set(re.findall(r"tool\s*=\s*\"([a-z0-9]+)\"", vt_src))
     if parse_tools != scanners:
         errors.append("vuln_triage.html: parseOne の対応スキャナ %s が shared/taxonomy.json の triage_scanners %s と一致しません。"
                       % (sorted(parse_tools), sorted(scanners)))
 
     sel = re.search(r"id=\"f-tool\".*?</select>", vt_src, re.S)
     if sel:
-        opts = set(re.findall(r"<option value=\"([a-z]+)\">", sel.group(0)))
+        opts = set(re.findall(r"<option value=\"([a-z0-9]+)\">", sel.group(0)))
         if opts != scanners:
             errors.append("vuln_triage.html: ツール絞り込み（f-tool）の選択肢 %s が triage_scanners %s と一致しません。"
                           % (sorted(opts), sorted(scanners)))
