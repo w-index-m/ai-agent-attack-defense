@@ -33,7 +33,7 @@
     "カード番号の暗号鍵が同じ環境から取得可"
   ],
 
-  "triage_scanners": ["semgrep", "trivy", "gitleaks", "sarif", "netcheck"],
+  "triage_scanners": ["semgrep", "trivy", "gitleaks", "sarif", "netcheck", "zgrab2"],
 
   "detections_coverage": {
     "_comment": "各検知タグ R1–R7 を、どの検知バックエンドで実装しているか（present = 専用コンテンツあり）。detections/README.md の網羅表と一致させる。sigma/datadog/elastic は r{n}_*.{ext} のファイル有無で、falco は単一ファイル内の R{n} 参照で検証する。",
