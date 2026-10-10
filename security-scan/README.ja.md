@@ -23,6 +23,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`strix-local-backend-notes.md`](strix-local-backend-notes.md) | Strix の実行フロー解析と、Docker 不要ローカル実行の設計。 |
 | [`strix-local-poc/`](strix-local-poc/) | 上記の PoC（パッチ・検証スクリプト・結果）。 |
 | [`cairn-lab/`](cairn-lab/) | Cairn を認可済み隔離ラボで動かすランブックと実設定（`dispatch.lab.yaml` ほか）、攻撃なし mock 設定。 |
+| [`cvp-application-form-draft.md`](cvp-application-form-draft.md) | CVP 申請フォームの下書き（Defense Access）。提出前チェック、各項目の回答案（英語＋日本語の意味）、書いてはいけない例。**実績など本人にしか書けない項目は空欄**。 |
 | [`cvp-readiness.md`](cvp-readiness.md) | Anthropic Cyber Verification Program のティア対応と申請準備。 |
 | [`sandbox-defense-model.ja.md`](sandbox-defense-model.ja.md) / [`.en.md`](sandbox-defense-model.en.md) | サンドボックス防御モデル（スキャンパターン別・使い捨ての正体）。実スキャンなしの防御解説。 |
 | [`cvp-package/`](cvp-package/) | 申請パッケージ（HTML / PDF）。`python3 security-scan/cvp-package/build_package.py` で元の文書から再生成できる（pandoc と Chromium が必要）。 |

@@ -26,6 +26,7 @@ techniques. Use only against assets you own or are authorized to test.
 | [`strix-local-backend-notes.md`](strix-local-backend-notes.md) | Strix execution-flow analysis and a Docker-free local backend design. |
 | [`strix-local-poc/`](strix-local-poc/) | PoC for the above (patch, verification scripts, results). |
 | [`cairn-lab/`](cairn-lab/) | Runbook and real config for running Cairn in an authorized, isolated lab; plus a no-attack mock config. |
+| [`cvp-application-form-draft.md`](cvp-application-form-draft.md) (EN answers + JA notes) | Draft answers for the CVP application form (Defense Access): pre-submission checklist, per-field answers, and what not to claim. **Fields only you can fill (e.g. vulnerability track record) are left blank.** |
 | [`cvp-readiness.md`](cvp-readiness.md) (JA) / [`.en.md`](cvp-readiness.en.md) (EN) | Anthropic Cyber Verification Program tier mapping and application readiness. |
 | [`sandbox-defense-model.ja.md`](sandbox-defense-model.ja.md) (JA) / [`.en.md`](sandbox-defense-model.en.md) (EN) | Sandbox defense model by scan pattern + what "ephemeral" really means. Defensive, no real scanning. |
 | [`cvp-package/`](cvp-package/) | Application package (HTML / PDF), including the dashboard PDF. Rebuild the HTML/PDF from the source docs with `python3 security-scan/cvp-package/build_package.py` (needs pandoc and Chromium). |
