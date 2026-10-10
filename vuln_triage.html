@@ -481,7 +481,8 @@ function parseOne(json){
         var rid=r.ruleId||(r.rule&&r.rule.id)||"",loc="",pl=r.locations&&r.locations[0]&&r.locations[0].physicalLocation;
         if(pl){var uri=(pl.artifactLocation&&pl.artifactLocation.uri)||"";var ln=(pl.region&&pl.region.startLine)||"";loc=uri+(ln?":"+ln:"")}
         var msg=(r.message&&(r.message.text||r.message.markdown))||"";
-        out.push({tool:tool,sev:mapSarifSev(r.level),ruleId:rid,title:drv+": "+(rid||"指摘"),loc:loc,detail:msg,raw:""});
+        var pt=r.properties&&r.properties.title; /* 生成側が付けた短い表示名があれば、それを優先(一覧で中身が読めるように) */
+        out.push({tool:tool,sev:mapSarifSev(r.level),ruleId:rid,title:pt?String(pt):(drv+": "+(rid||"指摘")),loc:loc,detail:msg,raw:""});
       });
     });
   } else if(json&&Array.isArray(json.results)&&json.results.length&&json.results[0]&&Array.isArray(json.results[0].findings)){
