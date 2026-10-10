@@ -11,6 +11,8 @@ Suggested Topics:
 
 **An open, defensive detection pack for autonomous AI-agent attacks** — exposure checks, triage, and detection rules (**R1–R7**) mapped to **MITRE ATT&CK / ATLAS** and **OWASP Top 10 for LLM**, organized as *prevent → detect → respond → recover*. Detection/defense design only.
 
+> **Start here:** [Security summary](security-scan/security-summary.en.md) — what happened, what this repo provides, and what is still unverified. (日本語: [セキュリティ問題のまとめ](security-scan/security-summary.ja.md))
+
 Study materials and small defensive tools based on the Gambit Security report (2026-09-22) on AI-agent attacks against online retailers (Strix / Cairn / Hermes).
 Use these **only on systems you own or are authorized to test**.
 
@@ -35,10 +37,9 @@ Use these **only on systems you own or are authorized to test**.
 5. Ship scan results to a SIEM: `--format elastic --out scan.ndjson` (ECS NDJSON) or `--format datadog --out scan.json` (Datadog Logs JSON). This feeds CI findings into the same platform where the R1–R7 detection rules live.
 
 ## Status / unverified
-- `summarize.py` and `netcheck.py` were tested locally (exit codes, refusals, a scan of 127.0.0.1).
-- The GitHub Actions workflow has **not yet run on GitHub**; first-run issues (image pulls, ZAP permissions) are possible.
-- Scanner output depends on the tools' versions; findings are leads, not proof.
-
+- The GitHub Actions workflow runs on GitHub (scan and consistency jobs, both green on `main`). ZAP runs only when `STAGING_URL` is set.
+- `summarize.py`, `netcheck.py`, `zgrab2_guard.py`, `patch_suggest.py` and `os_patch_check_*.py` were tested with samples, mocks or stubs. **Not yet run on real hosts** (real RHEL / Windows updates, a real Ollama with qwen2.5:1.5b).
+- Scanner output depends on the tools' versions; findings are leads, not proof. The [security summary](security-scan/security-summary.en.md) lists the verification status in full.
 ---
 
 # 日本語版（概要）
@@ -47,6 +48,8 @@ Use these **only on systems you own or are authorized to test**.
 
 Gambit Security レポート（2026-09-22）の、オンライン小売を狙った AI エージェント攻撃（Strix / Cairn / Hermes）を題材にした、**学習教材と小さな防御ツール**の集まりです。
 **自分が所有している、または許可を得た対象にのみ使用してください。**
+
+> **まずここから：** [セキュリティ問題のまとめ](security-scan/security-summary.ja.md) ── 何が起きたか、このリポジトリで何を作ったか、まだ検証していないことは何か。（English: [Security summary](security-scan/security-summary.en.md)）
 
 ![全体像：防御の4層（予防・検知・応答・復旧）と、どのツールがどこを担うか](overview-figure.png)
 
@@ -82,6 +85,6 @@ AI エージェント攻撃ツール（Strix / Cairn / Hermes、および周辺�
 - **CVP 対応** `security-scan/cvp-readiness.md` ＋申請パッケージ `security-scan/cvp-package/`。
 
 ## 状態・未検証
-- `summarize.py` と `netcheck.py` はローカルで動作確認済み（終了コード・拒否動作・127.0.0.1 のスキャン）。
-- GitHub Actions のワークフローは**まだ GitHub 上で実行していない**ため、初回特有の問題（イメージ取得、ZAP の権限）が起きる可能性があります。
-- スキャナの出力はツールのバージョンに依存します。指摘は手がかりであって証拠ではありません。
+- GitHub Actions のワークフロー（scan と consistency）は GitHub 上で実行され、`main` で緑です。ZAP は `STAGING_URL` を設定したときだけ動きます。
+- `summarize.py`、`netcheck.py`、`zgrab2_guard.py`、`patch_suggest.py`、`os_patch_check_*.py` は、サンプル・モック・スタブで確認しています。**実機では未実行**です（実際の RHEL・Windows の更新、qwen2.5:1.5b を動かす実際の Ollama）。
+- スキャナの出力はツールのバージョンに依存します。指摘は手がかりであって証拠ではありません。検証状況の全体は [セキュリティ問題のまとめ](security-scan/security-summary.ja.md) を参照。
