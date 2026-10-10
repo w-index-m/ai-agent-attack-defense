@@ -48,7 +48,7 @@ ZMap が「どの IP のどのポートが開いているか」を調べ、ZGrab
 | mqtt / amqp / snmp / ipp / socks5 / pptp が応答 | 管理・メッセージング系の露出 | 中 | ③ |
 | HTTP の `Server` / `X-Powered-By` にバージョン | バージョン露出（偵察の標的） | 低 | R3 |
 | 上記や SSH／FTP／Telnet のバナーが古い版（PHP 5/7、Apache 2.0/2.2、IIS 6–8、OpenSSH 1–6 系） | 古いバージョンの可能性 | 中 | R3 |
-| HTTP が 200〜399 で `Content-Security-Policy` なし | CSP がない | 中 | ③CSP |
+| HTML のページ(`Content-Type: text/html`、状態 200〜399)で `Content-Security-Policy` なし | CSP がない(API や Content-Type なしは対象外) | 中 | ③CSP |
 | TLS が SSLv3 / TLS 1.0 / 1.1 | 古い TLS | 高 | ③ |
 | 証明書の期限切れ／30 日以内 | 期限の問題 | 高／中 | ③ |
 

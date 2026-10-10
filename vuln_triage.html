@@ -106,7 +106,7 @@ summary::-webkit-details-marker{display:none}
   <section aria-labelledby="h-in">
     <h2 id="h-in">1. 診断結果を取り込む</h2>
     <div class="panel">
-      <label for="paste" class="note">JSON を貼り付けるか、ファイルを選びます。ツールの種類(Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2)は自動で判別します。複数回の取り込みは合算されます。</label>
+      <label for="paste" class="note">JSON を貼り付けるか、ファイルを選びます。ツールの種類(Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2)は自動で判別します。複数回の取り込みは合算されますが、同じ内容を二重に取り込もうとすると警告して追加しません。</label>
       <textarea id="paste" placeholder='例: semgrep --json / trivy fs --format json / gitleaks detect --report-format json / *.sarif / netcheck の保存 JSON / zgrab2 の出力(1 行 1 ターゲットの JSON Lines)'></textarea>
       <div class="row">
         <button class="primary" id="btn-parse" type="button">取り込む</button>
@@ -292,7 +292,7 @@ var SAMPLE_ZGRAB2=[
    server_certificates:{certificate:{parsed:{validity:{start:"2023-01-01T00:00:00Z",end:"2024-01-01T00:00:00Z"}}}}}}}}})
 ].join("\n");
 
-var findings=[]; var sources=[];
+var findings=[]; var sources=[]; var importedKeys=[];
 var $=function(id){return document.getElementById(id)};
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]})}
 function mask(s){s=String(s||"");return s.length<=4?"****":s.slice(0,3)+"…("+s.length+"文字・伏せ字)"}
@@ -341,6 +341,11 @@ function zgHasHdr(headers,name){
   for(var k in headers){ if(zgNorm(k)===name)return true }
   return false;
 }
+function zgIsHtml(headers){
+  /* CSP はブラウザが画面として表示する HTML のページに意味がある。API(JSON など)や Content-Type 無しは指摘しない。 */
+  var ct=zgHdr(headers,"content-type").split(";")[0].trim().toLowerCase();
+  return ct==="text/html"||ct==="application/xhtml+xml";
+}
 function zgFindTls(o,depth){
   /* result 内の handshake_log を、浅い再帰で探す(モジュールごとに入れ子の位置が違うため) */
   if(!o||typeof o!=="object"||depth>6)return null;
@@ -384,7 +389,7 @@ function zgrabParse(rows){
         }
         ZG_EOL.forEach(function(e){ if(srv&&e[0].test(srv)) add("medium","古いバージョンの可能性("+srv+")",e[1],
           zgRule("古いバージョンの可能性",e[1]+"。表示された文字列からの推測で、実際のバージョンと違うことがあります。",["サポート中のバージョンに更新する"],"","R3")) });
-        if(code>=200&&code<400&&!zgHasHdr(h,"content-security-policy")){
+        if(code>=200&&code<400&&zgIsHtml(h)&&!zgHasHdr(h,"content-security-policy")){
           add("medium","CSP がない(http)","他人のスクリプトの実行を制限する設定がありません。",
             zgRule("CSP がない","決済ページなどでは、カード窃取コードの挿入を防ぐ要になります。",
               ["まず Content-Security-Policy-Report-Only で読み込み元を洗い出してから、CSP を有効にする"],"","③CSP"));
@@ -500,9 +505,18 @@ function addJson(text,name){
   try{json=JSON.parse(text)}catch(e){json=parseJsonLines(text); if(!json) return "JSON として読めませんでした: "+name}
   var r=parseOne(json);
   if(!r.tool) return "対応していない形式です(Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2 の JSON): "+name;
+  var key=hashKey(JSON.stringify(json));
+  if(importedKeys.indexOf(key)>=0) return "同じ内容は取り込み済みです。二重に数えないよう、追加しませんでした: "+name;
+  importedKeys.push(key);
   r.items.forEach(function(f){findings.push(enrich(f))});
   sources.push({name:name+(r.skipped?"(未成功 "+r.skipped+" 件は対象外)":""),tool:r.tool,n:r.items.length});
   return "";
+}
+function hashKey(str){
+  /* 取り込んだ内容の指紋(FNV-1a)。空白や改行の違いは、解析後の JSON で比べるので無視される。 */
+  var h=2166136261;
+  for(var i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)>>>0}
+  return h.toString(16)+":"+str.length;
 }
 function setMsg(t,isErr){var m=$("msg");m.textContent=t||"";m.className=isErr?"err":"note"}
 
@@ -571,7 +585,7 @@ function planText(){
 function renderAll(){renderSources();renderSummary();renderList();$("plan").value=planText()}
 
 function loadSample(){
-  findings=[];sources=[];
+  findings=[];sources=[];importedKeys=[];
   addJson(JSON.stringify(SAMPLE_SEMGREP),"サンプル semgrep.json");
   addJson(JSON.stringify(SAMPLE_TRIVY),"サンプル trivy.json");
   addJson(JSON.stringify(SAMPLE_GITLEAKS),"サンプル gitleaks.json");
@@ -597,7 +611,7 @@ $("file").addEventListener("change",function(ev){
   });
 });
 $("btn-sample").addEventListener("click",loadSample);
-$("btn-clear").addEventListener("click",function(){findings=[];sources=[];setMsg("消しました。",false);renderAll()});
+$("btn-clear").addEventListener("click",function(){findings=[];sources=[];importedKeys=[];setMsg("消しました。",false);renderAll()});
 ["q","f-sev","f-tool","f-chain"].forEach(function(id){$(id).addEventListener("input",function(){renderList();$("plan").value=planText()})});
 $("btn-copy").addEventListener("click",function(){
   var ta=$("plan"),msg=$("copymsg");

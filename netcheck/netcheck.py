@@ -220,6 +220,14 @@ def http_get(ip, port, host, path, tls, method="GET", timeout=3.0):
         return None, {}, []
 
 
+def is_html(headers):
+    """応答が HTML(のページ)かを、Content-Type で判定する。
+    CSP・クリックジャッキング対策・nosniff は、ブラウザが画面として表示する HTML のページに意味がある。
+    API(JSON など)や、Content-Type が無い応答では指摘しない(誤検知を避ける)。"""
+    ctype = headers.get("content-type", "").split(";")[0].strip().lower()
+    return ctype in ("text/html", "application/xhtml+xml")
+
+
 def tls_info(ip, port, timeout=3.0):
     """証明書を、鎖と期限だけ検証して読む(名前の照合はしない)。"""
     ctx = ssl.create_default_context()
@@ -279,7 +287,9 @@ def check_host(name, ip, ports, cfg, admin_check, progress):
         status, h, cookies = http_get(ip, p, name, "/", tls)
         if status is None:
             continue
-        info = {"port": p, "tls": tls, "status": status, "server": h.get("server", "")}
+        html = is_html(h)
+        info = {"port": p, "tls": tls, "status": status, "server": h.get("server", ""),
+                "content_type": h.get("content-type", ""), "html": html}
         res["http"].append(info)
         srv = " ".join(x for x in (h.get("server", ""), h.get("x-powered-by", "")) if x)
         if re.search(r"\d+\.\d+", srv):
@@ -287,14 +297,14 @@ def check_host(name, ip, ports, cfg, admin_check, progress):
         for rx, msg in EOL_HINTS:
             if srv and rx.search(srv):
                 add(f, "medium", "古いバージョンの可能性(%s)" % srv, msg, "サポート中のバージョンに更新する。", p, "R3")
-        if "content-security-policy" not in h:
+        if html and "content-security-policy" not in h:
             add(f, "medium", "CSP がない(ポート %d)" % p,
                 "他人のスクリプトの実行を制限する設定がありません。決済ページでは、カード窃取コードの挿入を防ぐ要になります。",
                 "まず Content-Security-Policy-Report-Only で、読み込み元を洗い出してから、CSP を有効にする。", p, "③CSP")
-        if "x-frame-options" not in h and "frame-ancestors" not in h.get("content-security-policy", ""):
+        if html and "x-frame-options" not in h and "frame-ancestors" not in h.get("content-security-policy", ""):
             add(f, "low", "クリックジャッキング対策のヘッダがない(ポート %d)" % p, "他のサイトに埋め込まれて操作される可能性があります。",
                 "X-Frame-Options か、CSP の frame-ancestors を設定する。", p)
-        if "x-content-type-options" not in h:
+        if html and "x-content-type-options" not in h:
             add(f, "low", "X-Content-Type-Options がない(ポート %d)" % p, "", "X-Content-Type-Options: nosniff を設定する。", p)
         if tls and "strict-transport-security" not in h:
             add(f, "low", "HSTS がない(ポート %d)" % p, "", "Strict-Transport-Security を設定する。", p)
