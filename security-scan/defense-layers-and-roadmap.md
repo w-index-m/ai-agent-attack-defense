@@ -5,7 +5,7 @@
 **検知・防御の設計に限定し、攻撃の実行手順や安全機構の回避方法は含まない。**
 
 関連: [`defense-detection-notes.md`](defense-detection-notes.md)（検知ロジック本体）/
-[`../shared/taxonomy.json`](../shared/taxonomy.json)（タグ・攻撃連鎖の唯一の定義）
+[`../shared/taxonomy.json`](../shared/taxonomy.json)（タグ・攻撃連鎖の唯一の定義）／ [`defense-playbook.ja.md`](defense-playbook.ja.md)（攻撃連鎖の段ごとの具体化）
 
 ---
 
