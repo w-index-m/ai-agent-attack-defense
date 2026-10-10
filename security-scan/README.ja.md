@@ -18,7 +18,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`defense-playbook.ja.md`](defense-playbook.ja.md) / [`.en.md`](defense-playbook.en.md) | **AI エージェント攻撃 防御プレイブック**。Strix / Cairn / Hermes / ARTEX の見える動きを前提に、攻撃連鎖の7段ごとの予防・検知・応答・確認、インシデント対応、罠（ハニートークン）の設計メモ、最初の1週間、**未実装の一覧**。 |
 | [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md) | 防御の4層（予防・検知・応答・復旧）と、外部ロードマップ案の対応づけ・評価・不足分の補い方。R1–R7 と ③ の区別、カーネルFIM 解説つき。 |
 | [`glossary.ja.md`](glossary.ja.md) | 用語集（やさしい日本語）。FIM / CSP / WORM / egress / C2 / RCE / IAM などを1行ずつ。新語が出たら追記する。 |
-| [`os-patch-check-notes.md`](os-patch-check-notes.md) | 自分の機器の OS 更新（RHEL の未適用 RHSA、Windows の HotFix・未適用更新）を確認し、SARIF で `vuln_triage` に読み込む `scripts/os_patch_check.py`。確認専用。実機では未検証。 |
+| [`os-patch-check-notes.md`](os-patch-check-notes.md) | 自分の機器の OS 更新を確認し、SARIF で `vuln_triage` に読み込む。**Linux(RHEL系)用 `scripts/os_patch_check_linux.py`** と **Windows用 `scripts/os_patch_check_windows.py`** に分けている。確認専用。実機では未検証。 |
 | [`patch-suggest-notes.md`](patch-suggest-notes.md) | 診断結果から修正案（diff）を作る `scripts/patch_suggest.py`。自動適用はしない（人の y/N 確認つき）。gitleaks の値は LLM に送らない。小さいモデルの限界を明記。 |
 | [`zgrab2-notes.md`](zgrab2-notes.md) | zgrab2（ZMap のアプリ層スキャナ）の出力を `vuln_triage` に取り込む方法と、対象を許可範囲に絞るガード `scripts/zgrab2_guard.py`。露出の棚卸し用で、脆弱性スキャナではない。日英。 |
 | [`artex-analysis.ja.md`](artex-analysis.ja.md) / [`.en.md`](artex-analysis.en.md) | 自律型ペネトレ AI エージェント **ARTEX** の防御解析（一次情報の静的レビュー）。アーキ分解＋R1–R7/G1–G6 対応。攻撃手順は含まない。 |

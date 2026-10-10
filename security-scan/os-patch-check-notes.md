@@ -2,33 +2,40 @@
 
 English summary: at the end of this file.
 
-`scripts/os_patch_check.py` は、**自分が管理する機器の OS 更新状態**を確認し、結果を SARIF 2.1.0 に書き出す。
-書き出したファイルは `vuln_triage.html` にそのまま読み込める。
+OS の更新状態を確認し、結果を SARIF 2.1.0 に書き出す。書き出したファイルは `vuln_triage.html` にそのまま読み込める。
+**Linux（RHEL 系）と Windows で、別々のスクリプトに分けている。** 片方の環境の依存（PowerShell、Windows Update API、dnf）を、もう片方に持ち込まないため。
 
 > ⚠️ 方針：**確認専用**。更新の適用、設定の変更、ネットワークへの送信は一切しない。
 > 実行するのは、そのホストで動くコマンドだけ（リモートには接続しない）。**自分が管理する機器でだけ実行する。**
 
 ## できること
 
-| モード | 確認するもの | 使うコマンド | 出力 |
+| スクリプト | 確認するもの | 使うコマンド | 出力 |
 |---|---|---|---|
-| `--rhel` | **未適用**のセキュリティ更新（RHSA） | `dnf updateinfo list security --available` | 重大度つきの指摘（緊急〜低） |
-| `--windows` | **適用済み**の更新（HotFix） | `Get-HotFix` | 情報（note）として記録 |
-| `--windows --windows-pending` | **未適用**の更新（KB と MSRC 重大度） | Windows Update API（COM） | 重大度つきの指摘 |
+| `os_patch_check_linux.py` | **未適用**のセキュリティ更新（RHSA） | `dnf updateinfo list security --available` | 重大度つきの指摘（緊急〜低） |
+| `os_patch_check_windows.py` | **適用済み**の更新（HotFix） | `Get-HotFix` | 情報（note）として記録 |
+| `os_patch_check_windows.py --windows-pending` | **未適用**の更新（KB と MSRC 重大度） | Windows Update API（COM） | 重大度つきの指摘 |
 
 Windows の未適用の確認は、Windows Update API を使うため、**管理者権限が要ることがあります**。
+
+> 普通の利用者として `Get-HotFix`（HotFix の一覧）を実行するだけなら、読み取りだけで、管理者権限は通常いりません。
 
 ## 使い方
 
 ```bash
-# RHEL 系（dnf のある機器で）
-python3 scripts/os_patch_check.py --rhel --out os_patch.sarif
-
-# Windows（PowerShell で）。HotFix の一覧
-python3 scripts/os_patch_check.py --windows --out os_patch.sarif
-# Windows（未適用も確認する）
-python3 scripts/os_patch_check.py --windows --windows-pending --out os_patch.sarif
+# Linux（RHEL / Rocky / AlmaLinux など、dnf のある機器で）
+python3 scripts/os_patch_check_linux.py --out os_patch_linux.sarif
 ```
+
+```powershell
+# Windows（PowerShell / コマンドプロンプトで。適用済みの更新＝HotFix の一覧）
+python scripts/os_patch_check_windows.py --out os_patch_windows.sarif
+
+# Windows（未適用の更新も確認。時間がかかることがある。管理者で実行すると取れることがある）
+python scripts/os_patch_check_windows.py --windows-pending --out os_patch_windows.sarif
+```
+
+Windows 版は Windows 以外で実行すると、その旨を出して止まります。Linux 版は dnf が無いと、その旨を出して止まります。
 
 そのあと、`os_patch.sarif` を `vuln_triage.html` に読み込めば、優先度順に並びます。
 
@@ -51,9 +58,10 @@ python3 scripts/os_patch_check.py --windows --windows-pending --out os_patch.sar
 
 ## English summary
 
-`scripts/os_patch_check.py` checks OS update status on **a machine you manage** and writes a SARIF 2.1.0 file that
-`vuln_triage.html` can load. RHEL: pending security advisories via `dnf updateinfo`. Windows: installed HotFixes via
-`Get-HotFix` (recorded as informational), and optionally pending updates via the Windows Update API. It is
+Two scripts check OS update status on **a machine you manage** and write SARIF 2.1.0 that `vuln_triage.html` can load:
+`scripts/os_patch_check_linux.py` (RHEL pending security advisories via `dnf updateinfo`) and
+`scripts/os_patch_check_windows.py` (installed HotFixes via `Get-HotFix`, recorded as informational; optionally pending
+updates via the Windows Update API). They are split so each platform's dependencies stay out of the other. It is
 check-only — it never applies updates, changes settings, or sends data off the host. Verified with stubs that mimic
 the tool output, plus a headless load of the generated SARIF into the triage page. **Not yet run on real RHEL or
 Windows hosts** — output details may differ in practice.
