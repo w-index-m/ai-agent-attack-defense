@@ -1,4 +1,6 @@
 netcheck/netcheck.log
+scripts/patch_suggest.log
+patches/
 __pycache__/
 results/
 node_modules/
