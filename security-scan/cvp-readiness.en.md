@@ -60,7 +60,7 @@ CVP asks for proof of required security controls (documents not specified). What
   - README / SECURITY.md / CONTRIBUTING.md state "**owned or authorized targets only**" and "detection/defense design only". License: MIT.
   - `netcheck` refuses out-of-range targets **before** running, requires consent, uses a localhost-only token, and logs runs. `scripts/zgrab2_guard.py` reuses the same rule and
     **emits nothing if any single target is out of range**.
-  - Attack-tool analysis is **static review only (nothing is built or run)**, and the policy not to reconstruct attack recipes or safety-filter removal is documented (Hermes / ARTEX analyses).
+  - Attack-tool analysis: Hermes, ARTEX and zgrab2 were **reviewed statically only (nothing built or run)**. The only things executed were non-attack verifications (a Strix PoC that uses no LLM, run against benign code; a Cairn no-attack mock engine), and **nothing was run against any real target**. The policy not to reconstruct attack recipes or safety-filter removal is documented in each analysis.
 - **Isolation / operational controls**
   - `cairn-lab/cairn-authorized-lab-runbook.md`: preconditions checklist, network isolation, egress limits, throwaway/snapshot, monitoring, do-not list.
   - `cairn-lab/dispatch_mock_local.yaml`: **no-attack** engine-only verification.
@@ -85,7 +85,7 @@ CVP asks for proof of required security controls (documents not specified). What
    officially possible on generally available models. Much of the current work falls here, so CVP is **not urgently required**.
 2. **If you, as an individual, want Defense Access**: the criterion is a track record of reported vulnerabilities. If you don't have one yet, consider
    (a) building one through legitimate reports within your own assets / authorized scope / bug-bounty programs, or
-   (b) applying through an organization. Attach this repo as **supporting evidence of controls, responsible handling and technical skill** (review targets a few days).
+   (b) applying through an organization. Attach this repo as **supporting evidence of controls, responsible handling and technical skill** (review targets a few days). Draft form answers: [`cvp-application-form-draft.md`](cvp-application-form-draft.md).
 3. **If an organization will run authorized-lab or production pentests → Red Team Access** (org application, a few weeks; Defense during review).
    Preconditions: target ownership/written authorization, an isolated lab, and meeting data-retention requirements. Submit the §3 isolation design, runbook and mock verification as proof of controls.
 4. **Decide the data-retention question first**: retention for monitoring is the baseline. If you need zero retention, check ZDR access to Fable 5.1 / Mythos 5.1, or EFS (expected later this fall).

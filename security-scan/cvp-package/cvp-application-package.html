@@ -129,7 +129,9 @@ Access</strong>（組織のみ）</li>
 <li><strong>責任ある取り扱い</strong>:
 対象は所有/認可物に限定（README・SECURITY.md・CONTRIBUTING.md
 に明記、MIT）。netcheck は範囲外を実行前拒否・同意必須・実行ログ。
-攻撃ツールの解析は<strong>静的レビューのみ（実行・ビルドしない）</strong>で、攻撃レシピや安全機構の除去は作成・再構成しない方針を文書化。</li>
+攻撃ツールの解析は<strong>静的レビューが中心</strong>で、実行したのは攻撃を伴わない検証（Strix
+の LLM 非依存 PoC、Cairn の
+mock）のみ。攻撃レシピや安全機構の除去は作成・再構成しない方針を文書化。</li>
 <li><strong>隔離・運用統制</strong>:
 認可ラボ・ランブック、隔離ネットワーク設計、攻撃なし mock
 検証（実機確認済み）。</li>
@@ -329,8 +331,10 @@ PoC</strong>（<code>strix-local-poc/</code>、良性コードへの静的解析
 は許可レンジ外を<strong>実行前に拒否</strong>／同意必須／ローカル限定トークン／実行ログ。<code>scripts/zgrab2_guard.py</code>
 も同じ判定を再利用し、範囲外が 1
 つでも混ざれば<strong>何も出力しない</strong>。</li>
-<li>攻撃ツール解析は<strong>静的レビューのみ（実行・ビルドしない）</strong>で、攻撃レシピや安全フィルタ除去の再構成は扱わない方針を文書化（Hermes
-/ ARTEX の解析に明記）。</li>
+<li>攻撃ツールの解析は、Hermes・ARTEX・zgrab2
+は<strong>静的レビューのみ（実行・ビルドしない）</strong>。実行したのは攻撃を伴わない検証だけ（Strix
+は LLM を使わない PoC を良性コードに対して、Cairn は攻撃なしの mock
+エンジン）で、<strong>実対象への攻撃は行っていない</strong>。攻撃レシピや安全フィルタ除去の再構成は扱わない方針を文書化（各解析に明記）。</li>
 </ul></li>
 <li><strong>隔離・運用統制の設計</strong>
 <ul>
@@ -369,7 +373,8 @@ PoC</strong>（<code>strix-local-poc/</code>、良性コードへの静的解析
 条件は「報告済み脆弱性の実績」。実績がまだ無いなら、 (a)
 自分の資産／認可範囲／バグバウンティの範囲で、正規の脆弱性報告を行って実績をつくる、
 (b)
-所属組織を通じて申請する、を検討する。本リポジトリは、<strong>統制・責任ある取り扱い・技術力を示す補強材料</strong>として添える（審査は数日を目標）。</li>
+所属組織を通じて申請する、を検討する。本リポジトリは、<strong>統制・責任ある取り扱い・技術力を示す補強材料</strong>として添える（審査は数日を目標）。申請フォームの回答案:
+<a href="cvp-application-form-draft.md"><code>cvp-application-form-draft.md</code></a>。</li>
 <li><strong>組織として認可ラボ／本番ペンテストまで行う場合 → Red Team
 Access</strong>（組織申請・数週間、審査中は Defense に登録）。 前提:
 対象の所有/書面認可、隔離ラボ、データ保持要件の充足。§3
