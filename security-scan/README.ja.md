@@ -25,7 +25,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`cairn-lab/`](cairn-lab/) | Cairn を認可済み隔離ラボで動かすランブックと実設定（`dispatch.lab.yaml` ほか）、攻撃なし mock 設定。 |
 | [`cvp-readiness.md`](cvp-readiness.md) | Anthropic Cyber Verification Program のティア対応と申請準備。 |
 | [`sandbox-defense-model.ja.md`](sandbox-defense-model.ja.md) / [`.en.md`](sandbox-defense-model.en.md) | サンドボックス防御モデル（スキャンパターン別・使い捨ての正体）。実スキャンなしの防御解説。 |
-| [`cvp-package/`](cvp-package/) | 申請パッケージ（HTML / PDF）。 |
+| [`cvp-package/`](cvp-package/) | 申請パッケージ（HTML / PDF）。`python3 security-scan/cvp-package/build_package.py` で元の文書から再生成できる（pandoc と Chromium が必要）。 |
 
 ## 検知ルール早見（優先度順）
 

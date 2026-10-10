@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-  <title>00-cover</title>
+  <title>CVP application package</title>
   <style>
 code{white-space: pre-wrap;}
 span.smallcaps{font-variant: small-caps;}
@@ -99,46 +99,52 @@ th, td { border: 1px solid #c9d4d6; padding: 5px 8px; text-align: left; vertical
 th { background: #e9eff0; }
 blockquote { border-left: 4px solid #a57400; background: #fbf7ec; margin: 10px 0; padding: 6px 12px; color: #333; }
 a { color: #0f6f68; text-decoration: none; }
-hr { border: none; border-top: 2px solid #d3dcde; margin: 1.6em 0; page-break-after: always; }
+hr { border: none; border-top: 2px solid #d3dcde; margin: 1.6em 0; }
+@page { size: A4; margin: 14mm 13mm; }
+.docbreak { break-before: page; page-break-before: always; height: 0; margin: 0; }
 </style>
 </head>
 <body>
 <h1 id="cyber-verification-program-申請パッケージ">Cyber Verification
 Program 申請パッケージ</h1>
-<p><em>ai-agent-attack-defense — 防御研究・統制証拠一式 ／
-2026-10-06</em></p>
+<p><em>ai-agent-attack-defense — 防御研究・統制証拠一式 ／ 2026-10-10
+更新</em></p>
 <p><strong>プロジェクト</strong>:
-<code>ai-agent-attack-defense</code>（w-index-m） <strong>目的</strong>:
-Gambit Security レポート（2026-09-22）の AI エージェント攻撃（Strix /
-Cairn / Hermes）を題材にした 防御研究と小ツール群。本パッケージは
-Anthropic <a href="https://www.anthropic.com/news/cyber-verification-program">Cyber
-Verification Program</a>
-申請時に提示する「統制・責任ある取り扱い・技術的検証能力」の証拠を 1
-冊に束ねたもの。</p>
+<code>ai-agent-attack-defense</code>（w-index-m）</p>
+<p><strong>目的</strong>: Gambit Security レポート（2026-09-22）の AI
+エージェント攻撃（Strix / Cairn / Hermes）を題材にした
+防御研究と小ツール群。本パッケージは Anthropic <a href="https://www.anthropic.com/news/cyber-verification-program">Cyber
+Verification Program</a> （公式ページ公開日
+2026-10-06）の申請時に提示する「統制・責任ある取り扱い・技術的検証能力」の証拠を
+1 冊に束ねたもの。</p>
 <h2 id="申請サマリ">申請サマリ</h2>
 <ul>
 <li><strong>想定ティア</strong>:
 <ul>
-<li>個人の防御研究 → <strong>Defense Access</strong></li>
+<li>防御研究 → <strong>Defense
+Access</strong>（個人は公式条件の「報告済み脆弱性の実績」を別途示す）</li>
 <li>組織として認可ラボでの攻撃的テスト → <strong>Red Team
-Access</strong></li>
+Access</strong>（組織のみ）</li>
 </ul></li>
-<li><strong>責任ある取り扱い</strong>: 対象は所有/認可物に限定（README
-明記）。netcheck は範囲外を実行前拒否・同意必須・実行ログ。
-攻撃レシピや安全機構の除去は作成・再構成しない方針を文書化。</li>
+<li><strong>責任ある取り扱い</strong>:
+対象は所有/認可物に限定（README・SECURITY.md・CONTRIBUTING.md
+に明記、MIT）。netcheck は範囲外を実行前拒否・同意必須・実行ログ。
+攻撃ツールの解析は<strong>静的レビューのみ（実行・ビルドしない）</strong>で、攻撃レシピや安全機構の除去は作成・再構成しない方針を文書化。</li>
 <li><strong>隔離・運用統制</strong>:
 認可ラボ・ランブック、隔離ネットワーク設計、攻撃なし mock
 検証（実機確認済み）。</li>
 <li><strong>技術的検証能力</strong>: Strix のローカル実行
-PoC（再現手順・パッチ・検証ログ）。</li>
+PoC、検知ルール（R1–R7）、定義の一元化と CI の整合性チェック。</li>
+<li><strong>データ保持</strong>:
+モニタリングのためのデータ保持が必須であることを理解している。</li>
 </ul>
 <h2 id="収録ドキュメント">収録ドキュメント</h2>
 <ol type="1">
-<li>CVP 適用メモ＆ティア対応表（<code>cvp-readiness.md</code>）</li>
+<li>CVP 適用メモ＆ティア対応表（<code>cvp-readiness.md</code>）—
+公式の記載（2026-10-06 公開）に合わせて更新</li>
 <li>3ツール横断
-防御・検知ノート（<code>defense-detection-notes.md</code>）— SOC
-向け運用レイヤー（データソース対応、Sigma 風検知ルール雛形、MITRE
-ATT&amp;CK 対応、トリアージ手順）を含む</li>
+防御・検知ノート（<code>defense-detection-notes.md</code>）— 検知ルール
+R1–R7、MITRE ATT&amp;CK 対応、トリアージ手順を含む</li>
 <li>Cairn
 認可ラボ・ランブック（<code>cairn-lab/cairn-authorized-lab-runbook.md</code>）</li>
 <li>Strix
@@ -146,29 +152,35 @@ ATT&amp;CK 対応、トリアージ手順）を含む</li>
 </ol>
 <p><strong>付随リソース（本冊子には全文は載せず、リポジトリに収録）</strong>:</p>
 <ul>
-<li><code>security-scan/detections/</code> —
-上記検知ロジック（R1–R5）を実スタック向けに具体化した検知ルール （Sigma
-/ Falco / Datadog）。閾値・allowlist
-は環境でチューニングする前提の検知コンテンツ。</li>
+<li><code>security-scan/detections/</code> — R1–R7
+の実スタック向けルール（Sigma / Falco / Datadog / Elastic）。</li>
+<li><code>security-scan/artex-analysis.*</code> — ARTEX
+の防御解析（静的レビューのみ）。</li>
+<li><code>security-scan/zgrab2-notes.md</code> —
+スキャナ出力の取り込みと、対象を許可範囲に絞るガード（<code>scripts/zgrab2_guard.py</code>）。</li>
 </ul>
 <blockquote>
 <p>本パッケージは防御・統制の観点に限定し、攻撃の再現手順や安全機構の回避方法は含まない。</p>
 </blockquote>
-<hr />
+<div class="docbreak"></div>
+
 <h1 id="cyber-verification-programcvp適用メモ--申請準備">Cyber
 Verification Program（CVP）適用メモ ＆ 申請準備</h1>
+<p>English: <a href="cvp-readiness.en.md"><code>cvp-readiness.en.md</code></a></p>
 <p>Anthropic の <a href="https://www.anthropic.com/news/cyber-verification-program">Cyber
-Verification Program</a> に、本プロジェクト
+Verification Program</a> （CVP =
+サイバー検証プログラム）に、本プロジェクト
 （<code>ai-agent-attack-defense</code>: Gambit レポートの AI
 エージェント攻撃 Strix/Cairn/Hermes
 を題材にした<strong>防御研究＋小ツール</strong>）
 をどう対応づけ、どのティアを申請するかを整理したもの。</p>
 <blockquote>
-<p>出典ページの要点は末尾「参考」に記載。数値・制度内容は Anthropic
-の発表に基づく。</p>
+<p><strong>出典と鮮度</strong>: 公式ページ（公開日 2026-10-06）を
+<strong>2026-10-10</strong> に確認して反映した。制度は更新されうるので、
+申請前に必ず公式ページで再確認すること。公式に書かれていない点は「記載なし」と明記し、推測で埋めない。</p>
 </blockquote>
 <hr />
-<h2 id="1-cvp-3-ティア要約">1. CVP 3 ティア（要約）</h2>
+<h2 id="1-cvp-3-ティア公式の記載">1. CVP 3 ティア（公式の記載）</h2>
 <table>
 <thead>
 <tr class="header">
@@ -182,33 +194,58 @@ Verification Program</a> に、本プロジェクト
 <tbody>
 <tr class="odd">
 <td><strong>Defense Access</strong></td>
-<td>防御（SOC・IR・マルウェア解析・脆弱性検証）</td>
-<td>防御業務向けの制限緩和</td>
-<td>組織／<strong>実績ある個人研究者も可</strong></td>
-<td>数日</td>
+<td>防御（SOC・インシデント対応・マルウェアのリバースエンジニアリング・脆弱性の分析/検証）</td>
+<td>防御業務向けに、ブロックの分類器を緩める</td>
+<td><strong>組織</strong>（企業・NPO・大学・政府の防御チーム、重要インフラ事業者、小規模セキュリティ企業、OSS
+メンテナ）と、<strong>「報告済み脆弱性の実績」のある個人研究者</strong></td>
+<td>数日を目標</td>
 </tr>
 <tr class="even">
 <td><strong>Red Team Access</strong></td>
-<td>認可されたペンテスト・敵対的評価（重要インフラ IT 含む）</td>
-<td>認可済みシステムへの攻撃的テスト（物理被害・大規模妨害・ランサム・安全系無効化は常時ブロック）</td>
-<td><strong>組織のみ</strong></td>
-<td>数週間</td>
+<td>認可されたペンテスト・レッドチーム（Defense の全てを含む）</td>
+<td><strong>組織が認可を受けた対象に限る</strong>。物理的被害・大規模な妨害につながる行為（ランサムウェアの展開、物理システムの破壊、<strong>高リスクな安全系システムへのペンテスト</strong>など）は引き続きブロック</td>
+<td><strong>組織のみ</strong>（社内レッドチーム、政府レッドチーム、ペンテスト会社）。<strong>個人は不可</strong></td>
+<td>数週間。<strong>審査中は Defense Access に登録される</strong></td>
 </tr>
 <tr class="odd">
 <td><strong>Specialized Access</strong></td>
-<td>安全重要システム（航空/電力/通信/金融/政府網）のテスト認可組織</td>
-<td>ほぼ最小制限</td>
-<td>組織（<strong>米政府連携が必要</strong>）</td>
-<td>—</td>
+<td>人命や市場に影響しうる安全重要システム（航空機の
+OS、電力網、通信網、銀行間送金、政府の行政網など）をテストする認可を受けた、限られた検証済み組織</td>
+<td>サイバー分野のブロックが最も少ない</td>
+<td>組織（全組織を<strong>米政府と連携して詳細に審査</strong>）</td>
+<td>記載なし</td>
 </tr>
 </tbody>
 </table>
+<h3 id="共通事項">共通事項</h3>
 <ul>
-<li>全ティアで Claude Opus 5.5 / Sonnet 5.5 / Mythos 5.1
-等にアクセス。</li>
-<li>申請は Anthropic
-ポータル。本人確認＋<strong>必要なセキュリティ統制の証明</strong>が要る。<strong>データ保持モニタリング必須</strong>（Enterprise
-Frontier Safeguards でゼロ保持オプション予定）。</li>
+<li><strong>モデル</strong>: 全ティアで Claude Opus 5.5 / Sonnet 5.5 /
+Mythos 5.1 と今後のモデルを利用可能。</li>
+<li><strong>一般提供モデルでもできること</strong>: 一般提供モデル（Opus
+5.5 / Fable 5.1 / Sonnet
+5.5）は、サイバー作業の多くを保守的にブロックする。
+ただし、<strong>コードレビュー、既知の問題のパッチ適用、自分のソースコードの脆弱性発見、セキュリティアラートのトリアージ</strong>には引き続き使える。
+→ これらは <strong>CVP なしでも可能</strong>。</li>
+<li><strong>申請</strong>: ポータル <a href="https://portal.anthropic.com/programs/cvp">https://portal.anthropic.com/programs/cvp</a>
+。<strong>全申請者が検証</strong>され、<strong>ティアに必要なセキュリティ統制の証明</strong>を求められる
+（具体的な書類は公式に記載なし）。</li>
+<li><strong>データ保持</strong>:
+登録組織は、サイバー悪用の監視のため<strong>データ保持が必須</strong>。
+Enterprise Frontier Safeguards（EFS:
+ゼロ保持＋防護、データを利用者管理のクラウドに置ける）は<strong>「今秋後半」予定</strong>。
+それまでは、Fable 5.1 / Mythos 5.1
+の<strong>ゼロ保持アクセスを持つ組織は、CVP
+もゼロ保持で利用可</strong>。EFS の関心登録: <a href="https://claude.com/form/enterprise-frontier-safeguards">https://claude.com/form/enterprise-frontier-safeguards</a></li>
+<li><strong>提供基盤</strong>: Claude Platform / Google Cloud Vertex AI
+/ Microsoft Foundry。Amazon Bedrock は EFS の対象顧客のみ。</li>
+<li><strong>既存メンバー</strong>: 既存の CVP
+メンバーは従来のモデルの設定を維持し、新モデルは自動で評価される。Project
+Glasswing の既存メンバーは Specialized Access
+に移行（現行モデルは再承認不要）。</li>
+<li><strong>ワークスペース</strong>:
+管理者が、アクセスを割り当てるワークスペースを指定する（手順: <a href="https://support.claude.com/en/articles/16764810-assign-a-program-to-workspaces-in-claude-console">Claude
+Console のサポート記事</a>）。</li>
+<li><strong>誤ブロック／却下の異議申立て</strong>: <a href="https://claude.com/form/cyber-block-false-positive-report-cvp-rejection-appeal">https://claude.com/form/cyber-block-false-positive-report-cvp-rejection-appeal</a></li>
 </ul>
 <hr />
 <h2 id="2-本プロジェクトの活動--ティア対応表">2. 本プロジェクトの活動 →
@@ -224,65 +261,76 @@ Frontier Safeguards でゼロ保持オプション予定）。</li>
 <tbody>
 <tr class="odd">
 <td><code>vuln_triage.html</code> /
-<code>scripts/summarize.py</code>（スキャン結果の集計・トリアージ）</td>
-<td>防御（脆弱性検証）</td>
+<code>scripts/summarize.py</code>（スキャン結果の集計・トリアージ。SARIF
+/ netcheck / zgrab2 の取り込みを含む）</td>
+<td>防御（脆弱性の分析・検証）</td>
 <td><strong>Defense</strong></td>
 </tr>
 <tr class="even">
-<td><code>netcheck/</code>（所有資産の確認専用チェック、確認だけ・攻撃なし）</td>
+<td><code>netcheck/</code>（所有資産の確認専用チェック、確認だけ・攻撃なし）、<code>scripts/zgrab2_guard.py</code>（スキャナに渡す対象を許可範囲に限定）</td>
 <td>防御</td>
 <td><strong>Defense</strong></td>
 </tr>
 <tr class="odd">
-<td><code>.github/workflows/security-scan.yml</code>（Semgrep/Trivy/gitleaks
-CI）</td>
-<td>防御（コード/依存の検証）</td>
+<td><code>security-scan/detections/</code>（Sigma / Falco / Datadog /
+Elastic の検知ルール R1–R7）</td>
+<td>防御（検知の設計）</td>
 <td><strong>Defense</strong></td>
 </tr>
 <tr class="even">
-<td>Strix/Cairn/Hermes
-の<strong>コード・アーキテクチャ解析</strong>（<code>security-scan/*-notes.md</code>）</td>
-<td>防御（マルウェア/攻撃ツール解析）</td>
+<td><code>.github/workflows/security-scan.yml</code>（Semgrep/Trivy/gitleaks
+CI）と、定義のズレを止める整合性チェック</td>
+<td>防御（コード/依存の検証）</td>
 <td><strong>Defense</strong></td>
 </tr>
 <tr class="odd">
+<td>Strix / Cairn / Hermes / ARTEX
+の<strong>コード・アーキテクチャの静的解析</strong>（<code>*-notes.md</code>,
+<code>artex-analysis.*</code>）</td>
+<td>防御（攻撃ツールの解析）</td>
+<td><strong>Defense</strong></td>
+</tr>
+<tr class="even">
 <td>Strix の<strong>ローカル実行
 PoC</strong>（<code>strix-local-poc/</code>、良性コードへの静的解析）</td>
 <td>防御寄り／研究</td>
 <td><strong>Defense</strong></td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Cairn
 を<strong>認可ラボで実際に走らせる</strong>（<code>cairn-lab/</code>
 ランブック）</td>
 <td>攻撃的テスト</td>
 <td><strong>Red Team</strong>（組織のみ）</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>安全重要システム（電力/通信等）への実テスト</td>
 <td>安全重要</td>
-<td><strong>Specialized</strong>（該当時のみ・米政府連携）</td>
+<td><strong>Specialized</strong>（該当時のみ・米政府と連携）</td>
 </tr>
 </tbody>
 </table>
 <p><strong>読み方</strong>: 現状の成果物の大半は
-<strong>Defense</strong> の射程。Cairn/Strix
-を認可ターゲットへ能動的に走らせる段になって初めて <strong>Red
-Team</strong>（組織申請）が必要。</p>
+<strong>Defense</strong>
+の射程。攻撃ツールを認可ターゲットへ<strong>能動的に走らせる</strong>段になって初めて
+<strong>Red Team</strong>（組織申請）が必要。</p>
 <hr />
-<h2 id="3-申請準備本リポジトリが示せる統制実績の証拠">3.
-申請準備：本リポジトリが示せる「統制・実績」の証拠</h2>
-<p>CVP 申請では「必要なセキュリティ統制」と（個人 Defense
-では）脆弱性報告などの実績が問われる。現状の資産の対応：</p>
+<h2 id="3-申請準備本リポジトリが示せるもの示せないもの">3.
+申請準備：本リポジトリが示せるもの／示せないもの</h2>
+<p>CVP
+は「必要なセキュリティ統制の証明」を求める（具体書類は記載なし）。現状の資産で示せるもの：</p>
 <ul>
-<li><strong>責任ある取り扱いの実績</strong>
+<li><strong>責任ある取り扱い</strong>
 <ul>
-<li>README
-に「<strong>自分が所有・認可した対象にのみ使用</strong>」を明記。</li>
+<li>README・SECURITY.md・CONTRIBUTING.md
+に「<strong>自分が所有・認可した対象にのみ使用</strong>」「防御・検知の設計に限定」を明記。LICENSE
+は MIT。</li>
 <li><code>netcheck</code>
-は許可レンジ外を<strong>実行前に拒否</strong>／同意必須／ローカル限定トークン／実行ログ（<code>netcheck.log</code>）。</li>
-<li>攻撃ツール解析で<strong>攻撃レシピや安全フィルタ除去の再構成は扱わない</strong>方針を文書化（Hermes
-メモ）。</li>
+は許可レンジ外を<strong>実行前に拒否</strong>／同意必須／ローカル限定トークン／実行ログ。<code>scripts/zgrab2_guard.py</code>
+も同じ判定を再利用し、範囲外が 1
+つでも混ざれば<strong>何も出力しない</strong>。</li>
+<li>攻撃ツール解析は<strong>静的レビューのみ（実行・ビルドしない）</strong>で、攻撃レシピや安全フィルタ除去の再構成は扱わない方針を文書化（Hermes
+/ ARTEX の解析に明記）。</li>
 </ul></li>
 <li><strong>隔離・運用統制の設計</strong>
 <ul>
@@ -290,58 +338,85 @@ Team</strong>（組織申請）が必要。</p>
 実行前チェックリスト、ネットワーク隔離、egress
 制限、使い捨て/スナップショット、監視、禁止事項。</li>
 <li><code>cairn-lab/dispatch_mock_local.yaml</code>:
-<strong>攻撃せずにエンジンのみ検証</strong>した構成（本番前スモーク）。</li>
+<strong>攻撃せずにエンジンのみ検証</strong>した構成。</li>
 </ul></li>
 <li><strong>技術的検証能力</strong>
 <ul>
-<li><code>strix-local-poc/</code>:
-バックエンド差し替え＋PoC（再現手順・パッチ・検証ログ）。</li>
+<li><code>strix-local-poc/</code>（再現手順・パッチ・検証ログ）、<code>detections/</code>（R1–R7）、<code>shared/taxonomy.json</code>
+＋ CI の整合性チェック。</li>
 </ul></li>
-<li><strong>（任意）秘密情報管理</strong>: <code>.gitleaks.toml</code> /
-<code>.pre-commit-config.yaml</code> によるシークレット検出。</li>
+<li><strong>秘密情報管理</strong>: <code>.gitleaks.toml</code> /
+<code>.pre-commit-config.yaml</code>。CI は緑。</li>
+</ul>
+<p><strong>示せない／足りないもの（正直に）</strong></p>
+<ul>
+<li><strong>個人で Defense
+を申請する条件は「報告済み脆弱性の実績」</strong>。本リポジトリは防御研究とツールであり、<strong>脆弱性報告の実績の代わりにはならない</strong>。</li>
+<li>組織としての本人確認・組織の統制（Red Team の場合）。</li>
+<li><strong>データ保持とモニタリングを受け入れられるか</strong>（機密・NDA
+案件を扱う場合は要検討）。</li>
 </ul>
 <blockquote>
-<p>申請時は上記を「統制の証明」資料として束ねられる。秘密情報（LLM
-キー等）はコミットしない運用を継続する。</p>
+<p>秘密情報（LLM キー等）はコミットしない運用を継続する。</p>
 </blockquote>
 <hr />
 <h2 id="4-推奨アクション">4. 推奨アクション</h2>
 <ol type="1">
-<li><strong>個人で始めるなら → Defense Access
-を申請</strong>（審査は数日）。
-<ul>
-<li>申請材料:
-本リポジトリ（防御ツール＋解析ノート＋責任ある取り扱いの記録）。</li>
-<li>期待効果: 脆弱性検証・攻撃ツール解析の精度向上。</li>
-</ul></li>
-<li><strong>組織として本番ペンテストまで行うなら → Red Team
-Access</strong>（組織申請・数週間）。
-<ul>
-<li>申請材料: §3 の隔離設計・ランブック・mock
-検証を「統制の証明」として提出。</li>
-<li>前提: 対象の所有/書面認可、隔離ラボ、データ保持要件の充足。</li>
-</ul></li>
+<li><strong>まず「CVP なしで足りるか」を確認する。</strong>
+コードレビュー、スキャン結果やアラートのトリアージ、自分のコードの脆弱性発見、防御ルールの作成は、
+公式上も一般提供モデルで可能。現状の作業の多くはこれに当たるので、<strong>今すぐ必須ではない</strong>。</li>
+<li><strong>個人で Defense Access を目指す場合</strong>:
+条件は「報告済み脆弱性の実績」。実績がまだ無いなら、 (a)
+自分の資産／認可範囲／バグバウンティの範囲で、正規の脆弱性報告を行って実績をつくる、
+(b)
+所属組織を通じて申請する、を検討する。本リポジトリは、<strong>統制・責任ある取り扱い・技術力を示す補強材料</strong>として添える（審査は数日を目標）。</li>
+<li><strong>組織として認可ラボ／本番ペンテストまで行う場合 → Red Team
+Access</strong>（組織申請・数週間、審査中は Defense に登録）。 前提:
+対象の所有/書面認可、隔離ラボ、データ保持要件の充足。§3
+の隔離設計・ランブック・mock 検証を「統制の証明」として提出。</li>
+<li><strong>データ保持の扱いを先に決める</strong>:
+モニタリングのためのデータ保持が前提。ゼロ保持が必要なら、Fable 5.1 /
+Mythos 5.1 のゼロ保持アクセス、または
+EFS（今秋後半予定）を確認する。</li>
 <li><strong>不変の一線</strong>: Red Team
-でも物理被害・大規模妨害・ランサム・安全系無効化はブロック対象。本プロジェクトの方針（攻撃レシピ・安全フィルタ除去を作らない）と整合。</li>
+でも、物理的被害・大規模な妨害につながる行為（ランサム展開、物理システムの破壊、高リスクな安全系へのペンテスト等）はブロック対象。
+本プロジェクトの方針（攻撃レシピ・安全フィルタ除去を作らない）と整合。</li>
 </ol>
 <hr />
 <h2 id="参考">参考</h2>
 <ul>
 <li><a href="https://www.anthropic.com/news/cyber-verification-program">Anthropic
-— Cyber Verification Program</a>
+— Cyber Verification Program</a>（公開日 2026-10-06）
 <ul>
-<li>Project Glasswing と旧 CVP を統合した拡張枠組み。</li>
-<li>Glasswing 実績: 2026/4–7 に 12.9 万件以上の検証済み脆弱性（うち 3.3
-万件超が critical/high）。</li>
-<li>CyScenarioBench: Defense は悪性多段攻撃 50 件中 46 件をブロック／Red
-Team は 50 件中 34 件を無制限時と同等に完遂。</li>
+<li>Project Glasswing と従来の CVP
+を統合した拡張枠組み。「サイバーセキュリティは本質的に二面性がある」ため、検証された防御者に限定して提供。</li>
+<li>Glasswing の成果: パートナーが<strong>少なくとも 12.9
+万件</strong>の検証済みソフトウェア脆弱性を報告（2026/4–7）。Anthropic
+自身の OSS スキャンでさらに 5,500 件（2026/4–10）。 うち <strong>3.3
+万件超が
+critical/high</strong>。公式は<strong>過小計上</strong>で、実際の影響は「少なくとも
+5 倍」と推定。</li>
+<li>CyScenarioBench（Opus 5.5、10 シナリオ × 5 回 = 各ティア 50 試行）:
+CVP なしは最初のプロンプトで全てブロック。 Defense は 50 件中 46
+件がどこかでブロック（4 件は成功）。Red Team はブロックなしで 50 件中 34
+件を完遂（防護なしと「実質同等」）。 → <strong>Defense
+は悪性の多段攻撃をほぼ止める</strong>設計。</li>
 </ul></li>
+<li>申請: <a href="https://portal.anthropic.com/programs/cvp">https://portal.anthropic.com/programs/cvp</a>
+／ ティア詳細の Help Center: <a href="https://support.claude.com/en/articles/14604842-real-time-cyber-safeguards-on-claude-opus-and-sonnet">https://support.claude.com/en/articles/14604842-real-time-cyber-safeguards-on-claude-opus-and-sonnet</a></li>
 </ul>
+<div class="docbreak"></div>
+
 <h1 id="3ツール横断-防御検知ノートstrix--cairn--hermes">3ツール横断
 防御・検知ノート（Strix / Cairn / Hermes）</h1>
 <p>Gambit
 レポートの攻撃連鎖（偵察→侵入→統括/事後）を、<strong>防御側の観測点と対策</strong>に振って整理したもの。
 攻撃手順のレシピではなく、「何が観測され、どこで止められるか」に焦点を当てる。</p>
+<blockquote>
+<p>検知/防御タグ <strong>R1–R7 / ③</strong> とガバナンス
+<strong>G1–G6</strong> の正式な定義は <a href="../shared/taxonomy.json"><code>../shared/taxonomy.json</code></a>（唯一の定義）にあり、各ツールの追従は
+CI の <code>tools/check_consistency.py</code> が検査する。</p>
+</blockquote>
 <p>出典: <a href="https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company">Gambit
 Security</a> / 各ツール: <a href="https://github.com/usestrix/strix">Strix</a> / <a href="https://github.com/oritera/Cairn">Cairn</a> / <a href="https://github.com/NousResearch/hermes-agent">Hermes</a></p>
 <hr />
@@ -659,6 +734,50 @@ note: ローカルLLM 利用で LLM egress(R1) が出ないエージェント（
 LLM
 利用ガバナンス（プロンプト/ツール呼び出しの監査、安全機構の除去・迂回の試行検知）で補う。本ノートは
 その「兆候の存在」を指摘するに留め、具体的な回避手法は扱わない。</p>
+<h2 id="31-mitre-atlas--owasp-llm-への接続補足">3.1 MITRE ATLAS /
+OWASP-LLM への接続（補足）</h2>
+<p><strong>主軸は ATT&amp;CK</strong>（攻撃エージェントの“IT
+への行為”は古典的 TTP にそのまま乗るため、対応が強い）。 一方
+<strong>ATLAS</strong> と <strong>OWASP Top 10 for LLM</strong>
+は観点が異なるので、1:1 ではなく<strong>“接続点”</strong>として示す。
+正確さのため <strong>ID は公式マトリクスで要確認</strong>（<a href="https://atlas.mitre.org">atlas.mitre.org</a> / <a href="https://genai.owasp.org">genai.owasp.org</a>）。</p>
+<ul>
+<li><strong>MITRE ATLAS</strong>：主に「<strong>AI
+システムそのもの</strong>への/を使った敵対的脅威」。本件（AIが“攻撃者”として普通のITを攻める）とは向きが違うが、接続点はある。
+<ul>
+<li>攻撃側が<strong>自分の LLM
+を兵器化</strong>する行為（安全機構の回避）＝ ATLAS の <em>LLM
+Jailbreak</em> / <em>LLM Prompt Injection</em>（例: AML.T0054 /
+AML.T0051、※要確認）→ 本ノートのガバナンス層（T1562
+相当・G1–G6）で“兆候”を捉える。</li>
+<li><strong>被害側が LLM 推論 API を露出</strong>（<code>netcheck</code>
+の 11434 等）＝攻撃面。外部からの推論悪用は ATLAS の <em>ML Model
+Inference API Access</em> 系に対応 → 露出は
+<strong>③</strong>、不審な推論呼び出しは <strong>R1
+の裏返し</strong>。</li>
+</ul></li>
+<li><strong>OWASP Top 10 for
+LLM（2025）</strong>：主に「<strong>自組織の LLM
+アプリ</strong>を守る」観点。接続点：
+<ul>
+<li><strong>LLM06 Excessive
+Agency</strong>（自律エージェントが過大な権限で行動）＝本件の脅威モデルそのもの
+→ 封じ込めは最小権限・ツール制限、検知は <strong>R7/R2・相関
+R6</strong>。</li>
+<li><strong>LLM02 Sensitive Information
+Disclosure</strong>（情報持ち出し）→ <strong>R1/R4</strong> と DLP
+の相関。</li>
+<li><strong>LLM01 Prompt Injection / LLM10 Unbounded
+Consumption</strong>（露出 LLM への注入・濫用）→ 露出は
+<strong>③</strong>、濫用の兆候は <strong>R1</strong>。</li>
+</ul></li>
+</ul>
+<blockquote>
+<p>まとめ：<strong>ATT&amp;CK＝攻撃者の“行為”の共通語（強い対応）</strong>、<strong>ATLAS＝AI
+を巡る脅威の地図（接続点）</strong>、 <strong>OWASP-LLM＝自組織 LLM
+アプリの守り（接続点）</strong>。新ルールには、まず ATT&amp;CK
+ID、該当すれば ATLAS/OWASP-LLM ID を併記する。</p>
+</blockquote>
 <h2 id="4-soc-トリアージ手順優先度順">4. SOC
 トリアージ手順（優先度順）</h2>
 <ol type="1">
@@ -689,6 +808,35 @@ control）。</li>
 <strong>CSP</strong>（skimmer/カード窃取コード注入の防止）。</li>
 <li>LLM
 利用の監査・ガバナンス（安全機構の除去/迂回の試行を検知・通報）。</li>
+</ul>
+<h3 id="51-管理面の既知-unauth-rceベンダ製品の脆弱性への備え">5.1
+管理面の既知 unauth-RCE（ベンダ製品の脆弱性）への備え</h3>
+<p>自律型の攻撃エージェントは、独自のゼロデイより
+<strong>「公開済みの既知 Critical を自動で突く」</strong> 方が速い。
+特に<strong>認証不要で遠隔コード実行（unauth
+RCE）できる管理面</strong>は格好の標的になる。 代表例: 仮想基盤の管理面
+<strong>vCenter</strong>（例: VMSA-2026-0006 / アドバイザリID
+38017、最大 CVSS
+9.8、認証回避→任意コード実行、回避策なし＝パッチのみ）。
+BMC/IPMI・各種管理
+UI・アプライアンス管理面も同じ性質を持つ。これは「新しい AI
+の手口」ではなく
+<strong>昔ながらの製品脆弱性</strong>だが、<strong>守りの型は本ノートと共通</strong>：</p>
+<ul>
+<li><strong>予防(③)</strong>: 管理面（vCenter/ESXi/VAMI
+等）を管理用の隔離ネットワーク/VPN 内に限定し、ネット直結にしない。
+<code>netcheck</code> に管理面ポート（<strong>ESXi 902 / VAMI 5480 /
+vSphere UI 9443</strong>）を追加済み（露出の有無を確認）。</li>
+<li><strong>パッチ運用</strong>: ベンダのセキュリティアドバイザリ（VMSA
+/ GHSA / ディストリ security 等）を購読し、
+<strong>認証不要・RCE・管理面</strong>に関わるものから最優先で適用。<code>vuln_triage</code>
+の CVE 分類もこの優先度で並べる。</li>
+<li><strong>検知</strong>:
+管理面への<strong>偵察（R3）</strong>と<strong>認証異常</strong>を監視。侵入後は
+R2/R5/R7・相関 R6 に合流。</li>
+<li><strong>注意（認可の境界）</strong>:
+露出確認・パッチ管理は自組織の資産に対してのみ。実際の脆弱性有無の“検証”は、
+自社の検証環境か、許可を得た範囲で。他者の運用基盤への実スキャンは利用者であることでは認可されない。</li>
 </ul>
 <blockquote>
 <p>すべて検知・防御の設計に限定。攻撃の実行手順や安全機構の回避方法は本ノートに含めない。</p>
@@ -775,8 +923,14 @@ Strike」化が懸念。</li>
 <li><strong>HexStrike AI</strong>（OSS, MCP で 150+ ツール統括）: Citrix
 の CVE-2025-7775 等を<strong>数分で</strong>悪用する用途が
 攻撃者フォーラムで共有されたと報告。</li>
-<li><strong>ARTEX AI / Villager</strong>:
-実攻撃での悪用が報告・疑いあり（三輪信雄氏の整理より）。</li>
+<li><strong>ARTEX</strong>（<a href="https://github.com/Autumn-27/ARTEX">Autumn-27/ARTEX</a>, AGPL-3.0,
+百度BSRC「Agent+」優勝）: planner/worker＋共有グラフ（<strong>Cairn
+に最も近い</strong>）＋Hermes 型スキル＋MCP
+の<strong>ハイブリッド</strong>。 記録型 MITM
+プロキシ・内蔵ガバナンス（承認ゲート/破壊的 deny/スコープ強制/LLM
+記録）が特徴。
+韓国・金融機関の侵害での痕跡が<strong>報道（未確定）</strong>。一次情報の静的解析と
+R1–R7/G1–G6 対応は <a href="artex-analysis.ja.md"><code>artex-analysis.ja.md</code></a> / <a href="artex-analysis.en.md"><code>.en.md</code></a> 参照。</li>
 </ul>
 <blockquote>
 <p>これらは「存在と危険性の注意喚起」。本ノートは検知・防御に限定し、各ツールの入手・実行・悪用手順は扱わない。</p>
@@ -796,7 +950,8 @@ R3（偵察）→ R5（永続化）→ R6（相関）</strong>。</p>
 <p>ネットワーク(R1/R4)・ホスト(R2/R5/R7)の検知は「何が起きたか」を外側から観測する。これに対し、
 <strong>エージェント／LLM
 の“使い方そのもの”を統制・監査する層</strong>が必要になる領域がある。MITRE
-**T1562 （Impair Defenses＝防御の無効化）**に当たる動きで、Hermes
+<strong>T1562 （Impair
+Defenses＝防御の無効化）</strong>に当たる動きで、Hermes
 の「自身の安全フィルタ除去」のように、
 ネットワークやホストの単純なシグナルでは捕まえにくい。</p>
 <h2 id="71-スキルとは何かなぜ兵器化の入口になるのか">7.1
@@ -815,7 +970,7 @@ Gambit の事例では、攻撃者は Hermes
 外部から注入する口</strong>」であり、防御上は<strong>サプライチェーン</strong>（無審査のスキル取り込み）と
 <strong>プロンプトインジェクション</strong>（スキルの文章が判断を上書き）の二重の攻撃面になる。</p>
 <blockquote>
-<p>構造的な理由だけ述べる：安全強制を**スキル/モデル層の外側（スキルから触れない場所）**に置かない設計だと、
+<p>構造的な理由だけ述べる：安全強制を<strong>スキル/モデル層の外側（スキルから触れない場所）</strong>に置かない設計だと、
 スキルが「安全チェックを無視せよ」と指示する余地が生まれる。堅牢な設計は安全強制を外側に固定する。
 本ノートは除去の具体手順は扱わない。</p>
 </blockquote>
@@ -903,10 +1058,12 @@ Sigma/Falco/Datadog（<code>detections/</code>）ではなく、<strong>ガバ�
 実装する。各組織のエージェント基盤・ログ基盤のスキーマに合わせて配線する。本ノートは兆候の存在と
 対応方針のみを示し、安全機構の回避方法は一切含めない。</p>
 </blockquote>
+<div class="docbreak"></div>
+
 <h1 id="cairn-動作確認ランブック自分の隔離ラボ認可済み前提">Cairn
 動作確認ランブック（自分の隔離ラボ・認可済み前提）</h1>
 <p><a href="https://github.com/oritera/Cairn">oritera/Cairn</a>（AGPL-3.0,
-v0.2.1）を、**自分が所有・認可した、ネットワーク隔離された“やられ環境”**に対して実際に動かすための設計書。</p>
+v0.2.1）を、<strong>自分が所有・認可した、ネットワーク隔離された“やられ環境”</strong>に対して実際に動かすための設計書。</p>
 <blockquote>
 <p>⚠️ Cairn
 は能動的に脆弱性を突いてシェル/権限を奪う実行役。<strong>対象を所有しているか、書面で認可を得ている場合のみ</strong>実行すること。本ランブックは
@@ -1150,6 +1307,8 @@ or localhost に限定し、外部プロキシを設定しないことで egress
 <li><code>docs/specs/dispatcher-design.md</code> —
 ディスパッチャ設計</li>
 </ul>
+<div class="docbreak"></div>
+
 <h1 id="strix-をローカル実行する設計メモdocker-不要の-local-バックエンド">Strix
 をローカル実行する設計メモ（Docker 不要の <code>local</code>
 バックエンド）</h1>
