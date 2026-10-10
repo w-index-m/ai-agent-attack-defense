@@ -167,15 +167,15 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
   <section aria-labelledby="h-ask">
     <h2 id="h-ask">5. 自前LLMに質問する</h2>
     <div class="panel">
-      <p class="note">今表示中のトリアージ結果(件数・攻撃連鎖の該当・絞り込み後の上位の指摘)を文脈として、<b>あなたの LLM</b>(ローカルの Ollama / LM Studio や、OpenAI 互換のエンドポイント)に質問できます。claude.ai のクオータは使いません。通信は、下で指定したエンドポイント**だけ**に送られます。</p>
+      <p class="note">今表示中のトリアージ結果(件数・攻撃連鎖の該当・絞り込み後の上位の指摘)を文脈として、<b>あなたの LLM</b>(ローカルの Ollama / LM Studio や、OpenAI 互換のエンドポイント)に質問できます。claude.ai のクオータは使いません。通信は、下で指定したエンドポイント**だけ**に送られます。既定値は <code style="font-family:var(--font-mono)">qwen2.5:1.5b</code> のような軽量モデル向け(文脈は短め・回答も簡潔)です。もっと賢いモデルをお使いなら、モデル名だけ差し替えてください。</p>
       <details class="cfgwrap">
         <summary>接続設定(初回だけ入力。この端末に保存されます)</summary>
         <div class="cfg">
           <label>エンドポイント(OpenAI互換 base URL)<input class="f" id="llm-url" placeholder="http://localhost:11434/v1"></label>
-          <label>モデル名<input class="f" id="llm-model" placeholder="qwen2.5:3b など"></label>
+          <label>モデル名<input class="f" id="llm-model" placeholder="qwen2.5:1.5b"></label>
           <label>API キー(ローカルは空でOK)<input class="f" id="llm-key" type="password" placeholder="任意"></label>
         </div>
-        <p class="note" style="margin-top:6px">例: Ollama → URL <code style="font-family:var(--font-mono)">http://localhost:11434/v1</code>・モデル名はお使いのモデル(例 <code style="font-family:var(--font-mono)">qwen2.5:3b</code>)。ブラウザ(file://)から直接呼ぶため<b>CORS 許可</b>が必要です(Ollama: <code style="font-family:var(--font-mono)">OLLAMA_ORIGINS=*</code> を設定して再起動)。設定はこの端末の localStorage に保存され、指定したエンドポイント以外へは送信しません。</p>
+        <p class="note" style="margin-top:6px">例: Ollama → URL <code style="font-family:var(--font-mono)">http://localhost:11434/v1</code>・モデル名は <code style="font-family:var(--font-mono)">ollama list</code> に出る名前そのまま(例 <code style="font-family:var(--font-mono)">qwen2.5:1.5b</code>)。ブラウザ(file://)から直接呼ぶため<b>CORS 許可</b>が必要です(Ollama: <code style="font-family:var(--font-mono)">OLLAMA_ORIGINS=*</code> を設定して再起動)。設定はこの端末の localStorage に保存され、指定したエンドポイント以外へは送信しません。<b>1.5B クラスの軽量モデルは、要約を間違えることがあります。</b>重大度や分類の最終判断は、上の一覧(ルールベース)の方を信用してください。</p>
       </details>
       <div class="seeds" id="llm-seeds"></div>
       <textarea id="llm-q" placeholder="例: 今すぐ対応すべきものから3つ、理由つきで教えて / この結果で一番危ないのはどれ？"></textarea>
@@ -615,22 +615,22 @@ function planText(){
 }
 function renderAll(){renderSources();renderSummary();renderList();$("plan").value=planText()}
 
+var LLM_ITEM_LIMIT=15; /* qwen2.5:1.5b など軽量モデル向けに、渡す件数と指示文を短く抑える(文脈が短いほど誤読・脱線が減る) */
 function llmContext(){
   /* 自前LLMに渡す文脈。生データ(raw)や秘密情報の値は含めない。表示中(絞り込み後)の要約だけ。 */
   var items=filtered();
   var cnt={};SEV_ORDER.forEach(function(s){cnt[s]=0});items.forEach(function(f){cnt[f.sev]++});
   var nChain=items.filter(function(f){return f.chain.length}).length;
   var lines=[
-    "あなたは脆弱性トリアージの防御アシスタントです。日本語で簡潔に答え、検知・防御・修正の観点に限定してください。",
-    "攻撃の実行手順やエクスプロイトは提供しないでください。",
-    "以下は、診断結果を優先度順に並べた一覧の要約です(表示中の絞り込みを反映。先頭ほど優先度が高い)。",
-    "件数: 合計"+items.length+"件(緊急"+cnt.critical+"・高"+cnt.high+"・中"+cnt.medium+"・低"+cnt.low+"・情報"+cnt.info+")。攻撃連鎖に該当: "+nChain+"件。"
+    "次は脆弱性診断の一覧(優先度順)。これ**だけ**を根拠に、日本語で短く答えて。",
+    "検知・防御・修正の話だけ。攻撃手順やエクスプロイトは書かない。一覧にない事は推測しない。",
+    "件数: 計"+items.length+"(緊急"+cnt.critical+"/高"+cnt.high+"/中"+cnt.medium+"/低"+cnt.low+"/情報"+cnt.info+")。連鎖該当:"+nChain+"件。"
   ];
-  items.slice(0,40).forEach(function(f,i){
+  items.slice(0,LLM_ITEM_LIMIT).forEach(function(f,i){
     lines.push((i+1)+". ["+SEV_LABEL[f.sev]+"/"+priLabel(f.pri)+"] "+f.title+" — "+f.loc+
-      " (ツール:"+f.tool+"・分類:"+f.rule.label+(f.chain.length?"・連鎖"+f.chain.join("・"):"")+(f.r?"・タグ"+f.r:"")+")");
+      " ("+f.tool+"/"+f.rule.label+(f.chain.length?"/連鎖"+f.chain.join("・"):"")+(f.r?"/"+f.r:"")+")");
   });
-  if(items.length>40) lines.push("…ほか "+(items.length-40)+" 件(省略)。");
+  if(items.length>LLM_ITEM_LIMIT) lines.push("…ほか "+(items.length-LLM_ITEM_LIMIT)+" 件(省略)。");
   return lines.join("\n");
 }
 (function(){
@@ -639,7 +639,7 @@ function llmContext(){
   function load(id,k,def){try{var v=localStorage.getItem(k);$(id).value=(v!=null?v:def||"")}catch(e){$(id).value=def||""}}
   function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
   load("llm-url",LS.url,"http://localhost:11434/v1");
-  load("llm-model",LS.model,"");
+  load("llm-model",LS.model,"qwen2.5:1.5b");
   load("llm-key",LS.key,"");
   [["llm-url",LS.url],["llm-model",LS.model],["llm-key",LS.key]].forEach(function(p){
     $(p[0]).addEventListener("change",function(){save(p[1],$(p[0]).value.trim())});
@@ -659,7 +659,7 @@ function llmContext(){
       var headers={"Content-Type":"application/json"};
       if(key) headers["Authorization"]="Bearer "+key;
       var r=await fetch(base+"/chat/completions",{method:"POST",headers:headers,
-        body:JSON.stringify({model:model,messages:[{role:"user",content:llmContext()},{role:"user",content:text}],stream:false,temperature:0.2})});
+        body:JSON.stringify({model:model,messages:[{role:"user",content:llmContext()},{role:"user",content:text}],stream:false,temperature:0.1,max_tokens:500})});
       if(!r.ok){var t=await r.text();throw new Error("HTTP "+r.status+" "+t.slice(0,200))}
       var j=await r.json();
       var out=(j.choices&&j.choices[0]&&j.choices[0].message&&j.choices[0].message.content)||j.content||"(空の応答)";
