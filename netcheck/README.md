@@ -14,7 +14,7 @@ python3 netcheck.py
 
 - TCP で接続できるポートの一覧(標準 約30、拡張 約45)
 - 接続時にサーバーが自分で出す表示(バナー)の読み取り
-- HTTP の通常の応答ヘッダ(CSP、HSTS、Cookie の属性など)と、HTTPS 証明書の期限・検証
+- HTTP の通常の応答ヘッダ(CSP、HSTS、Cookie の属性など)と、HTTPS 証明書の期限・検証。**CSP・クリックジャッキング対策(X-Frame-Options)・X-Content-Type-Options は、応答が HTML のページ(`Content-Type: text/html`)のときだけ**指摘します。API(JSON など)や Content-Type の無い応答は、これらが意味を持たないため指摘しません(Ollama の API などの誤検知を避けるため)。結果の `http[]` に `content_type` と `html` が記録されます
 - 管理画面らしき URL(/admin、/wp-admin/ など 8 件)が応答するか。状態コードを見るだけで、ログインはしない
 - 開いていると危険なポート(データベース、NFS、Docker API、Redis など)への注意と、直し方の表示
 - **AIエージェント攻撃を意識したポートも追加**：コンテナ/オーケストレーション(Docker TLS 2376、etcd 2379、Kubernetes API 6443、kubelet 10250、Consul 8500、Nomad 4646)、ローカルLLM 推論 API(Ollama 11434、LM Studio 1234)、管理/監視ダッシュボード(Kibana 5601、RabbitMQ 15672、Prometheus 9090、Grafana/開発 3000、レジストリ/開発 5000)
