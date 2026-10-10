@@ -12,6 +12,7 @@
   3. vuln_triage.html の攻撃連鎖（CHAIN）が taxonomy と一致するか
   4. detections/ の各バックエンドのルール有無が taxonomy の網羅表と一致するか
   5. R1–R7 が detections/README.md と defense-detection-notes.md に記載されているか
+  6. ガバナンス G1–G6 の説明が、defense-detection-notes.md §7.3 の表と一致するか
 
 標準ライブラリだけで動く（Python 3.8+）。外部ネットワークもサブプロセスも使わない。
     python3 -I tools/check_consistency.py
@@ -133,6 +134,20 @@ def main():
         for tag in ("R1", "R2", "R3", "R4", "R5", "R6", "R7"):
             if tag not in text:
                 errors.append("%s: %s の記載が見つかりません。" % (doc, tag))
+
+    # 6. ガバナンス G1–G6 の説明が、ノート(§7.3 の表)と一致するか ---------------
+    notes = read(rp("security-scan", "defense-detection-notes.md"))
+    rows = dict(re.findall(r"^\|\s*(G\d)\s*\|\s*([^|]+?)\s*\|", notes, re.M))
+    for gid, text in tax.get("governance_events", {}).items():
+        if gid.startswith("_"):
+            continue
+        if gid not in rows:
+            errors.append("defense-detection-notes.md: %s の行(§7.3 の表)が見つかりません。" % gid)
+        elif rows[gid] != text:
+            errors.append("%s の説明が、shared/taxonomy.json（%r）と defense-detection-notes.md §7.3（%r）で一致しません。" % (gid, text, rows[gid]))
+    for gid in rows:
+        if gid not in tax.get("governance_events", {}):
+            errors.append("defense-detection-notes.md の %s が shared/taxonomy.json の governance_events にありません。" % gid)
 
     # 結果 --------------------------------------------------------------------
     if errors:

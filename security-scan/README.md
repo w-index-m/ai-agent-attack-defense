@@ -18,6 +18,7 @@ techniques. Use only against assets you own or are authorized to test.
 | File | Contents |
 |---|---|
 | [`defense-detection-notes.md`](defense-detection-notes.md) (JA) / [`.en.md`](defense-detection-notes.en.md) (EN) | Cross-tool defense & detection notes: SOC operational layer (data-source mapping, detection rules R1–R7, MITRE ATT&CK, triage) and the broader offensive-AI-agent landscape. |
+| [`defense-playbook.en.md`](defense-playbook.en.md) (EN) / [`.ja.md`](defense-playbook.ja.md) (JA) | **Defense playbook for AI-agent attacks**: what Strix / Cairn / Hermes / ARTEX look like, then prevent / detect / respond / verify for each of the seven chain steps, incident flow, a honeytoken design memo, a first-week plan, and an explicit **not-implemented list**. |
 | [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md) (JA) | The four defense layers (prevent / detect / respond / recover) and how an external rollout-roadmap proposal maps onto them: assessment, cautions, and the gaps this repo fills. Clarifies R1–R7 vs ③, with a kernel-FIM primer. |
 | [`glossary.ja.md`](glossary.ja.md) (JA) | Plain-language glossary: FIM / CSP / WORM / egress / C2 / RCE / IAM and more, one line each. Grows as new terms come up. |
 | [`zgrab2-notes.md`](zgrab2-notes.md) (JA + EN summary) | Ingesting zgrab2 (ZMap's application-layer scanner) output into `vuln_triage`, plus `scripts/zgrab2_guard.py`, an allowlist guard in front of zgrab2. Exposure inventory, not a vulnerability scanner. |

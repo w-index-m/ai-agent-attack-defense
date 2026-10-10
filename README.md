@@ -16,7 +16,7 @@ Use these **only on systems you own or are authorized to test**.
 
 ![Overview: the four defense layers (prevent / detect / respond / recover) and which tool covers each](overview-figure.png)
 
-> Big picture: countermeasures form one set across **prevent (③) → detect (R1–R7) → respond → recover**. See [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) for the mapping and [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) for plain-language term definitions.
+> Big picture: countermeasures form one set across **prevent (③) → detect (R1–R7) → respond → recover**. Step-by-step defense along the attack chain: [`security-scan/defense-playbook.en.md`](security-scan/defense-playbook.en.md). See [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) for the mapping and [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) for plain-language term definitions.
 
 | Path | What it is | How to test |
 |---|---|---|
@@ -50,7 +50,7 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 
 ![全体像：防御の4層（予防・検知・応答・復旧）と、どのツールがどこを担うか](overview-figure.png)
 
-> 全体像：対策は「**予防(③) → 検知(R1–R7) → 応答 → 復旧**」の4層で1セットです。各対策の対応づけは [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md)、用語のやさしい解説は [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) を参照。
+> 全体像：対策は「**予防(③) → 検知(R1–R7) → 応答 → 復旧**」の4層で1セットです。攻撃連鎖の段ごとの防御は [`security-scan/defense-playbook.ja.md`](security-scan/defense-playbook.ja.md)、各対策の対応づけは [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md)、用語のやさしい解説は [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) を参照。
 
 ## ツール一覧
 
