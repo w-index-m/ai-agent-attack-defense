@@ -16,6 +16,8 @@ Suggested Topics:
 Study materials and small defensive tools based on the Gambit Security report (2026-09-22) on AI-agent attacks against online retailers (Strix / Cairn / Hermes).
 Use these **only on systems you own or are authorized to test**.
 
+![Attack overview: the AI-agent roles and the seven-step chain (high level, no technique details)](attack-overview.png)
+
 ![Defense overview: the seven-step attack chain and the four defense layers (prevent / detect / respond / recover), with the tools for each](defense-overview.png)
 
 Legend: **本リポ** = implemented in this repository · **外部案** = external roadmap idea, evaluated in [`defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) and not yet implemented (the `本リポ` / `外部案` labels are kept in Japanese to match the figure).
@@ -54,6 +56,8 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 **自分が所有している、または許可を得た対象にのみ使用してください。**
 
 > **まずここから：** [セキュリティ問題のまとめ](security-scan/security-summary.ja.md) ── 何が起きたか、このリポジトリで何を作ったか、まだ検証していないことは何か。（English: [Security summary](security-scan/security-summary.en.md)）
+
+![攻撃の概要：AI エージェントの役割と攻撃連鎖7段（高レベル。手順は含まない）](attack-overview.png)
 
 ![防御全体像：攻撃連鎖7段と、防御の4層（予防・検知・応答・復旧）、各層のツール](defense-overview.png)
 
