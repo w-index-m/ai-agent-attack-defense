@@ -108,13 +108,13 @@ The chain from the Gambit case (definition: [`../shared/taxonomy.json`](../share
 The October 2026 advisories from JPCERT/CC and the Personal Information Protection Commission describe, beyond the seven steps above, **API abuse, exploitation of known vulnerabilities (including BI tools), device/admin misconfiguration, and web-shell placement**. The mapping is in [`jp-advisory-mapping.en.md`](jp-advisory-mapping.en.md). This section only adds defensive items (no attack procedures).
 
 **A. API authorization (never touch another user's data)**
-- **Prevent**: on every request, check on the server whether *this user* may access *this data*; being logged in is not enough. Even if IDs or parameters are altered, other users' data must not be returned. Put operations that the UI never exposes (role changes, account creation) behind an admin path with admin authentication and source restrictions.
+- **Prevent**: on every request, check on the server whether *this user* may access *this data*; being logged in is not enough. Even if IDs or parameters are altered, other users' data must not be returned. Put operations that the UI never exposes (role changes, account creation) behind an admin path with admin authentication and source restrictions. Accept only permitted users and HTTP methods on each endpoint. Set an upper limit on requests per unit time, and give high-load or high-abuse functions (login, password reset, SMS sending, search) their own rate and usage limits (a JPCERT/CC recommendation).
 - **Detect**: a burst of API calls from one principal; a spike in 401/403; calls to internal APIs that are normally unused. **[Not implemented]** (no API-log rules exist; R3 covers web enumeration).
 - **Respond**: pause or throttle the API; identify affected users and confirm whether notification is required; preserve logs.
 - **Verify**: in your own test environment, confirm per API that user A's session cannot retrieve user B's data.
 
 **B. API keys and secrets inside apps**
-- **Prevent**: do not embed high-privilege keys in public apps (such as mobile apps). Scope keys by purpose and permission and rotate them regularly. Do not reuse keys leaked from other systems.
+- **Prevent**: do not embed high-privilege keys in public apps (such as mobile apps). Scope keys by purpose and permission and rotate them regularly. Do not reuse keys leaked from other systems. Give API users and tokens only the minimum necessary permissions, give tokens a suitable expiry and avoid long-lived ones, and be able to revoke quickly any that are no longer needed or suspected leaked.
 - **Detect**: key use from unusual locations or times. **[Not implemented]** (use of decoy keys is a design memo in §5).
 - **Respond**: immediately revoke and reissue any key that may have leaked.
 - **Verify**: run gitleaks over the repository and its history for leftover keys.
@@ -130,6 +130,13 @@ The October 2026 advisories from JPCERT/CC and the Personal Information Protecti
 - **Detect**: access to configuration or backup files under the web root. **[Not implemented]**
 - **Respond**: remove the files and reissue any credentials they contained.
 - **Verify**: inventory the web root. **netcheck does not yet look for this kind of file exposure** (it checks admin-like paths only).
+
+**E. Common preparations (summary of JPCERT/CC's recommendations)**
+- **Prevent**: restrict access by region if the service's users are regionally limited. Stop exposing services or functions (such as admin features) not needed for the business. Do not keep data past its retention period or purpose.
+- **Detect / first response**: review the intrusion-detection setup and the first-response procedure (§4).
+- **After a compromise**: review lateral-movement countermeasures for after a web server or similar is compromised (steps ④⑤⑥ in §3).
+- **Customers**: prepare, in peacetime, the messaging to prevent secondary harm if a leak occurs (for example, urging multi-factor authentication).
+- **Scope**: apply the same review to systems not meant for an unspecified public, such as employee-facing systems and BI tools.
 
 ---
 

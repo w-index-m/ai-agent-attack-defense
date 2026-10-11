@@ -5,8 +5,10 @@
 From October 7 to 9, 2026, the Personal Information Protection Commission, JPCERT/CC, the National Cybersecurity Office, IPA, and others published advisories in response to a series of unauthorized-access incidents leaking personal information at Japanese organizations.
 This page lines them up against this repository's defenses. **It is limited to defensive organization and contains no attack procedures.**
 
-> ⚠️ Sourcing: what follows is **secondary information** based on a blog summary (piyolog, 2026-10-11) that the user shared as screenshots.
-> Confirm the accurate and current details, including the CVE number, in the **primary sources**: the JPCERT/CC advisory (October 8) and the Commission's WARNING (revised October 7).
+> ⚠️ Sourcing:
+> - **§1–§3 (the four cases and the mapping)** are **secondary information**, based on a blog summary (piyolog, 2026-10-11) that the user shared as screenshots.
+> - **§4 (JPCERT/CC's recommended countermeasures)** is based on the **original text** of the "countermeasures" and "reference information" sections of the JPCERT/CC advisory (published 2026-10-08; sections I and II were supplemented on 2026-10-09), as pasted by the user.
+> - Confirm the accurate and current details, including the CVE number, in the primary sources: the full JPCERT/CC advisory and the Commission's WARNING (revised October 7).
 > The advisory itself says the same technique is not necessarily used in every incident and that the information grasped is "limited and fragmentary."
 
 ## 1. The four patterns and the Commission's cases
@@ -43,7 +45,43 @@ The "This repository" column reflects the current state of documents and tools (
 3. **Web-shell placement detection.** FIM and process monitoring (child processes under the web server). The rules are not implemented.
 4. **Preparing for product-specific exploitation, such as BI tools.** The basics are reduced exposure and prioritized patching.
 
-## 4. Related files
+## 4. Countermeasures JPCERT/CC recommends, and how this repository maps
+
+Based on the techniques reported to it, JPCERT/CC recommends the following (summarized; see the advisory for the original wording). For details on API access, it points to OWASP guidance.
+
+**Against access through APIs**
+
+| Recommendation | State in this repo |
+|---|---|
+| Limit the number of requests per unit time to prevent repeated or bulk access | Added to playbook §3A-A (rate limiting). No implementation or detection |
+| Set separate rate and usage limits on high-load or high-abuse functions (login, password reset, SMS sending, search) | Same |
+| Enforce access control on every endpoint, including non-public ones, accepting only permitted users and HTTP methods | Added under §3A-A (authorization) |
+| Grant API users and tokens only the minimum necessary permissions | Added to §3A-B |
+| Give API tokens a suitable expiry; avoid long-lived tokens | Added to §3A-B |
+| Be able to quickly revoke tokens that are no longer needed or suspected leaked | Added to §3A-B (respond) |
+
+**General countermeasures**
+
+| Recommendation | State in this repo |
+|---|---|
+| Restrict access by region if the service's users are regionally limited | Added to §3A-E |
+| Apply fixed updates if running versions affected by known vulnerabilities | OS update checks, Trivy, playbook §3A-C |
+| Review lateral-movement countermeasures for after a web server or similar is compromised | Steps ④⑤⑥ of the chain (§3) and §3A-E |
+| Review the intrusion-detection setup and first-response procedure | Detection rules R1–R7 (network and host), playbook §4. No API-log detection |
+| Prepare customers in peacetime against secondary harm after a leak (for example multi-factor authentication) | Added to §3A-E |
+| Stop exposing services or functions (such as admin features) that are not needed for the business | netcheck, playbook §3A-C |
+| Do not keep data past its legal or contractual retention period or purpose | Added to §3A-E |
+
+JPCERT/CC notes that systems not meant for an unspecified public (employee-facing systems, BI tools) have also been hit, and recommends the same review for them.
+
+**References** listed in the advisory (URLs as given; contents not verified)
+- OWASP Top 10 API Security Risks 2023: https://api-security.owasp.org/editions/2023/en/0x11-t10/
+- OWASP REST Security Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/REST_Security_Cheat_Sheet.html
+- Macnica Security Research Center, "On the string of information-leak incidents from web systems": https://security.macnica.co.jp/blog/2026/10/web-incidents2026.html
+
+JPCERT/CC asks for information about suspicious access or suspected compromise, techniques, and causes. The advisory lists a contact point for incident-response consultation.
+
+## 5. Related files
 
 - Defense playbook: [`defense-playbook.en.md`](defense-playbook.en.md) (§3A and §9)
 - Detection concepts: [`defense-detection-notes.en.md`](defense-detection-notes.en.md)
