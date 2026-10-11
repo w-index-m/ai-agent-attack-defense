@@ -246,7 +246,7 @@ If your organization runs offensive agents (for red-teaming, etc.) **under autho
 | 3A-C BI / admin systems | netcheck, OS update checks, Trivy | R3 (external access) | Per-product exploitation detection |
 | 3A-D Config / backups | netcheck (15-item exposure check) | **None** | Web-root inventory, detection of file access |
 
-- **R1–R7 are mainly network and host observations.** Detection for ②⑤⑥⑦ lives in the app and cloud audit-log layer, and **does not exist yet**. That is the next task.
+- **R1–R8 are mainly network and host observations.** Detection for ②⑤⑥⑦ lives in the app and cloud audit-log layer, and **does not exist yet**. That is the next task.
 - **Response (§4) is documentation only**; there is no automation.
 - **Decoys (§5) are a design only**, with no rules or implementation.
 - **We have not verified, on real offensive tools, that detection works** (that needs an authorized lab).
@@ -255,7 +255,7 @@ If your organization runs offensive agents (for red-teaming, etc.) **under autho
 
 ## 10. Related files
 
-- Detection rules: [`detections/`](detections/) (R1–R7; Sigma / Falco / Elastic / Datadog)
+- Detection rules: [`detections/`](detections/) (R1–R8; Sigma / Falco / Elastic / Datadog)
 - Detection concepts and terms: [`defense-detection-notes.en.md`](defense-detection-notes.en.md), [`glossary.ja.md`](glossary.ja.md)
 - The four layers and the external roadmap assessment: [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md)
 - Per-tool analyses: [`artex-analysis.en.md`](artex-analysis.en.md), [`strix-local-backend-notes.md`](strix-local-backend-notes.md), [`cairn-lab/cairn-authorized-lab-runbook.md`](cairn-lab/cairn-authorized-lab-runbook.md)

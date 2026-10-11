@@ -118,7 +118,7 @@ details.cfgwrap summary{cursor:pointer;font-size:13px;color:var(--ink2)}
 <!-- ASK (自前LLM) -->
 <section id="ask">
   <h2>💬 AIに質問（自前LLM） <span class="en">Your own LLM</span></h2>
-  <p class="note">この防御データ（マップ・検知R1–R7・ガバナンスG1–G6・予防）を文脈に、<b>あなたの LLM</b> が回答します。claude.ai のクオータは使いません。OpenAI 互換エンドポイント（ローカルの Ollama / LM Studio / vLLM、または OpenRouter 等）に対応。</p>
+  <p class="note">この防御データ（マップ・検知R1–R8・ガバナンスG1–G6・予防）を文脈に、<b>あなたの LLM</b> が回答します。claude.ai のクオータは使いません。OpenAI 互換エンドポイント（ローカルの Ollama / LM Studio / vLLM、または OpenRouter 等）に対応。</p>
   <details class="cfgwrap">
     <summary>⚙️ 接続設定（初回だけ入力。ブラウザに保存されます）</summary>
     <div class="cfg">
@@ -201,7 +201,7 @@ details.cfgwrap summary{cursor:pointer;font-size:13px;color:var(--ink2)}
 <!-- ② COVERAGE -->
 <section id="cov">
   <h2>② 検知カバレッジ マトリクス <span class="en">Detection coverage</span></h2>
-  <p class="note">タイプ別チップを押すと、その型に効く検知行がハイライトされます。検知の土台は共通（LLM推論・スキャン・ツール実行・C2）なので R1–R7 が横展開で効きます。</p>
+  <p class="note">タイプ別チップを押すと、その型に効く検知行がハイライトされます。検知の土台は共通（LLM推論・スキャン・ツール実行・C2）なので R1–R8 が横展開で効きます。</p>
   <div class="tools" style="margin-bottom:10px">
     <span class="chip" style="border-color:var(--c1);cursor:pointer" data-type="t1">① 分業チェーン</span>
     <span class="chip" style="border-color:var(--c2);cursor:pointer" data-type="t4">④ E2E</span>
@@ -230,6 +230,8 @@ details.cfgwrap summary{cursor:pointer;font-size:13px;color:var(--ink2)}
         <td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c part">○</td></tr>
       <tr data-t="t1 t4 t5 t6"><td>R6</td><td>相関（R3＋R1＋(R2 or R7)＋任意R4/R5）</td><td>SIEM 相関</td><td><span class="pri sev-high">高</span></td>
         <td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c part">○</td></tr>
+      <tr data-t="t1"><td>R8</td><td>Web シェルの設置（Web ルート配下の JSP/WAR/PHP 等）と、Web サーバーからのシェル起動<br><span class="cap">JPCERT/CC 注意喚起（2026-10）のケース D。Sigma / Falco のみ</span></td><td>file event / process (auditd, Falco)</td><td><span class="pri sev-high">高</span></td>
+        <td class="c yes">●</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
     </tbody>
   </table>
   </div>
@@ -258,7 +260,7 @@ details.cfgwrap summary{cursor:pointer;font-size:13px;color:var(--ink2)}
 <!-- ④ SKILLS & GOVERNANCE -->
 <section id="gov">
   <h2>④ スキル機構とガバナンス <span class="en">Skills & governance / T1562</span></h2>
-  <p class="note">ネットワーク/ホストの検知(R1–R7)では捕まえにくい「エージェント/LLM の使い方そのもの」を統制・監査する層。MITRE <b>T1562（防御の無効化）</b>に対応。</p>
+  <p class="note">ネットワーク/ホストの検知(R1–R8)では捕まえにくい「エージェント/LLM の使い方そのもの」を統制・監査する層。MITRE <b>T1562（防御の無効化）</b>に対応。</p>
   <div class="grid c2">
     <div class="card"><h3>スキルとは／なぜ危険か</h3>
       <p class="cap" style="line-height:1.6">スキル＝エージェントに後付けする「指示＋ツール権限＋ワークフロー」の束。Hermes は自己改善ループで自動生成・改良する。危険なのは、スキル内容を<b>“信頼された上位の指示＋権限”として取り込む</b>点。Gambit の事例では本体コードを変えず、攻撃用スキル(121中78が攻撃目的)＋<b>自身の安全フィルタを外すスキル</b>を上乗せしただけで司令塔化した。実質「信頼された指示＋権限を外部注入する口」＝<b>サプライチェーン＋プロンプトインジェクション</b>の二重の攻撃面。</p>
@@ -275,7 +277,7 @@ details.cfgwrap summary{cursor:pointer;font-size:13px;color:var(--ink2)}
     </div>
   </div>
   <h3 style="margin:14px 0 2px;font-size:14px">監査イベント G1–G6（ガバナンス層）</h3>
-  <p class="note">ネットワーク/ホストの R1–R7 とは観測点が異なり、<b>アプリ/監査ログ層</b>（エージェント監査ログ・スキルレジストリ・LLM/ツールゲートウェイ・ログ基盤）で見る。</p>
+  <p class="note">ネットワーク/ホストの R1–R8 とは観測点が異なり、<b>アプリ/監査ログ層</b>（エージェント監査ログ・スキルレジストリ・LLM/ツールゲートウェイ・ログ基盤）で見る。</p>
   <div class="sc"><table><thead>
     <tr><th>ID</th><th>監査イベント</th><th>データソース</th><th>優先度</th><th>対応</th></tr>
   </thead><tbody>
@@ -310,7 +312,7 @@ details.cfgwrap summary{cursor:pointer;font-size:13px;color:var(--ink2)}
       <li><code>.github/workflows/security-scan.yml</code> — CI（Semgrep/Trivy/gitleaks）</li>
     </ul></div>
     <div class="card"><h3>解析・設計</h3><ul class="tight">
-      <li><code>defense-detection-notes.md</code> — 防御・検知ノート（R1–R7）</li>
+      <li><code>defense-detection-notes.md</code> — 防御・検知ノート（R1–R8）</li>
       <li><code>detections/</code> — Sigma / Falco / Datadog ルール</li>
       <li><code>strix-local-backend-notes.md</code> + <code>strix-local-poc/</code></li>
       <li><code>cairn-lab/</code> — 認可ラボ・ランブック＋実設定</li>
@@ -362,13 +364,13 @@ details.cfgwrap summary{cursor:pointer;font-size:13px;color:var(--ink2)}
     "あなたはAI攻撃エージェントに対する防御/検知の専門アシスタント。日本語で簡潔に、検知・防御の観点のみ回答する。",
     "攻撃の実行手順・エクスプロイト・安全機構の回避方法は提供しない（防御目的に限定）。",
     "【攻撃エージェント類型】①分業チェーン(Hermes統括/Strix偵察/Cairn侵入, Gambitの事例) ④E2E自律(PentAGI, Villager[悪用], ARTEX[疑い], NeuroSploit, PentestAgent, Pentest-Swarm, Decepticon, Shannon, hackingBuddyGPT) ⑤攻撃基盤(HexStrike[悪用,MCP150+ツール], CAI, TARS) ⑥対話型(PentestGPT, Pentest Copilot)。",
-    "【検知ルール】R1=サーバ系→外部LLM API egress(高,proxy/DNS)。R2=特権/NET_RAW/host net/privilegedコンテナ起動(中,container audit/Falco)。R3=管理画面パス列挙バースト4xx(中,web/WAF)。R4=サーバ→メッセージングAPI(Telegram/Discord/Slack/Signal)=C2的(高)。R5=cron/systemd永続化作成(中,host)。R6=相関(R3+R1+(R2 or R7)[+R4/R5])。R7=1親プロセスが多種セキュリティツールを短時間連続実行(高,EDR)。R7はローカルLLM利用でR1が出ない型でも残る挙動の核。",
+    "【検知ルール】R1=サーバ系→外部LLM API egress(高,proxy/DNS)。R2=特権/NET_RAW/host net/privilegedコンテナ起動(中,container audit/Falco)。R3=管理画面パス列挙バースト4xx(中,web/WAF)。R4=サーバ→メッセージングAPI(Telegram/Discord/Slack/Signal)=C2的(高)。R5=cron/systemd永続化作成(中,host)。R6=相関(R3+R1+(R2 or R7)[+R4/R5])。R7=1親プロセスが多種セキュリティツールを短時間連続実行(高,EDR)。R7はローカルLLM利用でR1が出ない型でも残る挙動の核。R8=Webシェルの設置(Webルート配下へのJSP/WAR/PHP等)とWebサーバーからのシェル起動(高,file event/process,Sigma/Falco)。",
     "【優先度】R1/R4→R2→R7→R3→R5→R6(相関)。",
     "【予防】送信ドメインallowlist / コンテナadmission control / 攻撃面最小化 / 決済ページCSP / LLM利用ガバナンス。",
     "【スキル機構】スキル=後付けの指示＋ツール権限＋ワークフロー。Hermesは自己改善ループで自動生成。危険性は“信頼された上位指示＋権限”として取り込む点。Gambitでは本体コード不変で攻撃用スキル(121中78)＋安全フィルタ除去スキルを上乗せし司令塔化。サプライチェーン＋プロンプトインジェクションの二重攻撃面。安全強制はスキル/モデルの外側に固定するのが堅牢。※攻撃スキルや除去手順は扱わない。",
     "【ガバナンス(T1562)/監査イベント】G1 スキル導入・自動生成・自己改変 G2 安全設定/ガードレール変更・無効化の試行 G3 プロンプト/ツール呼び出しに迂回意図 G4 監査ログ欠落・停止 G5 ツール権限拡大要求/付与 G6 サブエージェント大量スポーン/権限拡大。アプリ/監査ログ層で観測。",
     "【CVP】Defense(防御・個人可・数日) / Red Team(認可ペンテスト・組織のみ・数週間) / Specialized(安全重要・米政府連携)。物理被害/大規模妨害/ランサム/安全系無効化は常時ブロック。",
-    "SIEM移植(Sigma/Falco/Datadog/Elastic/Splunk等)を聞かれたら、R1–R7の意味に即した検知クエリの考え方を示し、閾値・allowlistは環境でチューニングする旨を添える。"
+    "SIEM移植(Sigma/Falco/Datadog/Elastic/Splunk等)を聞かれたら、R1–R8の意味に即した検知クエリの考え方を示し、閾値・allowlistは環境でチューニングする旨を添える。"
   ].join("\n");
   var SEEDS=["ローカルLLM型はどう検知する？","R7をSplunk SPLにするには？","優先度が高い検知トップ3は？","HexStrike系(基盤型)の防御の勘所は？","ガバナンスG1–G6の運用のコツは？"];
   var $=function(i){return document.getElementById(i);};

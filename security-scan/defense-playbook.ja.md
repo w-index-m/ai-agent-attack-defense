@@ -246,7 +246,7 @@ Gambit の事例の連鎖（定義: [`../shared/taxonomy.json`](../shared/taxono
 | 3A-C BI・管理系 | netcheck、OS 更新の確認、Trivy | R3（外部アクセス） | 製品ごとの悪用の検知 |
 | 3A-D 設定・バックアップ | netcheck（15 件の露出確認） | **無し** | Web ルートの棚卸し、ファイルへのアクセスの検知 |
 
-- **R1〜R7 は、ネットワークとホストの観測が中心**です。②⑤⑥⑦の検知は、アプリ・クラウドの監査ログの層で、**まだ無い**。次の課題。
+- **R1〜R8 は、ネットワークとホストの観測が中心**です。②⑤⑥⑦の検知は、アプリ・クラウドの監査ログの層で、**まだ無い**。次の課題。
 - **応答（§4）は手順の文書のみ**で、自動化の実装は無い。
 - **罠（§5）は設計のみ**で、ルールも実装も無い。
 - 実際の攻撃ツールに対して検知できるかの**実機検証は、していない**（認可ラボが必要）。
@@ -255,7 +255,7 @@ Gambit の事例の連鎖（定義: [`../shared/taxonomy.json`](../shared/taxono
 
 ## 10. 関連ファイル
 
-- 検知ルール：[`detections/`](detections/)（R1〜R7。Sigma / Falco / Elastic / Datadog）
+- 検知ルール：[`detections/`](detections/)（R1〜R8。Sigma / Falco / Elastic / Datadog）
 - 検知の考え方と用語：[`defense-detection-notes.md`](defense-detection-notes.md)、[`glossary.ja.md`](glossary.ja.md)
 - 4層と外部ロードマップの評価：[`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md)
 - 各ツールの解析：[`artex-analysis.ja.md`](artex-analysis.ja.md)、[`strix-local-backend-notes.md`](strix-local-backend-notes.md)、[`cairn-lab/cairn-authorized-lab-runbook.md`](cairn-lab/cairn-authorized-lab-runbook.md)

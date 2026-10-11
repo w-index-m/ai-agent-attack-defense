@@ -67,7 +67,7 @@ Based on the techniques reported to it, JPCERT/CC recommends the following (summ
 | Restrict access by region if the service's users are regionally limited | Added to §3A-E |
 | Apply fixed updates if running versions affected by known vulnerabilities | OS update checks, Trivy, playbook §3A-C |
 | Review lateral-movement countermeasures for after a web server or similar is compromised | Steps ④⑤⑥ of the chain (§3) and §3A-E |
-| Review the intrusion-detection setup and first-response procedure | Detection rules R1–R7 (network and host), playbook §4. No API-log detection |
+| Review the intrusion-detection setup and first-response procedure | Detection rules R1–R8 (network and host), playbook §4. No API-log detection |
 | Prepare customers in peacetime against secondary harm after a leak (for example multi-factor authentication) | Added to §3A-E |
 | Stop exposing services or functions (such as admin features) that are not needed for the business | netcheck, playbook §3A-C |
 | Do not keep data past its legal or contractual retention period or purpose | Added to §3A-E |

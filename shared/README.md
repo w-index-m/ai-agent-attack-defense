@@ -45,7 +45,7 @@
 3. チェッカーが ✅ になることを確認
 
 **netcheck に危険ポートを足すとき**
-1. `RISKY` に説明を追加し、`PORT_RULE` で既存タグ（R1–R7 / ③）に対応づけ
+1. `RISKY` に説明を追加し、`PORT_RULE` で既存タグ（R1–R8 / ③）に対応づけ
 2. プローブ対象（`STANDARD_PORTS` / `EXTENDED_PORTS` / `HTTP_PORTS` 等）にも追加
 3. 使ったタグはすべて `taxonomy.json` に定義済みであること（新タグなら上記手順）
 

@@ -1,7 +1,7 @@
 <!--
 Suggested GitHub "About" (set in the repo page → About ⚙️):
   Defensive detection pack for autonomous AI-agent attacks — exposure checks,
-  triage, and detection rules (R1–R7) mapped to MITRE ATT&CK. Authorized use only.
+  triage, and detection rules (R1–R8) mapped to MITRE ATT&CK. Authorized use only.
 Suggested Topics:
   defensive-security detection-engineering ai-security blue-team threat-detection
   sigma falco siem llm-security security-tools
@@ -9,7 +9,7 @@ Suggested Topics:
 
 # ai-agent-attack-defense
 
-**An open, defensive detection pack for autonomous AI-agent attacks** — exposure checks, triage, and detection rules (**R1–R7**) mapped to **MITRE ATT&CK / ATLAS** and **OWASP Top 10 for LLM**, organized as *prevent → detect → respond → recover*. Detection/defense design only.
+**An open, defensive detection pack for autonomous AI-agent attacks** — exposure checks, triage, and detection rules (**R1–R8**) mapped to **MITRE ATT&CK / ATLAS** and **OWASP Top 10 for LLM**, organized as *prevent → detect → respond → recover*. Detection/defense design only.
 
 > **Start here:** [Security summary](security-scan/security-summary.en.md) — what happened, what this repo provides, and what is still unverified. (日本語: [セキュリティ問題のまとめ](security-scan/security-summary.ja.md))
 
@@ -24,7 +24,7 @@ Legend: **本リポ** = implemented in this repository · **外部案** = extern
 
 ![Overview: the four defense layers (prevent / detect / respond / recover) and which tool covers each](overview-figure.png)
 
-> Big picture: countermeasures form one set across **prevent (③) → detect (R1–R7) → respond → recover**. Step-by-step defense along the attack chain: [`security-scan/defense-playbook.en.md`](security-scan/defense-playbook.en.md). See [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) for the mapping and [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) for plain-language term definitions.
+> Big picture: countermeasures form one set across **prevent (③) → detect (R1–R8) → respond → recover**. Step-by-step defense along the attack chain: [`security-scan/defense-playbook.en.md`](security-scan/defense-playbook.en.md). See [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) for the mapping and [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) for plain-language term definitions.
 
 | Path | What it is | How to test |
 |---|---|---|
@@ -40,7 +40,7 @@ Legend: **本リポ** = implemented in this repository · **外部案** = extern
    - `STAGING_URL`: a **staging** URL you own. Leave unset to skip ZAP. Never point it at production or third parties.
 3. Results: job summary and the `security-scan-results` artifact (JSON). Feed those JSON files into `vuln_triage.html`.
 4. Offline test of the summarizer: `python3 scripts/summarize.py <dir-with-json> --fail-on high`.
-5. Ship scan results to a SIEM: `--format elastic --out scan.ndjson` (ECS NDJSON) or `--format datadog --out scan.json` (Datadog Logs JSON). This feeds CI findings into the same platform where the R1–R7 detection rules live.
+5. Ship scan results to a SIEM: `--format elastic --out scan.ndjson` (ECS NDJSON) or `--format datadog --out scan.json` (Datadog Logs JSON). This feeds CI findings into the same platform where the R1–R8 detection rules live.
 
 ## Status / unverified
 - The GitHub Actions workflow runs on GitHub (scan and consistency jobs, both green on `main`). ZAP runs only when `STAGING_URL` is set.
@@ -50,7 +50,7 @@ Legend: **本リポ** = implemented in this repository · **外部案** = extern
 
 # 日本語版（概要）
 
-**自律型AIエージェント攻撃を“検知する”ためのオープンな防御パック**です。露出確認・トリアージ・検知ルール（**R1–R7**）を、**MITRE ATT&CK / ATLAS** と **OWASP Top 10 for LLM** に対応づけ、*予防→検知→応答→復旧* で整理しています。検知・防御の設計に限定。
+**自律型AIエージェント攻撃を“検知する”ためのオープンな防御パック**です。露出確認・トリアージ・検知ルール（**R1–R8**）を、**MITRE ATT&CK / ATLAS** と **OWASP Top 10 for LLM** に対応づけ、*予防→検知→応答→復旧* で整理しています。検知・防御の設計に限定。
 
 Gambit Security レポート（2026-09-22）の、オンライン小売を狙った AI エージェント攻撃（Strix / Cairn / Hermes）を題材にした、**学習教材と小さな防御ツール**の集まりです。
 **自分が所有している、または許可を得た対象にのみ使用してください。**
@@ -65,7 +65,7 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 
 ![全体像：防御の4層（予防・検知・応答・復旧）と、どのツールがどこを担うか](overview-figure.png)
 
-> 全体像：対策は「**予防(③) → 検知(R1–R7) → 応答 → 復旧**」の4層で1セットです。攻撃連鎖の段ごとの防御は [`security-scan/defense-playbook.ja.md`](security-scan/defense-playbook.ja.md)、各対策の対応づけは [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md)、用語のやさしい解説は [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) を参照。
+> 全体像：対策は「**予防(③) → 検知(R1–R8) → 応答 → 復旧**」の4層で1セットです。攻撃連鎖の段ごとの防御は [`security-scan/defense-playbook.ja.md`](security-scan/defense-playbook.ja.md)、各対策の対応づけは [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md)、用語のやさしい解説は [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) を参照。
 
 ## ツール一覧
 
@@ -89,8 +89,8 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 AI エージェント攻撃ツール（Strix / Cairn / Hermes、および周辺の攻撃用 AI エージェント）を**防御・検知の観点で**まとめた一式です。**検知・防御の設計に限定**し、攻撃の実行手順や安全機構の回避方法は含みません。日本語の入口は [`security-scan/README.ja.md`](security-scan/README.ja.md)。
 
 - **統合ダッシュボード** `security-scan/dashboard.html` … 攻撃エージェントの俯瞰・検知カバレッジ・予防策を1枚に（オフライン完結）。
-- **防御・検知ノート** `security-scan/defense-detection-notes.md` … 偵察/侵入/統括の各段の観測点と、検知ルール R1–R7・MITRE ATT&CK 対応・トリアージ。
-- **検知ルール** `security-scan/detections/` … Sigma / Falco / Datadog の実装（R1–R7）。
+- **防御・検知ノート** `security-scan/defense-detection-notes.md` … 偵察/侵入/統括の各段の観測点と、検知ルール R1–R8・MITRE ATT&CK 対応・トリアージ。
+- **検知ルール** `security-scan/detections/` … Sigma / Falco / Datadog の実装（R1–R8）。
 - **系統図** `security-scan/lineage.md` … 起点 URL →ツール要素→検知→防御のたどり（GitHub 上で図が描画されます）。
 - **Cairn 認可ラボ** `security-scan/cairn-lab/` … 自分の隔離ラボで動かすためのランブックと設定（攻撃なし mock 検証つき）。
 - **Strix ローカル実行 PoC** `security-scan/strix-local-poc/`。

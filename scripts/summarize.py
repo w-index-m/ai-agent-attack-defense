@@ -5,7 +5,7 @@
   markdown  CI の要約(既定)。ジョブサマリに貼れる Markdown。
   elastic   Elastic/ECS 向けの NDJSON(1 行 1 イベント)。Elastic に取り込める。
   datadog   Datadog Logs 向けの JSON 配列。Datadog に取り込める。
-            → CI のスキャン結果を、検知ルール(R1–R7)が載る SIEM 側へ流すための出力。
+            → CI のスキャン結果を、検知ルール(R1–R8)が載る SIEM 側へ流すための出力。
 
 使い方:
   python3 scripts/summarize.py results                        # 要約だけ(失敗させない)

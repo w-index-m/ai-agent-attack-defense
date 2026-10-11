@@ -128,7 +128,7 @@ def main():
                         errors.append("detections/%s: 統合ファイル内に %s の参照が見つかりません（網羅表では present）。"
                                       % (backend, tag))
 
-    # 5. R1–R7 がノート類に記載されているか -----------------------------------
+    # 5. R1–R8 がノート類に記載されているか -----------------------------------
     for doc in ("security-scan/detections/README.md", "security-scan/defense-detection-notes.md"):
         text = read(rp(*doc.split("/")))
         for tag in ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"):
