@@ -86,3 +86,47 @@
      container=%container.name image=%container.image.repository cmd=%proc.cmdline)
   priority: NOTICE
   tags: [execution, mitre_execution, T1059, T1046, ai_agent]
+
+# R8: Web シェルの設置と、Web サーバーからのシェル起動
+# （JPCERT/CC 注意喚起 2026-10-08/09: アプリケーションサーバー上に WAR が置かれ、JSP が簡易 Web シェルとして動作）
+# 単体では誤検知が出うる。デプロイ用のユーザー・ツールを allowlist 化し、設置と起動を相関させる。
+- list: r8_web_server_procs
+  items: [java, nginx, httpd, apache2, php-fpm, php-fpm7, php-fpm8, w3wp]
+
+- list: r8_shell_names
+  items: [sh, bash, dash, zsh, ash, ksh, csh, tcsh]
+
+- list: r8_deploy_procs
+  items: [dpkg, rpm, yum, dnf, apt, apt-get]
+
+- rule: R8 Web Server Spawns Shell
+  desc: >
+    A web/application server process started a command shell. Normal request
+    handling rarely does this; a web shell does it to run commands. Allowlist
+    applications that deliberately shell out (backup/report/batch jobs).
+  condition: >
+    spawned_process and proc.pname in (r8_web_server_procs)
+    and proc.name in (r8_shell_names)
+  output: >
+    Shell spawned by web server (parent=%proc.pname shell=%proc.name
+     cmd=%proc.cmdline pcmd=%proc.pcmdline user=%user.name
+     container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [execution, persistence, mitre_execution, mitre_persistence, T1059, T1505, webshell]
+
+- rule: R8 Executable Web Content Written Under Web Root
+  desc: >
+    A server-side executable file (JSP/WAR/PHP/ASPX) was written under a common
+    web root. Allowlist deploy tooling and the deploy user; correlate with the
+    spawn rule above.
+  condition: >
+    open_write and not proc.name in (r8_deploy_procs)
+    and fd.name pmatch (/var/www/*, /usr/share/nginx/*, */webapps/*, */htdocs/*, */wwwroot/*)
+    and (fd.name endswith ".jsp" or fd.name endswith ".jspx" or fd.name endswith ".war"
+         or fd.name endswith ".php" or fd.name endswith ".phtml"
+         or fd.name endswith ".aspx" or fd.name endswith ".ashx")
+  output: >
+    Executable web content written (file=%fd.name proc=%proc.name
+     pcmd=%proc.pcmdline user=%user.name container=%container.name)
+  priority: WARNING
+  tags: [persistence, mitre_persistence, T1505, webshell]

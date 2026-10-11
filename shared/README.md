@@ -12,7 +12,7 @@
 ## 構成
 
 - [`taxonomy.json`](taxonomy.json) — **唯一の定義**。以下を一元管理します。
-  - `detection_tags` … 検知/防御タグ **R1–R7 / ③ / ③CSP**（id と名前）
+  - `detection_tags` … 検知/防御タグ **R1–R8 / ③ / ③CSP**（id と名前）
   - `governance_events` … ガバナンス監査イベント **G1–G6**
   - `attack_chain` … Gambit 報告の攻撃連鎖 7 段
   - `triage_scanners` … `vuln_triage.html` が取り込めるスキャナ形式
@@ -27,16 +27,16 @@
 2. `vuln_triage.html` の対応スキャナ（`parseOne` と絞り込み UI）が `triage_scanners` と一致するか
 3. `vuln_triage.html` の攻撃連鎖（`CHAIN`）が `attack_chain` と一致するか
 4. `security-scan/detections/`（sigma / datadog / elastic / falco）のルール有無が `detections_coverage` の網羅表と一致するか
-5. R1–R7 が `detections/README.md` と `defense-detection-notes.md` に記載されているか
+5. R1–R8 が `detections/README.md` と `defense-detection-notes.md` に記載されているか
 
 ## 追加のチェックリスト（最新化漏れを防ぐ）
 
-**新しい検知/防御タグを足すとき**（例: R8）
-1. `taxonomy.json` の `detection_tags` に `R8` を追加
+**新しい検知/防御タグを足すとき**（例: R9。R8 はこの手順で追加済み）
+1. `taxonomy.json` の `detection_tags` に `R9` を追加
 2. 使う側（`netcheck.py` の `PORT_RULE` / `add(...)`、`vuln_triage.html` の `RULES`）に反映
-3. `detections_coverage.matrix` に `R8` の行を追加し、実装したバックエンドを `true` に
+3. `detections_coverage.matrix` に `R9` の行を追加し、実装したバックエンドを `true` に
 4. 実装した各バックエンドにルールファイル（`r8_*.yml` 等）を追加、`detections/README.md` の表も更新
-5. `defense-detection-notes.md` に R8 の節を追加
+5. `defense-detection-notes.md` に R9 の節を追加
 6. `python3 -I tools/check_consistency.py` が ✅ になることを確認
 
 **新しいスキャナ形式を足すとき**（例: osv）
@@ -45,7 +45,7 @@
 3. チェッカーが ✅ になることを確認
 
 **netcheck に危険ポートを足すとき**
-1. `RISKY` に説明を追加し、`PORT_RULE` で既存タグ（R1–R7 / ③）に対応づけ
+1. `RISKY` に説明を追加し、`PORT_RULE` で既存タグ（R1–R8 / ③）に対応づけ
 2. プローブ対象（`STANDARD_PORTS` / `EXTENDED_PORTS` / `HTTP_PORTS` 等）にも追加
 3. 使ったタグはすべて `taxonomy.json` に定義済みであること（新タグなら上記手順）
 

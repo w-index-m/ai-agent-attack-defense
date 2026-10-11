@@ -152,7 +152,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <!-- ② COVERAGE -->
 <section id="cov">
   <h2>② 検知カバレッジ マトリクス <span class="en">Detection coverage</span></h2>
-  <p class="note">タイプ別チップを押すと、その型に効く検知行がハイライトされます。検知の土台は共通（LLM推論・スキャン・ツール実行・C2）なので R1–R7 が横展開で効きます。</p>
+  <p class="note">タイプ別チップを押すと、その型に効く検知行がハイライトされます。検知の土台は共通（LLM推論・スキャン・ツール実行・C2）なので R1–R8 が横展開で効きます。</p>
   <div class="tools" style="margin-bottom:10px">
     <span class="chip" style="border-color:var(--c1);cursor:pointer" data-type="t1">① 分業チェーン</span>
     <span class="chip" style="border-color:var(--c2);cursor:pointer" data-type="t4">④ E2E</span>
@@ -181,6 +181,8 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
         <td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c part">○</td></tr>
       <tr data-t="t1 t4 t5 t6"><td>R6</td><td>相関（R3＋R1＋(R2 or R7)＋任意R4/R5）</td><td>SIEM 相関</td><td><span class="pri sev-high">高</span></td>
         <td class="c yes">●</td><td class="c yes">●</td><td class="c yes">●</td><td class="c part">○</td></tr>
+      <tr data-t="t1"><td>R8</td><td>Web シェルの設置（Web ルート配下の JSP/WAR/PHP 等）と、Web サーバーからのシェル起動<br><span class="cap">JPCERT/CC 注意喚起（2026-10）のケース D。Sigma / Falco のみ</span></td><td>file event / process (auditd, Falco)</td><td><span class="pri sev-high">高</span></td>
+        <td class="c yes">●</td><td class="c no">—</td><td class="c no">—</td><td class="c no">—</td></tr>
     </tbody>
   </table>
   </div>
@@ -209,7 +211,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
 <!-- ④ SKILLS & GOVERNANCE -->
 <section id="gov">
   <h2>④ スキル機構とガバナンス <span class="en">Skills & governance / T1562</span></h2>
-  <p class="note">ネットワーク/ホストの検知(R1–R7)では捕まえにくい「エージェント/LLM の使い方そのもの」を統制・監査する層。MITRE <b>T1562（防御の無効化）</b>に対応。</p>
+  <p class="note">ネットワーク/ホストの検知(R1–R8)では捕まえにくい「エージェント/LLM の使い方そのもの」を統制・監査する層。MITRE <b>T1562（防御の無効化）</b>に対応。</p>
   <div class="grid c2">
     <div class="card"><h3>スキルとは／なぜ危険か</h3>
       <p class="cap" style="line-height:1.6">スキル＝エージェントに後付けする「指示＋ツール権限＋ワークフロー」の束。Hermes は自己改善ループで自動生成・改良する。危険なのは、スキル内容を<b>“信頼された上位の指示＋権限”として取り込む</b>点。Gambit の事例では本体コードを変えず、攻撃用スキル(121中78が攻撃目的)＋<b>自身の安全フィルタを外すスキル</b>を上乗せしただけで司令塔化した。実質「信頼された指示＋権限を外部注入する口」＝<b>サプライチェーン＋プロンプトインジェクション</b>の二重の攻撃面。</p>
@@ -226,7 +228,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
     </div>
   </div>
   <h3 style="margin:14px 0 2px;font-size:14px">監査イベント G1–G6（ガバナンス層）</h3>
-  <p class="note">ネットワーク/ホストの R1–R7 とは観測点が異なり、<b>アプリ/監査ログ層</b>（エージェント監査ログ・スキルレジストリ・LLM/ツールゲートウェイ・ログ基盤）で見る。</p>
+  <p class="note">ネットワーク/ホストの R1–R8 とは観測点が異なり、<b>アプリ/監査ログ層</b>（エージェント監査ログ・スキルレジストリ・LLM/ツールゲートウェイ・ログ基盤）で見る。</p>
   <div class="sc"><table><thead>
     <tr><th>ID</th><th>監査イベント</th><th>データソース</th><th>優先度</th><th>対応</th></tr>
   </thead><tbody>
@@ -261,7 +263,7 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
       <li><code>.github/workflows/security-scan.yml</code> — CI（Semgrep/Trivy/gitleaks）</li>
     </ul></div>
     <div class="card"><h3>解析・設計</h3><ul class="tight">
-      <li><code>defense-detection-notes.md</code> — 防御・検知ノート（R1–R7）</li>
+      <li><code>defense-detection-notes.md</code> — 防御・検知ノート（R1–R8）</li>
       <li><code>detections/</code> — Sigma / Falco / Datadog ルール</li>
       <li><code>strix-local-backend-notes.md</code> + <code>strix-local-poc/</code></li>
       <li><code>cairn-lab/</code> — 認可ラボ・ランブック＋実設定</li>

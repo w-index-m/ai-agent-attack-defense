@@ -20,7 +20,7 @@ they stay within that scope. / 本プロジェクトは**防御・教育目的**
 
 ## Before you open a PR / PR を出す前に
 
-1. **Keep the single source of truth in sync.** Detection tags (R1–R7 / ③), the attack
+1. **Keep the single source of truth in sync.** Detection tags (R1–R8 / ③), the attack
    chain, supported scanners, and the detection-rule coverage matrix are defined once in
    [`shared/taxonomy.json`](shared/taxonomy.json). When you add a tag, scanner, port, or
    rule, follow the checklist in [`shared/README.md`](shared/README.md).

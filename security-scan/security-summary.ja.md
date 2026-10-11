@@ -61,7 +61,7 @@ AI エージェントに限らず、このような既知の重大な脆弱性�
 | **露出の削減** | 管理画面、DB、ローカルの LLM API を、インターネットに直接出さない | `netcheck`、`zgrab2_guard.py` |
 | **外向き通信の制限** | サーバから LLM やメッセージングへの通信を、許可リストで絞る | 検知 R1・R4 |
 | **パッチ** | OS（RHEL・Windows）と製品（vCenter など）の既知の重大な脆弱性から優先する | `os_patch_check_linux.py`、`os_patch_check_windows.py` |
-| **検知** | R1〜R7 のルールを、ログ基盤（SIEM）に載せる | `detections/`（Sigma・Falco・Elastic・Datadog） |
+| **検知** | R1〜R8 のルールを、ログ基盤（SIEM）に載せる | `detections/`（Sigma・Falco・Elastic・Datadog） |
 
 ---
 
@@ -73,7 +73,7 @@ AI エージェントに限らず、このような既知の重大な脆弱性�
 | トリアージ | `vuln_triage.html`（優先度づけ、ローカル LLM への質問機能つき） | [`../README.md`](../README.md) |
 | 修正支援 | `patch_suggest.py`（diff を作る。適用は1件ずつ人が確認） | [`patch-suggest-notes.md`](patch-suggest-notes.md) |
 | OS 更新の確認 | RHEL 用・Windows 用の2スクリプト（確認専用、SARIF で出力） | [`os-patch-check-notes.md`](os-patch-check-notes.md) |
-| 検知 | R1〜R7 のルール（Sigma・Falco・Elastic・Datadog） | [`detections/README.md`](detections/README.md) |
+| 検知 | R1〜R8 のルール（Sigma・Falco・Elastic・Datadog） | [`detections/README.md`](detections/README.md) |
 | 防御の文書 | 防御プレイブック、4層の整理、用語集 | [`defense-playbook.ja.md`](defense-playbook.ja.md)、[`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md)、[`glossary.ja.md`](glossary.ja.md) |
 | 解析 | Strix・Cairn の局所検証、ARTEX の静的解析、防御ノート | [`defense-detection-notes.md`](defense-detection-notes.md) |
 

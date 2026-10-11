@@ -62,7 +62,7 @@ This repository covers it through management-plane exposure checks (ports 902 / 
 | **Reduce exposure** | Do not expose admin UIs, databases, or local LLM APIs directly to the internet | `netcheck`, `zgrab2_guard.py` |
 | **Restrict outbound traffic** | Allowlist server-side traffic to LLM and messaging endpoints | Detections R1 and R4 |
 | **Patch** | Prioritize known critical vulnerabilities in the OS (RHEL, Windows) and products (e.g. vCenter) | `os_patch_check_linux.py`, `os_patch_check_windows.py` |
-| **Detect** | Load the R1–R7 rules into your log platform (SIEM) | `detections/` (Sigma, Falco, Elastic, Datadog) |
+| **Detect** | Load the R1–R8 rules into your log platform (SIEM) | `detections/` (Sigma, Falco, Elastic, Datadog) |
 
 ---
 
@@ -74,7 +74,7 @@ This repository covers it through management-plane exposure checks (ports 902 / 
 | Triage | `vuln_triage.html` (prioritization, with a local-LLM question panel) | [`../README.md`](../README.md) |
 | Fix assistance | `patch_suggest.py` (produces diffs; each is applied only after a human confirms) | [`patch-suggest-notes.md`](patch-suggest-notes.md) |
 | OS update checks | Two scripts, Linux (RHEL) and Windows (check-only, SARIF output) | [`os-patch-check-notes.md`](os-patch-check-notes.md) |
-| Detection | R1–R7 rules (Sigma, Falco, Elastic, Datadog) | [`detections/README.md`](detections/README.md) |
+| Detection | R1–R8 rules (Sigma, Falco, Elastic, Datadog) | [`detections/README.md`](detections/README.md) |
 | Defense docs | Defense playbook, the four-layer overview, glossary | [`defense-playbook.en.md`](defense-playbook.en.md), [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md), [`glossary.ja.md`](glossary.ja.md) |
 | Analysis | Strix and Cairn local verification, ARTEX static analysis, defense notes | [`defense-detection-notes.en.md`](defense-detection-notes.en.md) |
 

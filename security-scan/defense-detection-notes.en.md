@@ -124,7 +124,7 @@ not cover bypass techniques.
 
 The Gambit trio is one instance of the "division-of-labor chain" type. The good news:
 **as the catalog grows, the observable fundamentals stay shared** (LLM inference, scanning,
-tool execution, optional C2), so R1–R7 generalize — no need to rebuild per tool.
+tool execution, optional C2), so R1–R8 generalize — no need to rebuild per tool.
 
 ## 6.1 Type map (defensive view)
 
@@ -163,7 +163,7 @@ running, or abusing any tool.
 ## 6.4 Summary
 
 The attacker "catalog" keeps growing, but **defense generalizes behaviorally**. This repo's
-detections (`detections/` R1–R7 + correlation R6) and prevention (§5) extend beyond the Gambit
+detections (`detections/` R1–R8 + correlation R6) and prevention (§5) extend beyond the Gambit
 trio to much of types ④⑤⑥. Priority: **R1/R4 (egress) → R2 (privileged container) → R7
 (rapid multi-tool) → R3 (recon) → R5 (persistence) → R6 (correlation)**.
 
