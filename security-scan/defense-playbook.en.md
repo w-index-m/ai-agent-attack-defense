@@ -75,7 +75,7 @@ The chain from the Gambit case (definition: [`../shared/taxonomy.json`](../share
 
 ### ③ No extension check on the admin upload (web shell placement)
 - **Prevent**: decide allowed extensions with an allowlist and also validate content; store outside the web root with no execute permission; regenerate file names; put the admin UI behind VPN / IP restriction with MFA; make the web root read-only (files 644, directories 755; exclude paths that need writes).
-- **Detect**: new files in the web root or upload directory, and child processes spawned under the web server. **[Not implemented]** (R5 covers cron / systemd persistence, not web-shell placement itself; for external FIM see [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md)). External access to admin URLs can be checked with **R3** and netcheck.
+- **Detect**: new files in the web root or upload directory, and child processes spawned under the web server. **R8** ([Sigma](detections/sigma/r8_webshell_placement_and_spawn.yml) and Falco; two rules: placement, and a shell spawned by a web server. Elastic / Datadog versions are not implemented, and nothing has been validated in a real environment). R5 covers cron / systemd persistence, not web-shell placement itself; for external FIM see [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md). External access to admin URLs can be checked with **R3** and netcheck.
 - **Respond**: copy the file **before** deleting it to preserve evidence, then quarantine it; review the account that was the path; rotate credentials.
 - **Verify**: in your staging environment, upload a non-image file from the admin UI and confirm it is rejected; use netcheck to see which admin-like URLs are exposed.
 
@@ -129,7 +129,7 @@ The October 2026 advisories from JPCERT/CC and the Personal Information Protecti
 - **Prevent**: do not keep configuration files, environment files, backups, or logs in locations reachable over the web. Delete files you no longer need.
 - **Detect**: access to configuration or backup files under the web root. **[Not implemented]**
 - **Respond**: remove the files and reissue any credentials they contained.
-- **Verify**: inventory the web root. **netcheck does not yet look for this kind of file exposure** (it checks admin-like paths only).
+- **Verify**: inventory the web root. **netcheck checks for this kind of file exposure** (15 items such as `.env`, `.git`, DB dumps, and backups; it reports only when the response signature matches and never stores or shows the content; not yet run on real hosts).
 
 **E. Common preparations (summary of JPCERT/CC's recommendations)**
 - **Prevent**: restrict access by region if the service's users are regionally limited. Stop exposing services or functions (such as admin features) not needed for the business. Do not keep data past its retention period or purpose.
@@ -236,7 +236,7 @@ If your organization runs offensive agents (for red-teaming, etc.) **under autho
 |---|---|---|---|
 | ① SQLi | Semgrep (CI) | R3 | WAF (operations side) |
 | ② OTP | Manual check | **None** | Authentication-log anomaly detection |
-| ③ Upload | netcheck (admin exposure), Semgrep | R3 (external access) | Web-root file monitoring (FIM), child-process monitoring |
+| ③ Upload | netcheck (admin exposure), Semgrep | R3 (external access), R8 (placement / shell spawn; Sigma and Falco) | R8 for Elastic / Datadog, tuning and validation in a real environment |
 | ④ sudo | Trivy (config findings) | R2 (privileged containers) | Abnormal-sudo detection (auditd or an EDR) |
 | ⑤ NFS / credentials | gitleaks, Trivy | **None** | File-access auditing, decoys (§5) |
 | ⑥ IAM | Trivy (IaC findings) | **None** | Cloud audit-log detection |
@@ -244,7 +244,7 @@ If your organization runs offensive agents (for red-teaming, etc.) **under autho
 | 3A-A API authorization | **None** (manual check) | **None** | API-log anomaly detection |
 | 3A-B API keys | gitleaks | **None** | Key-use anomaly detection, decoys (§5) |
 | 3A-C BI / admin systems | netcheck, OS update checks, Trivy | R3 (external access) | Per-product exploitation detection |
-| 3A-D Config / backups | **None** (netcheck does not cover it) | **None** | Web-root inventory, detection of file access |
+| 3A-D Config / backups | netcheck (15-item exposure check) | **None** | Web-root inventory, detection of file access |
 
 - **R1–R7 are mainly network and host observations.** Detection for ②⑤⑥⑦ lives in the app and cloud audit-log layer, and **does not exist yet**. That is the next task.
 - **Response (§4) is documentation only**; there is no automation.

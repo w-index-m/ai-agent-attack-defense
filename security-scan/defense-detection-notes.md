@@ -3,7 +3,7 @@
 Gambit レポートの攻撃連鎖（偵察→侵入→統括/事後）を、**防御側の観測点と対策**に振って整理したもの。
 攻撃手順のレシピではなく、「何が観測され、どこで止められるか」に焦点を当てる。
 
-> 検知/防御タグ **R1–R7 / ③** とガバナンス **G1–G6** の正式な定義は [`../shared/taxonomy.json`](../shared/taxonomy.json)（唯一の定義）にあり、各ツールの追従は CI の `tools/check_consistency.py` が検査する。
+> 検知/防御タグ **R1–R8 / ③** とガバナンス **G1–G6** の正式な定義は [`../shared/taxonomy.json`](../shared/taxonomy.json)（唯一の定義）にあり、各ツールの追従は CI の `tools/check_consistency.py` が検査する。
 
 出典: [Gambit Security](https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company) /
 各ツール: [Strix](https://github.com/usestrix/strix) / [Cairn](https://github.com/oritera/Cairn) / [Hermes](https://github.com/NousResearch/hermes-agent)
@@ -189,6 +189,26 @@ condition: distinct_tool_count_by_parent >= N
 note: ローカルLLM 利用で LLM egress(R1) が出ないエージェント（PentAGI/Villager 系）でも、
       この「人手を超える速度・多様さでのツール連続実行」は残る。MCP で 150+ ツールを
       束ねる基盤型（HexStrike 系）にも効く。Kali ベースのコンテナ内実行なら R2 と相関。
+```
+
+**R8. Web シェルの設置と、Web サーバーからのシェル起動**
+```
+logsource: file_event / process_creation (auditd / sysmon for linux / ebpf / Falco)
+detection (設置):
+  Web ルート配下（/var/www/, /usr/share/nginx/, */webapps/ など）に、
+  サーバー側で実行される種類のファイル（.jsp .jspx .war .php .aspx 等）が書き込まれる
+  （パッケージ導入・デプロイ用のツール/ユーザーは除外）
+detection (起動):
+  Web/アプリケーションサーバーのプロセス（java, nginx, httpd, php-fpm 等）の子として、
+  シェル（sh, bash, dash 等）が起動される
+condition: 設置 OR 起動（相関する場合は優先度を上げる）
+note: JPCERT/CC の注意喚起（2026-10-08/09）が、公開 Web サーバーから届くアプリケーション
+      サーバー上への WAR の設置（JSP が簡易 Web シェルとして動作）を報告している（ケース D。
+      出典の確度は security-scan/jp-advisory-mapping.ja.md を参照）。
+      単体では、正規のデプロイやバッチ起動で誤検知が出る。デプロイ用のユーザー・ツールと、
+      意図的にシェルを呼ぶアプリを allowlist 化し、設置と起動を同じホスト・時間帯で突き合わせる。
+      実装: detections/sigma/r8_webshell_placement_and_spawn.yml、detections/falco/cairn-ai-agent.yaml。
+      Elastic / Datadog 版は未実装。実機・実環境での検証は未実施。
 ```
 
 ## 3. MITRE ATT&CK 対応（検知の棚卸し用）

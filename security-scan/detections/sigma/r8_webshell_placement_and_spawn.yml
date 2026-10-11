@@ -1,0 +1,102 @@
+title: Executable web content written under a web root
+id: 3c8f5d2e-6a41-4b7e-9d0a-8e1f2b7c4a58
+status: experimental
+description: >
+  R8 (placement). Detects creation of server-side executable content (JSP, WAR,
+  PHP, ASPX and similar) under common web roots. A web shell is typically placed
+  as such a file on a server reachable from a public web server (JPCERT/CC
+  advisory of 2026-10-08/09 reports a WAR file with a JSP acting as a simple web
+  shell). Correlate with who wrote the file and with R8 (spawn) below.
+references:
+  - https://www.jpcert.or.jp/at/2026/at260030.html
+author: ai-agent-attack-defense
+date: 2026/10/11
+logsource:
+  product: linux
+  category: file_event
+detection:
+  selection_root:
+    TargetFilename|contains:
+      - '/var/www/'
+      - '/usr/share/nginx/'
+      - '/webapps/'
+      - '/htdocs/'
+      - '/wwwroot/'
+  selection_ext:
+    TargetFilename|endswith:
+      - '.jsp'
+      - '.jspx'
+      - '.war'
+      - '.php'
+      - '.phtml'
+      - '.aspx'
+      - '.ashx'
+  filter_deploy_tooling:
+    Image|endswith:
+      - '/dpkg'
+      - '/rpm'
+      - '/yum'
+      - '/dnf'
+      - '/apt'
+      - '/apt-get'
+  condition: selection_root and selection_ext and not filter_deploy_tooling
+fields:
+  - TargetFilename
+  - Image
+  - User
+  - ParentImage
+falsepositives:
+  - Legitimate application deployments (CI/CD, tomcat manager, package installs). Allowlist the deploy user and deploy tooling in your environment.
+  - Content management systems that create PHP files on plugin or theme updates.
+level: high
+tags:
+  - attack.persistence
+  - attack.t1505.003
+---
+title: Web server process spawns a shell
+id: 9b4e1a67-2d35-4c80-b6f3-5a7d0c9e1f24
+status: experimental
+description: >
+  R8 (spawn). Detects a web or application server process (Tomcat/Java, nginx,
+  Apache, PHP-FPM) starting a command shell. Normal request handling rarely
+  starts a shell; a web shell does so to run commands. Correlate with R8
+  (placement) above and with the writing user or request source.
+references:
+  - https://www.jpcert.or.jp/at/2026/at260030.html
+author: ai-agent-attack-defense
+date: 2026/10/11
+logsource:
+  product: linux
+  category: process_creation
+detection:
+  selection_parent:
+    ParentImage|endswith:
+      - '/java'
+      - '/nginx'
+      - '/httpd'
+      - '/apache2'
+      - '/php-fpm'
+      - '/php-fpm7'
+      - '/php-fpm8'
+  selection_child:
+    Image|endswith:
+      - '/sh'
+      - '/bash'
+      - '/dash'
+      - '/zsh'
+  condition: selection_parent and selection_child
+fields:
+  - Image
+  - CommandLine
+  - ParentImage
+  - ParentCommandLine
+  - User
+falsepositives:
+  - Applications that deliberately shell out (backup, report, or batch jobs started by the web app, health-check scripts). Allowlist by parent command line.
+  - Java-based tools that are not web servers (build agents, IDEs) on the same host.
+level: high
+tags:
+  - attack.execution
+  - attack.persistence
+  - attack.t1059.004
+  - attack.t1505.003

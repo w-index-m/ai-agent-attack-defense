@@ -10,6 +10,7 @@
     "R5": {"kind": "detection", "name": "永続化の新規作成（cron / systemd timer）"},
     "R6": {"kind": "detection", "name": "自律エージェントの相関検知（連鎖を束ねる）"},
     "R7": {"kind": "detection", "name": "多数のセキュリティツールの短時間連続実行"},
+    "R8": {"kind": "detection", "name": "Web シェルの設置と、Web サーバーからのシェル起動"},
     "③": {"kind": "control", "name": "攻撃面最小化（ネット直結の露出を断つ）"},
     "③CSP": {"kind": "control", "name": "CSP による読み込み制御"}
   },
@@ -36,7 +37,7 @@
   "triage_scanners": ["semgrep", "trivy", "gitleaks", "sarif", "netcheck", "zgrab2"],
 
   "detections_coverage": {
-    "_comment": "各検知タグ R1–R7 を、どの検知バックエンドで実装しているか（present = 専用コンテンツあり）。detections/README.md の網羅表と一致させる。sigma/datadog/elastic は r{n}_*.{ext} のファイル有無で、falco は単一ファイル内の R{n} 参照で検証する。",
+    "_comment": "各検知タグ R1–R8 を、どの検知バックエンドで実装しているか（present = 専用コンテンツあり）。detections/README.md の網羅表と一致させる。sigma/datadog/elastic は r{n}_*.{ext} のファイル有無で、falco は単一ファイル内の R{n} 参照で検証する。",
     "backends": {
       "sigma":   {"dir": "security-scan/detections/sigma",   "ext": "yml",  "mode": "per_tag_file"},
       "datadog": {"dir": "security-scan/detections/datadog", "ext": "json", "mode": "per_tag_file"},
@@ -50,7 +51,8 @@
       "R4": {"sigma": true,  "datadog": true,  "elastic": true,  "falco": false},
       "R5": {"sigma": true,  "datadog": false, "elastic": true,  "falco": true},
       "R6": {"sigma": false, "datadog": false, "elastic": true,  "falco": false},
-      "R7": {"sigma": true,  "datadog": false, "elastic": true,  "falco": true}
+      "R7": {"sigma": true,  "datadog": false, "elastic": true,  "falco": true},
+      "R8": {"sigma": true,  "datadog": false, "elastic": false, "falco": true}
     }
   }
 }

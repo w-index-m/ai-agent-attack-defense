@@ -40,6 +40,28 @@ BANNER_PORTS = {21, 22, 25, 110, 143, 3306}
 ADMIN_PATHS = ["/admin", "/administrator", "/wp-admin/", "/wp-login.php", "/phpmyadmin/",
                "/manager/html", "/login", "/console"]
 
+# 設定・バックアップなどが Web から取得できる状態かの確認(JPCERT/CC の注意喚起の「管理不備」)。
+# 状態コード 200 だけでは判定しない(どのパスにも HTML を返すサイトで誤検知になるため)。
+# 応答の先頭にある、そのファイルらしい特徴(署名)が一致したときだけ指摘する。
+# 応答の中身は保存も表示もしない(秘密情報を扱わないため)。(path, sev, 題名, 署名の正規表現(bytes))
+SENSITIVE_FILES = [
+    ("/.env", "high", "環境変数のファイル(.env)が取得できる", rb"(?m)^[A-Za-z][A-Za-z0-9_]*="),
+    ("/.git/HEAD", "high", "Git のメタデータ(.git)が取得できる", rb"^ref:\s"),
+    ("/.git/config", "high", "Git の設定(.git/config)が取得できる", rb"\[core\]"),
+    ("/WEB-INF/web.xml", "high", "アプリの設定(WEB-INF/web.xml)が取得できる", rb"<web-app"),
+    ("/wp-config.php.bak", "high", "設定のバックアップ(wp-config.php.bak)が取得できる", rb"(?i)DB_PASSWORD|<\?php"),
+    ("/config.php.bak", "high", "設定のバックアップ(config.php.bak)が取得できる", rb"<\?php"),
+    ("/backup.sql", "high", "DB のバックアップ(backup.sql)が取得できる", rb"(?i)CREATE TABLE|INSERT INTO|MySQL dump"),
+    ("/dump.sql", "high", "DB のダンプ(dump.sql)が取得できる", rb"(?i)CREATE TABLE|INSERT INTO|MySQL dump"),
+    ("/db.sql", "high", "DB のダンプ(db.sql)が取得できる", rb"(?i)CREATE TABLE|INSERT INTO|MySQL dump"),
+    ("/backup.zip", "high", "バックアップ(backup.zip)が取得できる", rb"^PK\x03\x04"),
+    ("/www.zip", "high", "サイト一式のバックアップ(www.zip)が取得できる", rb"^PK\x03\x04"),
+    ("/backup.tar.gz", "high", "バックアップ(backup.tar.gz)が取得できる", rb"^\x1f\x8b"),
+    ("/actuator/env", "high", "Spring Boot の環境情報(/actuator/env)が見える", rb"propertySources"),
+    ("/phpinfo.php", "medium", "phpinfo のページが公開されている", rb"(?i)phpinfo\(\)|PHP Version"),
+    ("/server-status", "medium", "Apache のサーバー状態(/server-status)が公開されている", rb"(?i)Apache Server Status"),
+]
+
 # ポートごとの注意(sev, 題名, 説明, 直し方)
 RISKY = {
     21: ("medium", "FTP が開いている", "FTP は通信が暗号化されません。", "SFTP/FTPS に切り替えるか、不要なら閉じる。"),
@@ -200,7 +222,7 @@ def read_banner(s):
         return ""
 
 
-def http_get(ip, port, host, path, tls, method="GET", timeout=3.0):
+def http_get(ip, port, host, path, tls, method="GET", timeout=3.0, want_body=False):
     try:
         if tls:
             ctx = ssl.create_default_context()
@@ -211,13 +233,15 @@ def http_get(ip, port, host, path, tls, method="GET", timeout=3.0):
             conn = http.client.HTTPConnection(ip, port, timeout=timeout)
         conn.request(method, path, headers={"Host": host, "User-Agent": UA, "Connection": "close"})
         r = conn.getresponse()
-        r.read(2048)
+        body = r.read(2048)
         hdrs = {k.lower(): v for k, v in r.getheaders()}
         cookies = [v for k, v in r.getheaders() if k.lower() == "set-cookie"]
         conn.close()
+        if want_body:
+            return r.status, hdrs, cookies, body
         return r.status, hdrs, cookies
     except (OSError, http.client.HTTPException, ssl.SSLError):
-        return None, {}, []
+        return (None, {}, [], b"") if want_body else (None, {}, [])
 
 
 def is_html(headers):
@@ -339,6 +363,14 @@ def check_host(name, ip, ports, cfg, admin_check, progress):
                             "社内ネットワークや VPN、IP 制限の内側に置き、多要素認証を付ける。", p, "R3")
                     elif st in (301, 302, 303, 307, 308):
                         add(f, "info", "管理画面らしき URL がリダイレクトされる: %s(ポート %d)" % (path, p), "", "公開が必要か確認する。", p, "R3")
+            for path, sev, title, sig in SENSITIVE_FILES:
+                time.sleep(delay)
+                st, _, _, body = http_get(ip, p, name, path, tls, timeout=3.0, want_body=True)
+                if st == 200 and re.search(sig, body):
+                    res["admin"].append({"port": p, "path": path, "status": st, "kind": "sensitive_file"})
+                    add(f, sev, "%s: %s(ポート %d)" % (title, path, p),
+                        "応答の特徴が一致しました。中身は保存も表示もしていません。",
+                        "Web から取得できない場所に移すか削除する。含まれていた認証情報は、漏れた前提で作り直す。", p, "③")
     res["findings"].sort(key=lambda x: ["critical", "high", "medium", "low", "info"].index(x["sev"]))
     return res
 

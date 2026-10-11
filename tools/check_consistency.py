@@ -2,7 +2,7 @@
 """shared/taxonomy.json を唯一の定義（single source of truth）として、各ツールが
 それに追従しているかを検査する「ズレ検知（drift guard）」。
 
-目的: 検知/防御タグ（R1–R7 / ③）・攻撃連鎖・対応スキャナ・検知ルールの網羅表の
+目的: 検知/防御タグ（R1–R8 / ③）・攻撃連鎖・対応スキャナ・検知ルールの網羅表の
 定義が各ファイルに点在してコピーされているため、片方だけ更新して他方を忘れる
 「最新化漏れ」が起きやすい。この検査を CI に入れ、ズレがあればビルドを失敗させる。
 
@@ -11,7 +11,7 @@
   2. vuln_triage.html の対応スキャナ（parseOne と絞り込み）が taxonomy と一致するか
   3. vuln_triage.html の攻撃連鎖（CHAIN）が taxonomy と一致するか
   4. detections/ の各バックエンドのルール有無が taxonomy の網羅表と一致するか
-  5. R1–R7 が detections/README.md と defense-detection-notes.md に記載されているか
+  5. R1–R8 が detections/README.md と defense-detection-notes.md に記載されているか
   6. ガバナンス G1–G6 の説明が、defense-detection-notes.md §7.3 の表と一致するか
 
 標準ライブラリだけで動く（Python 3.8+）。外部ネットワークもサブプロセスも使わない。
@@ -131,7 +131,7 @@ def main():
     # 5. R1–R7 がノート類に記載されているか -----------------------------------
     for doc in ("security-scan/detections/README.md", "security-scan/defense-detection-notes.md"):
         text = read(rp(*doc.split("/")))
-        for tag in ("R1", "R2", "R3", "R4", "R5", "R6", "R7"):
+        for tag in ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8"):
             if tag not in text:
                 errors.append("%s: %s の記載が見つかりません。" % (doc, tag))
 

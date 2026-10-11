@@ -31,18 +31,18 @@ The "This repository" column reflects the current state of documents and tools (
 | Pattern | Prevent | Detect | State in this repo | Gap |
 |---|---|---|---|---|
 | A: probing for known vulnerabilities | Prioritized patching, reduced exposure | External enumeration (R3) | OS update checks (`os_patch_check_*`), Trivy, netcheck, R3 | Per-product exploitation detection |
-| A: admin weakness (config / backups) | Do not place them where the web can reach | Access to such files under the web root | Items added in playbook §3A-D | **netcheck does not cover it** (admin-like paths only). No detection |
+| A: admin weakness (config / backups) | Do not place them where the web can reach | Access to such files under the web root | Items added in playbook §3A-D. **netcheck now checks 15 items** (`.env`, `.git`, DB dumps, backups, and so on; not yet run on real hosts) | No detection of access to such files |
 | B: API abuse (broken authorization) | Check authorization per user on the server | API-log anomalies (bursts, 401/403 spikes) | Items added in playbook §3A-A | **No detection rules**, and no tool for auditing API authorization |
 | B: API-key abuse | Narrow key scope, rotate regularly | Key-use anomalies | gitleaks, playbook §3A-B | Key-use detection; decoys (§5 is a design only) |
 | C: BI-tool vulnerability | Do not expose (VPN / IP restriction), patch | External access to admin ports (R3) | netcheck, playbook §3A-C | Product-specific detection. **No item names Metabase** |
-| D: Web-shell placement | Upload allowlist, no execute permission, read-only web root | New files in the web root; child processes under the web server | Playbook §3 ③ | **Detection of placement (including WAR/JSP) is not implemented** (FIM and process monitoring) |
+| D: Web-shell placement | Upload allowlist, no execute permission, read-only web root | New files in the web root; child processes under the web server | Playbook §3 ③, **R8** (two Sigma / Falco rules: placement, and a shell spawned by a web server) | Elastic / Datadog versions are not implemented; not validated in a real environment; full FIM operation is separate |
 | Case 9: API abuse | Same as pattern B | Same as pattern B | Playbook §3A-A | Same |
 
 ## 3. Gaps, in priority order
 
 1. **API authorization checks and detection.** Pattern B and case 9 are the weakest area in this repository. First, add per-API authorization checks to your operating procedures.
-2. **Exposure of configuration files and backups.** One option is to extend `netcheck` to check for such exposure (a code change; decide the approach separately).
-3. **Web-shell placement detection.** FIM and process monitoring (child processes under the web server). The rules are not implemented.
+2. **Exposure of configuration files and backups.** Implemented in `netcheck` (15 items). Validation on real hosts is the next task.
+3. **Web-shell placement detection.** R8 is implemented for Sigma and Falco. The Elastic / Datadog versions and tuning/validation in a real environment remain.
 4. **Preparing for product-specific exploitation, such as BI tools.** The basics are reduced exposure and prioritized patching.
 
 ## 4. Countermeasures JPCERT/CC recommends, and how this repository maps

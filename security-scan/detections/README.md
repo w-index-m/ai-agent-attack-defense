@@ -1,6 +1,6 @@
 # 検知ルール（Strix / Cairn / Hermes 攻撃連鎖向け）
 
-`../defense-detection-notes.md` の検知ロジック（R1–R6）を、実スタック向けに具体化したもの。
+`../defense-detection-notes.md` の検知ロジック（R1–R8）を、実スタック向けに具体化したもの。
 **検知コンテンツのみ**で、攻撃手順や安全機構の回避方法は含まない。
 
 > 下の網羅表は [`../../shared/taxonomy.json`](../../shared/taxonomy.json) の `detections_coverage` を人間向けに表したもの。両者のズレ（ルールファイルの過不足）は CI の整合性チェック（`tools/check_consistency.py`）が検出する。タグの追加手順は [`../../shared/README.md`](../../shared/README.md) を参照。
@@ -14,6 +14,7 @@
 | R5 | 永続化（cron / systemd timer）の新規作成 | ✅ | ✅ | — | ✅ |
 | R6 | 相関（連鎖を束ねる） | — | — | — | ✅(EQL seq) |
 | R7 | 1 親プロセスが多種のセキュリティツールを短時間に連続実行（ローカルLLM型でも残る） | ✅ | ✅(aux) | — | ✅(threshold+card) |
+| R8 | Web シェルの設置（Web ルート配下への JSP/WAR/PHP 等）と、Web サーバーからのシェル起動 | ✅(2 ルール) | ✅(2 ルール) | — | — |
 
 ## 使い方・注意
 
@@ -24,7 +25,7 @@
 
 ## ファイル
 
-- `sigma/` — ベンダ非依存の Sigma ルール（SIEM 変換前提）
+- `sigma/` — ベンダ非依存の Sigma ルール（SIEM 変換前提）。`r8_webshell_placement_and_spawn.yml` は 1 ファイルに 2 ルール（`---` 区切り）
 - `falco/cairn-ai-agent.yaml` — Falco（コンテナ/ホストのランタイム検知）
 - `datadog/` — Datadog ログ検知ルール（クエリ例）
 - `elastic/` — Elastic Security 検知ルール（KQL/EQL・ECS）。`elastic-detection-rules.ndjson` を Kibana に取り込み（取り込み手順・調整箇所は `elastic/README.md`）
