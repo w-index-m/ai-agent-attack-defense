@@ -104,6 +104,33 @@ The chain from the Gambit case (definition: [`../shared/taxonomy.json`](../share
 - **Respond**: rotate the key; confirm whether the card brand and payment provider must be contacted; temporarily stop the payment page.
 - **Verify**: list where the keys are and who can access them, and confirm they are not in the same environment as the data; use netcheck to see whether the payment page has a CSP.
 
+### 3A. Patterns from the Japanese advisories (APIs, BI tools, admin misconfiguration)
+The October 2026 advisories from JPCERT/CC and the Personal Information Protection Commission describe, beyond the seven steps above, **API abuse, exploitation of known vulnerabilities (including BI tools), device/admin misconfiguration, and web-shell placement**. The mapping is in [`jp-advisory-mapping.en.md`](jp-advisory-mapping.en.md). This section only adds defensive items (no attack procedures).
+
+**A. API authorization (never touch another user's data)**
+- **Prevent**: on every request, check on the server whether *this user* may access *this data*; being logged in is not enough. Even if IDs or parameters are altered, other users' data must not be returned. Put operations that the UI never exposes (role changes, account creation) behind an admin path with admin authentication and source restrictions.
+- **Detect**: a burst of API calls from one principal; a spike in 401/403; calls to internal APIs that are normally unused. **[Not implemented]** (no API-log rules exist; R3 covers web enumeration).
+- **Respond**: pause or throttle the API; identify affected users and confirm whether notification is required; preserve logs.
+- **Verify**: in your own test environment, confirm per API that user A's session cannot retrieve user B's data.
+
+**B. API keys and secrets inside apps**
+- **Prevent**: do not embed high-privilege keys in public apps (such as mobile apps). Scope keys by purpose and permission and rotate them regularly. Do not reuse keys leaked from other systems.
+- **Detect**: key use from unusual locations or times. **[Not implemented]** (use of decoy keys is a design memo in §5).
+- **Respond**: immediately revoke and reissue any key that may have leaked.
+- **Verify**: run gitleaks over the repository and its history for leftover keys.
+
+**C. Exposure and patching of BI tools and employee-facing systems**
+- **Prevent**: keep BI tools, admin screens, and internal systems from being directly visible from the internet (place them behind a VPN or IP restrictions). Subscribe to product vulnerability notices and prioritize patching.
+- **Detect**: external access to admin ports or admin screens (**R3** and netcheck). Detection of per-product exploitation is **[not implemented]**.
+- **Respond**: stop the exposure, apply the patch, check for signs of compromise (preserve first).
+- **Verify**: use netcheck for admin exposure; use the OS update checks (`os_patch_check_*`) and Trivy for missed patches.
+
+**D. Configuration files and backups**
+- **Prevent**: do not keep configuration files, environment files, backups, or logs in locations reachable over the web. Delete files you no longer need.
+- **Detect**: access to configuration or backup files under the web root. **[Not implemented]**
+- **Respond**: remove the files and reissue any credentials they contained.
+- **Verify**: inventory the web root. **netcheck does not yet look for this kind of file exposure** (it checks admin-like paths only).
+
 ---
 
 ## 4. From detection to response
@@ -207,6 +234,10 @@ If your organization runs offensive agents (for red-teaming, etc.) **under autho
 | ⑤ NFS / credentials | gitleaks, Trivy | **None** | File-access auditing, decoys (§5) |
 | ⑥ IAM | Trivy (IaC findings) | **None** | Cloud audit-log detection |
 | ⑦ Keys / card data | netcheck (CSP present?) | **None** | KMS auditing, collecting CSP Report-Only reports |
+| 3A-A API authorization | **None** (manual check) | **None** | API-log anomaly detection |
+| 3A-B API keys | gitleaks | **None** | Key-use anomaly detection, decoys (§5) |
+| 3A-C BI / admin systems | netcheck, OS update checks, Trivy | R3 (external access) | Per-product exploitation detection |
+| 3A-D Config / backups | **None** (netcheck does not cover it) | **None** | Web-root inventory, detection of file access |
 
 - **R1–R7 are mainly network and host observations.** Detection for ②⑤⑥⑦ lives in the app and cloud audit-log layer, and **does not exist yet**. That is the next task.
 - **Response (§4) is documentation only**; there is no automation.
@@ -221,6 +252,7 @@ If your organization runs offensive agents (for red-teaming, etc.) **under autho
 - Detection concepts and terms: [`defense-detection-notes.en.md`](defense-detection-notes.en.md), [`glossary.ja.md`](glossary.ja.md)
 - The four layers and the external roadmap assessment: [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md)
 - Per-tool analyses: [`artex-analysis.en.md`](artex-analysis.en.md), [`strix-local-backend-notes.md`](strix-local-backend-notes.md), [`cairn-lab/cairn-authorized-lab-runbook.md`](cairn-lab/cairn-authorized-lab-runbook.md)
+- Mapping to the Japanese advisories: [`jp-advisory-mapping.en.md`](jp-advisory-mapping.en.md)
 - Audit tools: [`../netcheck/`](../netcheck/), [`../vuln_triage.html`](../vuln_triage.html), [`zgrab2-notes.md`](zgrab2-notes.md)
 
 > Defense, detection and recovery design only. No attack procedures or safety-bypass techniques.
