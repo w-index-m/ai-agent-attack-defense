@@ -15,7 +15,7 @@ published: false
 - **攻撃の手順は一切含みません**（検知・防御の設計に限定）。ツールは自分が所有／認可した対象にだけ使います。
 - リポジトリ: https://github.com/w-index-m/ai-agent-attack-defense （MIT）
 
-![全体像：防御の4層とツール](https://raw.githubusercontent.com/w-index-m/ai-agent-attack-defense/main/overview-figure.png)
+![全体像：防御の4層とツール](https://raw.githubusercontent.com/w-index-m/ai-agent-attack-defense/main/defense-overview.png)
 
 ## 背景：攻撃側が「エージェント化」している
 
