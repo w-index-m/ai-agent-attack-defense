@@ -87,6 +87,7 @@ JPCERT/CC notes that systems not meant for an unspecified public (employee-facin
 - **Countermeasure**: upgrade to the latest version.
 - **Workaround**: until you can upgrade, block access to `/api/session/reset_password` at network devices.
 - **Compromise investigation**: if that endpoint was reachable from the internet, do not stop at upgrading; check for compromise. In the logs of Metabase or network devices, `POST /api/session/reset_password` (HTTP 400) followed by `GET /api/user/current` (HTTP 200) indicates a likely compromise. If compromise is possible, check user sessions, API keys, and admin accounts, change the credentials of connected databases, and review logs.
+- **Metabase's own advisory (GHSA-vwf4-m7j8-wcjf; from a summary)**: Critical (CVSS 10.0). The vendor states that active exploitation was confirmed. The fixed versions match those in the JPCERT/CC original (x.58.24 and so on). **The log pattern (POST 400 → GET 200) is not in the advisory summary**; it is what JPCERT/CC gave as Metabase's information (the source may be Metabase's announcement, unconfirmed).
 - **A separate vulnerability**: on the same day Metabase also published CVE-2026-72899 (GHSA-r8h2-qpfx-mx59, via a publicly shared dashboard). JPCERT/CC has confirmed that information that appears to be a PoC for it has also been published.
 - The example User-Agent `Metabase-GHSA-vwf4/2.0` in advisory 0030 corresponds to the ID of CVE-2026-72898's advisory (GHSA-vwf4-m7j8-wcjf).
 
