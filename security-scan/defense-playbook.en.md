@@ -124,10 +124,11 @@ The October 2026 advisories from JPCERT/CC and the Personal Information Protecti
 - **Detect**: external access to admin ports or admin screens (**R3** and netcheck). Detection of per-product exploitation is **[not implemented]**.
 - **Respond**: stop the exposure, apply the patch, check for signs of compromise (preserve first).
 - **Verify**: use netcheck for admin exposure; use the OS update checks (`os_patch_check_*`) and Trivy for missed patches. `os_patch_check_*` covers the OS only, not apps such as Metabase, so check app patching separately.
-- **If you run Metabase** (Metabase's own advisory GHSA-r8h2-qpfx-mx59, CVE-2026-72899; Critical, CVSS 9.6, published 2026-08-06; from a summary. **Its number differs from the CVE-2026-72898 in the JPCERT/CC advisory, and whether they are the same issue is unconfirmed**):
-  - **Interim measure**: until patched, disable public sharing (public links), or make public links that include field filters private.
-  - **Fixed versions**: 58.24 / 59.21 / 60.17 / 61.11 / 62.9 / 63.5 (upgrade to the one for your line; the versions come from a summary, so confirm in the original).
-  - **After upgrading**: confirm no public share includes field filters; revoke active sessions; delete unknown API keys; check admin accounts for unexpected changes; rotate the credentials of connected databases; review data-warehouse logs and Metabase's activity and query history.
+- **If you run Metabase** (**two separate** SQL injection vulnerabilities were published on 2026-08-06. Sources: the original of JPCERT/CC's JPCERT-AT-2026-0023, and a summary of Metabase advisory GHSA-r8h2-qpfx-mx59):
+  - **CVE-2026-72898** (GHSA-vwf4-m7j8-wcjf; admin access through an unauthenticated endpoint; zero-day attacks confirmed, per Metabase): upgrade to the latest version. Until you can, **block access to `/api/session/reset_password`** at network devices. If that path was reachable from the internet, **do not stop at upgrading; check for compromise**. A log sequence of `POST /api/session/reset_password` (HTTP 400) followed by `GET /api/user/current` (HTTP 200) indicates a likely compromise.
+  - **CVE-2026-72899** (GHSA-r8h2-qpfx-mx59; via a publicly shared dashboard; Critical, CVSS 9.6; **from a summary**): the interim measure is to disable public sharing (public links), or make public links that include field filters private. JPCERT/CC notes that information that appears to be a PoC has also been published.
+  - **Fixed versions**: 58.24 / 59.21 / 60.17 / 61.11 / 62.9 / 63.5 (in the form `x.58.24`). For 72898 this is from the JPCERT/CC original; the 72899 versions come from a summary, so confirm in the original. Versions before the 58 line are not affected by 72898. Metabase Cloud had already been mitigated for 72898.
+  - **If you suspect compromise**: check user sessions, API keys, and admin accounts; rotate the credentials of connected databases; review the logs of Metabase and the connected databases.
 
 **D. Configuration files and backups**
 - **Prevent**: do not keep configuration files, environment files, backups, or logs in locations reachable over the web. Delete files you no longer need.
