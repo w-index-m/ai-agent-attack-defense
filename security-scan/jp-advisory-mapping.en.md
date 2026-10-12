@@ -20,7 +20,7 @@ The four cases JPCERT/CC presented (high level only):
 |---|---|
 | A | **Scanning each target for various known vulnerabilities** and trying to exploit them. Attacks abusing administrative weaknesses that are not vulnerabilities (**theft of configuration or backup files**) may also be attempted. Suspicious source IP addresses were added on October 9 |
 | B | **Unauthorized operations through APIs**, with information tampered with via requests to an app's management API. Reported techniques: (a) analyzing a public smartphone app to identify API details; (b) attacking internal APIs that the UI cannot reach (changing user permissions, creating unauthorized accounts, observing differences in authentication responses, identifying account information through NoSQL injection); (c) using API keys stolen from another system's compromise. Suspicious source IP addresses were added on October 9 |
-| C | **A SQL injection vulnerability in Metabase (CVE-2026-72898)**, abused through unauthorized API requests. JPCERT/CC published an advisory on it on 2026-08-14 (JPCERT-AT-2026-0023). Exploitation is described as between early August and early September |
+| C | **A SQL injection vulnerability in Metabase (CVE-2026-72898)**, abused through unauthorized API requests. JPCERT/CC published an advisory on it on 2026-08-14 (JPCERT-AT-2026-0023). Exploitation is described as between early August and early September. **Metabase's own advisory (GHSA-r8h2-qpfx-mx59) is CVE-2026-72899 (Critical, CVSS 9.6, published 2026-08-06), a different number; whether it is the same issue is unconfirmed** (§3, playbook §3A-C) |
 | D | **A WAR file placed on an application server reachable from a public web server** (added October 9). A JSP in the WAR acts as a malicious simple web shell: it takes a specific query parameter and runs it as a shell command. Repeated GET and POST requests to the web shell were observed around September |
 
 The original lists **suspicious source IP addresses and example User-Agents** for each case. The IP addresses carry notes that they were used only in limited periods and may have been legitimate. This repository **does not copy them** (they age and cause false positives). For investigations, use the original (§5).
@@ -48,7 +48,7 @@ The "This repository" column reflects the current state of documents and tools (
 1. **API authorization checks and detection.** Pattern B and case 9 are the weakest area in this repository. First, add per-API authorization checks to your operating procedures.
 2. **Exposure of configuration files and backups.** Implemented in `netcheck` (15 items). Validation on real hosts is the next task.
 3. **Web-shell placement detection.** R8 is implemented for Sigma and Falco. The Elastic / Datadog versions and tuning/validation in a real environment remain.
-4. **Preparing for product-specific exploitation, such as BI tools.** The basics are reduced exposure and prioritized patching. For case C, you need to confirm patching of the application itself (`os_patch_check_*` covers the OS only, not apps such as Metabase).
+4. **Preparing for product-specific exploitation, such as BI tools.** The relationship between case C's CVE-2026-72898 and Metabase's own CVE-2026-72899 is unconfirmed; the body of JPCERT-AT-2026-0023 needs to be checked. The basics are reduced exposure and prioritized patching. For case C, you need to confirm patching of the application itself (`os_patch_check_*` covers the OS only, not apps such as Metabase).
 
 ## 4. Countermeasures JPCERT/CC recommends, and how this repository maps
 
