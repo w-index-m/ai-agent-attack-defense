@@ -204,7 +204,7 @@ detection (起動):
 condition: 設置 OR 起動（相関する場合は優先度を上げる）
 note: JPCERT/CC の注意喚起（2026-10-08/09）が、公開 Web サーバーから届くアプリケーション
       サーバー上への WAR の設置（JSP が簡易 Web シェルとして動作）を報告している（ケース D。
-      出典の確度は security-scan/jp-advisory-mapping.ja.md を参照）。
+      JPCERT/CC の原文で確認済み：WAR に含まれる JSP が、クエリパラメーターを取得してシェルコマンドとして実行する簡易 Web シェル。security-scan/jp-advisory-mapping.ja.md を参照）。
       単体では、正規のデプロイやバッチ起動で誤検知が出る。デプロイ用のユーザー・ツールと、
       意図的にシェルを呼ぶアプリを allowlist 化し、設置と起動を同じホスト・時間帯で突き合わせる。
       実装: detections/sigma/r8_webshell_placement_and_spawn.yml、detections/falco/cairn-ai-agent.yaml。

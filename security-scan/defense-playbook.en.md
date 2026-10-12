@@ -109,7 +109,7 @@ The October 2026 advisories from JPCERT/CC and the Personal Information Protecti
 
 **A. API authorization (never touch another user's data)**
 - **Prevent**: on every request, check on the server whether *this user* may access *this data*; being logged in is not enough. Even if IDs or parameters are altered, other users' data must not be returned. Put operations that the UI never exposes (role changes, account creation) behind an admin path with admin authentication and source restrictions. Accept only permitted users and HTTP methods on each endpoint. Set an upper limit on requests per unit time, and give high-load or high-abuse functions (login, password reset, SMS sending, search) their own rate and usage limits (a JPCERT/CC recommendation).
-- **Detect**: a burst of API calls from one principal; a spike in 401/403; calls to internal APIs that are normally unused. **[Not implemented]** (no API-log rules exist; R3 covers web enumeration).
+- **Detect**: a burst of API calls from one principal; a spike in 401/403; runs of errors from malformed authentication tokens; calls to internal APIs that are normally unused. **[Not implemented]** (no API-log rules exist; R3 covers web enumeration).
 - **Respond**: pause or throttle the API; identify affected users and confirm whether notification is required; preserve logs.
 - **Verify**: in your own test environment, confirm per API that user A's session cannot retrieve user B's data.
 
@@ -120,7 +120,7 @@ The October 2026 advisories from JPCERT/CC and the Personal Information Protecti
 - **Verify**: run gitleaks over the repository and its history for leftover keys.
 
 **C. Exposure and patching of BI tools and employee-facing systems**
-- **Prevent**: keep BI tools, admin screens, and internal systems from being directly visible from the internet (place them behind a VPN or IP restrictions). Subscribe to product vulnerability notices and prioritize patching.
+- **Prevent**: keep BI tools, admin screens, and internal systems from being directly visible from the internet (place them behind a VPN or IP restrictions). Subscribe to product vulnerability notices and prioritize patching (for example, the Metabase SQL injection CVE-2026-72898; see JPCERT-AT-2026-0023).
 - **Detect**: external access to admin ports or admin screens (**R3** and netcheck). Detection of per-product exploitation is **[not implemented]**.
 - **Respond**: stop the exposure, apply the patch, check for signs of compromise (preserve first).
 - **Verify**: use netcheck for admin exposure; use the OS update checks (`os_patch_check_*`) and Trivy for missed patches.
