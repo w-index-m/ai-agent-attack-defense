@@ -22,8 +22,6 @@ Use these **only on systems you own or are authorized to test**.
 
 Legend: **本リポ** = implemented in this repository · **外部案** = external roadmap idea, evaluated in [`defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) and not yet implemented (the `本リポ` / `外部案` labels are kept in Japanese to match the figure).
 
-![Overview: the four defense layers (prevent / detect / respond / recover) and which tool covers each](overview-figure.png)
-
 > Big picture: countermeasures form one set across **prevent (③) → detect (R1–R8) → respond → recover**. Step-by-step defense along the attack chain: [`security-scan/defense-playbook.en.md`](security-scan/defense-playbook.en.md). See [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) for the mapping and [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) for plain-language term definitions.
 
 | Path | What it is | How to test |
@@ -62,8 +60,6 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 ![防御全体像：攻撃連鎖7段と、防御の4層（予防・検知・応答・復旧）、各層のツール](defense-overview.png)
 
 凡例：**本リポ** ＝このリポジトリで実装済み ／ **外部案** ＝外部ロードマップの案。[`defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) で評価したもので、未実装。
-
-![全体像：防御の4層（予防・検知・応答・復旧）と、どのツールがどこを担うか](overview-figure.png)
 
 > 全体像：対策は「**予防(③) → 検知(R1–R8) → 応答 → 復旧**」の4層で1セットです。攻撃連鎖の段ごとの防御は [`security-scan/defense-playbook.ja.md`](security-scan/defense-playbook.ja.md)、各対策の対応づけは [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md)、用語のやさしい解説は [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) を参照。
 
