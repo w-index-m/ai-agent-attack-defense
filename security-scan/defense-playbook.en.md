@@ -144,6 +144,21 @@ The October 2026 advisories from JPCERT/CC and the Personal Information Protecti
 - **Customers**: prepare, in peacetime, the messaging to prevent secondary harm if a leak occurs (for example, urging multi-factor authentication).
 - **Scope**: apply the same review to systems not meant for an unspecified public, such as employee-facing systems and BI tools.
 
+### 3B. Where to place a WAF (network-architecture choices)
+This expands on "a WAF is supplementary" from step ①. **A WAF is not a substitute for fixing the code** (see §3 ①). Whatever the setup, start with alerting only and confirm false positives before moving to blocking (§4.3).
+
+- **Cloud WAF** (Cloudflare, AWS WAF, and similar): configured through the vendor's console; this repository builds no tool for it. Make sure the origin (your own server) is not reachable by a direct path that bypasses the WAF — a direct path lets attackers route around it.
+- **Running a WAF on your own load balancer** (for example F5 BIG-IP's LTM plus ASM/Advanced WAF): the WAF module sits on a device that already terminates TLS. Because **nothing has to be decrypted a second time**, this tends to add less latency and keep the setup simpler. Points to watch:
+  - ASM/Advanced WAF is licensed separately from LTM.
+  - Any path that reaches the server without passing through BIG-IP is unprotected; pair this with reducing exposure (§3A-C, §3A-D).
+  - The violation log records the matched signature and the actual request path and parameters. **This is useful for the log-pattern checks in a compromise investigation (§5)**, so forward it to your SIEM.
+- **Decrypting and inspecting at an NGFW** (for example Palo Alto's Threat Prevention / Vulnerability Protection):
+  - **While traffic stays encrypted, the HTTP path and query contents are not visible.** App-ID only makes a heuristic guess at the kind of traffic (web, MySQL, and so on); it does not look at the content (such as a SQL injection string).
+  - Inspecting the content requires decryption via **SSL Inbound Inspection**: import the protected server's private key into the firewall, which then decrypts, inspects, and re-encrypts the relevant traffic.
+  - This comes with private-key management and added processing load. Decide, against legal and internal policy, whether to exclude traffic carrying personal or payment data from decryption.
+  - If a device such as BIG-IP already terminates TLS, inspecting there is simpler, since decryption only happens once.
+- **Rule of thumb**: if a device that already terminates TLS (a load balancer or reverse proxy) exists, put the WAF there. Otherwise, a cloud WAF is the easy option. Treat NGFW decryption as covering a separate role — defending non-web protocols such as direct database connections.
+
 ---
 
 ## 4. From detection to response
