@@ -111,6 +111,40 @@ JPCERT/CC lists, "for use in compromise investigation," **suspicious source IP a
 - For case C (Metabase), look in the logs of Metabase or network devices for **`POST /api/session/reset_password` (400) followed by `GET /api/user/current` (200)** (§4.1). This is the compromise sign Metabase gave; **do not judge on a single entry, look for the sequence**.
 - For case D, check the application server behind the public web server for **placement of `.war` and `.jsp` files** and for **traces of a shell being started** under it (detection: R8).
 
+## 5A. Private-sector analysis: Macnica (stats/trends) and Scutum (technical confirmation of AI agents)
+
+> This section is based on **private-sector technical blogs**, not the official JPCERT/CC or Personal Information Protection Commission announcements. Confirmed against the original text pasted by the user.
+
+### Macnica Security Research Center (Yutaka Sejiyama, published 2026-10-07, updated 2026-10-08)
+
+- **Case count trend**: disclosures of this kind went 62 (2024) → 84 (2025) → 119 as of October 6, 2026 (265 total). **About 68% of this year's 119 (81 cases) cluster after July.**
+- **Shift in targeted sites**: previously card data from EC sites was the focus; now targets range widely and indiscriminately — library catalog search, sightseeing-train seat reservations, university facility bookings, and more.
+- **Breakdown of technique** (the 81 cases since July): ① known vulnerabilities in common software, 9 cases; ② credential abuse, 4; ③ flaws in site configuration/access control, 3; **④ insufficient explanation to classify, 65 (80.2%)**. Few disclosures identify the root cause.
+- **What incident response/log analysis actually showed**: not a single targeted vulnerability, but **broadly probing an entire site, exercising screens and APIs normally while looking for flaws**. Some cases involved reverse-engineering a mobile app to extract an API key. Recon and exploitation are not always clearly separated.
+- **On AI involvement (as of this article)**: "**no exploitation of a zero-day vulnerability has been confirmed**"; AI use "is hard to rule out, given the breadth and speed of the probing, but **cannot be confirmed**" either. This changes with Scutum's article below.
+- **International picture**: 99 cases confirmed across 13 countries/regions, July–September 2026. South Korea: 30; France: 11; Poland: 8.
+
+### Scutum (Secure Sky Technology / Bitforest, "Kanatoko," published 2026-10-14)
+
+- **States explicitly that AI-agent involvement was technically confirmed.** Scutum built its own detection mechanism into its WAF to judge whether an attacker is an AI agent, and began monitoring the night of October 10, 2026. **By October 14 it had confirmed AI-agent attacks on Japanese companies' sites from at least three IP addresses.**
+- **The detection method's details are withheld, to avoid enabling evasion.** Its stated property: "cannot enumerate every AI agent (false negatives possible), but a positive detection is essentially certain to be an AI agent (near-zero false positives)." It also states detection succeeded against all eight high-performance models it tested (this specific claim itself could not be independently verified).
+- **Observed attack patterns (summarized; IP addresses are not reproduced here — see the original)**:
+  - One IP showed only simple, high-volume scanning (classic behavior).
+  - Another showed a textbook, staged pattern over roughly two-plus hours: **recon → exhaustive scanning of admin paths and backup files → SQL-injection attempts → automated submission to a contact form**, with **tools and techniques shifting by phase**.
+  - A third ran for about eight hours, **shifting among many tools and techniques**: slow scan → fast scan → exploitation of known vulnerabilities → Nmap → login brute-forcing → exploitation of another known vulnerability.
+  - **This matches the direction of this repository's R7** (one parent process running many security tools in rapid succession) — the timescale here is tens of minutes to hours rather than strictly "rapid," but the core signal (tools and techniques switching by phase) is the same. The scanned targets include `.git`, `.env`, `backup.zip`, `db_backup.sql`, overlapping with what `netcheck` §3A-D already checks for.
+  - It states that the "mobile-app string in the User-Agent" pattern seen in large-scale A2B-style attacks was **not** observed across these three IPs.
+- **Its conclusion on countermeasures**: whether or not an AI agent is involved, **the substance of defense does not change** (eliminate vulnerabilities; use a WAF that does not rely on signatures alone).
+
+### Connection to this repository
+
+| Observation | How it connects |
+|---|---|
+| A long-running, staged attack pattern where tools/techniques shift by phase | A real-world data point for R7. Worth considering whether R7's "short window" threshold should be loosened to match this case (tens of minutes to hours) |
+| Scanning for `.git`, `.env`, backup files | `netcheck`'s §3A-D (configuration/backup exposure check) already covers the same kind of file |
+| IP-based indicators | See the original (Scutum's blog). Not reproduced here (they age and cause false positives) |
+| The AI-detection method itself | Scutum withholds it. It cannot be reproduced or verified |
+
 ## 6. Related files
 
 - Defense playbook: [`defense-playbook.en.md`](defense-playbook.en.md) (§3A and §9)

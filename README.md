@@ -28,7 +28,8 @@ Legend: **本リポ** = implemented in this repository · **外部案** = extern
 |---|---|---|
 | `vuln_triage.html` | Browser page: load Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2 (JSON Lines) output, get priority, fixes and a plan. Runs locally, nothing is uploaded. Secrets are masked. | Open the file in a browser, drop a JSON report. |
 | `.github/workflows/security-scan.yml` + `scripts/summarize.py` | CI scan set: Semgrep, Trivy, gitleaks (+ ZAP baseline if `STAGING_URL` is set). | See "CI scan" below. |
-| `netcheck/` | Confirmation-only checker (ports, banners, headers, TLS, admin-like URLs) with a browser UI. Private ranges only by default. Cannot judge SQL injection. | `python3 netcheck/netcheck.py` then open the printed URL. |
+| `netcheck/` | Confirmation-only checker (ports, banners, headers, TLS, admin-like URLs, exposed config/backup files). Private ranges only by default. Cannot judge SQL injection. | `python3 netcheck/netcheck.py` then open the printed URL. |
+| `scripts/dep_cve_check.py` | Checks your own `requirements.txt` / npm `package-lock.json` against the public OSV.dev vulnerability database; outputs SARIF. | See [`security-scan/dep-cve-check-notes.md`](security-scan/dep-cve-check-notes.md). |
 | `deck/` | Generator scripts for the JP/EN slide decks (pptxgenjs). | See `deck/README.md`. |
 
 ## CI scan
@@ -42,7 +43,8 @@ Legend: **本リポ** = implemented in this repository · **外部案** = extern
 
 ## Status / unverified
 - The GitHub Actions workflow runs on GitHub (scan and consistency jobs, both green on `main`). ZAP runs only when `STAGING_URL` is set.
-- `summarize.py`, `netcheck.py`, `zgrab2_guard.py`, `patch_suggest.py` and `os_patch_check_*.py` were tested with samples, mocks or stubs. **Not yet run on real hosts** (real RHEL / Windows updates, a real Ollama with qwen2.5:1.5b).
+- `summarize.py`, `netcheck.py`, `zgrab2_guard.py`, `patch_suggest.py`, `os_patch_check_*.py` and `dep_cve_check.py` were tested with samples, mocks or stubs. **Not yet run on real hosts** (real RHEL / Windows updates, a real Ollama with qwen2.5:1.5b, the real OSV.dev API).
+- Scope note: [`security-scan/llm-target-attacks.en.md`](security-scan/llm-target-attacks.en.md) covers the other direction — attacks *on* LLM systems (prompt injection, system prompt leakage, LLMjacking) — confirmed against primary sources (CVE advisories, EchoLeak, PLeak, Sysdig). [`security-scan/jp-advisory-mapping.en.md`](security-scan/jp-advisory-mapping.en.md) tracks the ongoing October 2026 Japanese web-breach campaign (JPCERT/CC, Metabase CVEs, and private-sector analyses from Macnica and Scutum, including Scutum's technical confirmation of AI-agent involvement).
 - Scanner output depends on the tools' versions; findings are leads, not proof. The [security summary](security-scan/security-summary.en.md) lists the verification status in full.
 ---
 
@@ -69,7 +71,8 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 |---|---|---|
 | `vuln_triage.html` | ブラウザで動くトリアージ画面。Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2（JSON Lines）の出力を読み込み、優先度・修正案・対応計画を表示。ローカル完結でアップロードなし、秘密情報はマスク。 | ファイルをブラウザで開き、JSON レポートをドロップ。 |
 | `.github/workflows/security-scan.yml` + `scripts/summarize.py` | CI スキャン一式：Semgrep・Trivy・gitleaks（`STAGING_URL` を設定すれば ZAP ベースラインも）。 | 下の「CI スキャン」を参照。 |
-| `netcheck/` | 確認専用のチェッカー（ポート・バナー・ヘッダ・TLS・管理画面らしき URL）。ブラウザ UI 付き。既定ではプライベート範囲のみ。SQL インジェクションの有無は判定しない。 | `python3 netcheck/netcheck.py` を実行し、表示された URL を開く。 |
+| `netcheck/` | 確認専用のチェッカー（ポート・バナー・ヘッダ・TLS・管理画面らしき URL・設定/バックアップの露出）。ブラウザ UI 付き。既定ではプライベート範囲のみ。SQL インジェクションの有無は判定しない。 | `python3 netcheck/netcheck.py` を実行し、表示された URL を開く。 |
+| `scripts/dep_cve_check.py` | 自分の `requirements.txt` / npm `package-lock.json` を、公開の脆弱性データベース OSV.dev に照合。SARIF を出力。 | [`security-scan/dep-cve-check-notes.md`](security-scan/dep-cve-check-notes.md) を参照。 |
 | `deck/` | 日英スライドの生成スクリプト（pptxgenjs）。 | `deck/README.md` を参照。 |
 
 ## CI スキャン
@@ -94,5 +97,6 @@ AI エージェント攻撃ツール（Strix / Cairn / Hermes、および周辺�
 
 ## 状態・未検証
 - GitHub Actions のワークフロー（scan と consistency）は GitHub 上で実行され、`main` で緑です。ZAP は `STAGING_URL` を設定したときだけ動きます。
-- `summarize.py`、`netcheck.py`、`zgrab2_guard.py`、`patch_suggest.py`、`os_patch_check_*.py` は、サンプル・モック・スタブで確認しています。**実機では未実行**です（実際の RHEL・Windows の更新、qwen2.5:1.5b を動かす実際の Ollama）。
+- `summarize.py`、`netcheck.py`、`zgrab2_guard.py`、`patch_suggest.py`、`os_patch_check_*.py`、`dep_cve_check.py` は、サンプル・モック・スタブで確認しています。**実機では未実行**です（実際の RHEL・Windows の更新、qwen2.5:1.5b を動かす実際の Ollama、実際の OSV.dev API）。
+- スコープの補足：[`security-scan/llm-target-attacks.ja.md`](security-scan/llm-target-attacks.ja.md) は、逆方向（LLM システム自体が標的になる攻撃：プロンプトインジェクション、システムプロンプト漏洩、LLMjacking）を、一次情報（CVE アドバイザリ、EchoLeak、PLeak、Sysdig）で確認してまとめたもの。[`security-scan/jp-advisory-mapping.ja.md`](security-scan/jp-advisory-mapping.ja.md) は、2026年10月の国内 Web 侵害キャンペーン（JPCERT/CC、Metabase の CVE、Macnica・Scutum の民間分析。Scutum は AI エージェントの関与を技術的に確認）を追っています。
 - スキャナの出力はツールのバージョンに依存します。指摘は手がかりであって証拠ではありません。検証状況の全体は [セキュリティ問題のまとめ](security-scan/security-summary.ja.md) を参照。
