@@ -25,6 +25,8 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`patch-suggest-notes.md`](patch-suggest-notes.md) | 診断結果から修正案（diff）を作る `scripts/patch_suggest.py`。自動適用はしない（人の y/N 確認つき）。gitleaks の値は LLM に送らない。小さいモデルの限界を明記。 |
 | [`zgrab2-notes.md`](zgrab2-notes.md) | zgrab2（ZMap のアプリ層スキャナ）の出力を `vuln_triage` に取り込む方法と、対象を許可範囲に絞るガード `scripts/zgrab2_guard.py`。露出の棚卸し用で、脆弱性スキャナではない。日英。 |
 | [`dep-cve-check-notes.md`](dep-cve-check-notes.md) | `scripts/dep_cve_check.py`: `requirements.txt`（pip、`==` 固定行）と npm の `package-lock.json` を、公開の脆弱性データベース OSV.dev に照合する。出力は SARIF で `vuln_triage` にそのまま読み込める。モックで検証済み、実際の OSV API は未確認。日英。 |
+| [`ghsa-lookup-notes.md`](ghsa-lookup-notes.md) | `scripts/ghsa_lookup.py`: GHSA ID・CVE 番号から GitHub の公開 Advisories API の構造化データ（影響版・修正版・CWE・CVSS）を取得し、**要約せずそのまま** Markdown に転記する。2つの CVE を取り違えた過去の誤りの再発防止。モックで検証済み、実際の API はこのセッションの GitHub 連携の制約で未確認。日英。 |
+| [`llm-defense-checklist.ja.md`](llm-defense-checklist.ja.md) / [`.en.md`](llm-defense-checklist.en.md) | `llm-target-attacks.ja.md` の4類型の予防・検知項目を、**自分のシステムで守られているか確認するチェックリスト**にしたもの。自動判定スクリプトではなく、人が確認する前提。 |
 | [`artex-analysis.ja.md`](artex-analysis.ja.md) / [`.en.md`](artex-analysis.en.md) | 自律型ペネトレ AI エージェント **ARTEX** の防御解析（一次情報の静的レビュー）。アーキ分解＋R1–R8/G1–G6 対応。攻撃手順は含まない。 |
 | [`detections/`](detections/) | 検知ルールの実装：Sigma / Falco / Datadog（R1–R8）。閾値・allowlist は環境でチューニング。 |
 | [`strix-local-backend-notes.md`](strix-local-backend-notes.md) | Strix の実行フロー解析と、Docker 不要ローカル実行の設計。 |
