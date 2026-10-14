@@ -26,12 +26,14 @@ Cases confirmed from primary sources (each is a **specific vendor/product implem
 | Case | Content (high level) | Source |
 |---|---|---|
 | **EchoLeak** (CVE-2025-32711) | Microsoft 365 Copilot. CVSS 9.3. Details in §4 | Microsoft, Aim Security |
-| **Semantic Kernel** (CVE-2026-26030, CVE-2026-25592) | Microsoft's agent framework; a plugin's filter function reportedly assembled strings unsafely, so a crafted prompt could reach code execution | Vendor advisories (reported secondhand; not independently confirmed) |
-| **Context7 MCP server** (CVE-2026-75130) | Poisoned custom instructions reportedly let a connected coding agent steal credentials from environment files and delete files. CVSS 4.0 (6.4). Finder: Noma Security | VulnCheck (the CVE assigner) |
-| **ModelScope ms-agent** (CVE-2026-2256) | v1.6.0rc1 and earlier. Prompt-derived input reaching OS command execution (command injection) | NVD |
+| **Semantic Kernel — CVE-2026-26030** (Python SDK) | `InMemoryVectorStore`'s filter functionality failed to block dangerous attribute names from being used inside a filter expression, leading to remote code execution. CWE-94 (code injection). CVSS 9.9 (Critical). Fixed in 1.39.4 | **Confirmed against the original GitHub Security Advisory (GHSA-xjw9-4gw8-4rqx)** |
+| **Semantic Kernel — CVE-2026-25592** (.NET SDK, a separate vulnerability) | `SessionsPythonPlugin`'s file download/upload functions (`DownloadFileAsync`, `UploadFileAsync`) did not sufficiently validate the supplied path, allowing writes to arbitrary locations. CWE-22 (path traversal). CVSS 9.9 (Critical). Fixed in NuGet 1.71.0 / pip 1.39.3 | **Confirmed against the original GitHub Security Advisory (GHSA-2ww3-72rp-wpp4)** |
+| **Context7 MCP server** (CVE-2026-75130) | Poisoned custom instructions reportedly let a connected coding agent steal credentials from environment files and delete files. Sources disagree, giving CVSS 3.1 as 9.0 and CVSS 4.0 as 6.4. Finder: Eli Ainhorn, Noma Security. **Sources also disagree on whether a fix exists** (one says fixed in 2.1.3, another says unfixed as of August 2026) | Secondary sources only (NVD and VulnCheck could not be reached from this environment) |
+| **ModelScope ms-agent — CVE-2026-2256** | Input validation in the Shell tool (named `check_safe()` and similar in secondhand sources) did not sufficiently sanitize prompt-derived input, leading to OS command execution. CWE-77. CVSS 3.1: 6.5 (Moderate). **As of 2026-03-04, no fixed version exists (Patched versions: None)** | **Confirmed against the original GitHub Security Advisory (GHSA-4gc2-344q-r2rw)** |
 
 **Prevent**:
 - Do **not** build commands or code dynamically from agent-generated strings (avoid string interpolation and `eval`-style execution).
+- For any **tool that takes a file path** (download, upload, read, write), validate the supplied path against an allowlist so it cannot point outside the intended directory (defends against path traversal).
 - **Allowlist** tool calls and minimize the agent's execution privileges (run containers as a non-root user, drop unneeded capabilities).
 - Put a **human approval gate** in front of risky actions (file deletion, outbound sending, access to credentials).
 
@@ -103,12 +105,16 @@ Cases confirmed from primary sources (each is a **specific vendor/product implem
 
 ## 7. Limits and what is unconfirmed
 
-- The prompt-injection-to-execution cases (Semantic Kernel, Context7, ModelScope) rest on **vendor advisories and CVE database entries**. Nothing here was run to confirm it.
+- Both Semantic Kernel cases and ModelScope ms-agent were confirmed by reading **the original GitHub Security Advisory (GHSA) text directly** from this environment. Context7 could not be reached (neither NVD nor VulnCheck resolved from here), so it rests on secondary sources only, and **even whether a fix exists is disputed** across sources.
+- None of these were run to confirm — only the published text was read; no exploit code was written.
 - The "Trend Micro" and "Azure AI Foundry" claims attached to PLeak are **not corroborated** (see §3).
 - The LLMjacking cost figures are Sysdig's estimates; other articles cite different measurement windows and amounts. Check Sysdig's own posts (sysdig.com/blog) for the exact numbers.
 
 ## 8. References (primary and near-primary sources)
 
+- GitHub Security Advisory, GHSA-xjw9-4gw8-4rqx (Semantic Kernel, CVE-2026-26030): https://github.com/microsoft/semantic-kernel/security/advisories/GHSA-xjw9-4gw8-4rqx
+- GitHub Security Advisory, GHSA-2ww3-72rp-wpp4 (Semantic Kernel, CVE-2026-25592): https://github.com/microsoft/semantic-kernel/security/advisories/GHSA-2ww3-72rp-wpp4
+- GitHub Advisory Database, GHSA-4gc2-344q-r2rw (ModelScope ms-agent, CVE-2026-2256): https://github.com/advisories/GHSA-4gc2-344q-r2rw
 - Microsoft, CVE-2025-32711 (EchoLeak): https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-32711
 - Aim Security's technical account of EchoLeak (via The Hacker News): https://thehackernews.com/2025/06/zero-click-ai-vulnerability-exposes.html
 - Academic post-mortem of EchoLeak (arXiv): https://arxiv.org/html/2509.10540v1

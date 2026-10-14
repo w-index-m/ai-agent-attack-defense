@@ -26,12 +26,14 @@ English: [`llm-target-attacks.en.md`](llm-target-attacks.en.md)
 | 事例 | 内容（高い粒度） | 出典 |
 |---|---|---|
 | **EchoLeak**（CVE-2025-32711） | Microsoft 365 Copilot。CVSS 9.3。詳細は §4 | Microsoft、Aim Security |
-| **Semantic Kernel**（CVE-2026-26030、CVE-2026-25592） | Microsoft の agent framework で、プラグインのフィルター関数が、文字列を安全でない形で組み立てており、細工したプロンプトがコード実行に至ったとされる | ベンダーのアドバイザリ（未確認。報道ベース） |
-| **Context7 MCP サーバー**（CVE-2026-75130） | カスタム指示機能に、毒を仕込んだ指示を入れておくと、連携するコーディングエージェントが、環境変数ファイルから認証情報を盗み、ファイルを削除する、とされる。CVSS 4.0（6.4）。発見者：Noma Security | VulnCheck（CVE 採番機関） |
-| **ModelScope ms-agent**（CVE-2026-2256） | v1.6.0rc1 以前。プロンプト由来の入力が、OS コマンドの実行に至るコマンドインジェクション | NVD |
+| **Semantic Kernel — CVE-2026-26030**（Python SDK） | `InMemoryVectorStore` のフィルター機能で、フィルター式の中にアクセスすべきでない危険な属性名を使うことを防げておらず、リモートでのコード実行に至る。CWE-94（コードインジェクション）。CVSS 9.9（Critical）。1.39.4 で修正 | **GitHub Security Advisory（GHSA-xjw9-4gw8-4rqx）を原文で確認済み** |
+| **Semantic Kernel — CVE-2026-25592**（.NET SDK、別の脆弱性） | `SessionsPythonPlugin` のファイルのダウンロード/アップロード機能（`DownloadFileAsync`・`UploadFileAsync`）で、渡されたパスの検証が不十分で、任意の場所にファイルを書き込める。CWE-22（パストラバーサル）。CVSS 9.9（Critical）。NuGet 1.71.0・pip 1.39.3 で修正 | **GitHub Security Advisory（GHSA-2ww3-72rp-wpp4）を原文で確認済み** |
+| **Context7 MCP サーバー**（CVE-2026-75130） | カスタム指示機能に、毒を仕込んだ指示を入れておくと、連携するコーディングエージェントが、環境変数ファイルから認証情報を盗み、ファイルを削除する、とされる。CVSS 3.1 で 9.0、CVSS 4.0 で 6.4 という、情報源により異なる値が出ている。発見者：Noma Security の Eli Ainhorn 氏。**修正版の有無についても情報源が食い違う**（2.1.3 で修正済みとする情報源と、2026年8月時点で未修正とする情報源がある） | 二次情報（VulnCheck、NVD とも、この環境からは接続できず未確認） |
+| **ModelScope ms-agent — CVE-2026-2256** | Shell ツールの入力検証（`check_safe()` 等、呼称は二次情報による）が、プロンプト由来の入力を十分に無害化できておらず、OS コマンドの実行に至る。CWE-77。CVSS 3.1 で 6.5（Moderate）。**2026年3月4日の時点で、修正版は無い（Patched versions: None）** | **GitHub Security Advisory（GHSA-4gc2-344q-r2rw）を原文で確認済み** |
 
 **予防**：
 - エージェントが生成した文字列を、**コマンドやコードに動的に組み込まない**（文字列補間・`eval` 系の実行を避ける）。
+- **ファイルパスを引数に取るツール**（ダウンロード・アップロード・読み書き）には、渡されたパスを許可リストで検証し、意図したディレクトリの外を指せないようにする（パストラバーサル対策）。
 - ツール呼び出しは**許可リスト化**し、エージェントの実行権限を最小限にする（コンテナの非 root 実行、不要な capability を外す）。
 - リスクのある操作（ファイル削除、外部送信、認証情報へのアクセス）には、**人の承認ゲート**を挟む。
 
@@ -103,12 +105,16 @@ English: [`llm-target-attacks.en.md`](llm-target-attacks.en.md)
 
 ## 7. 限界・未確認の点
 
-- プロンプトインジェクション→実行の事例（Semantic Kernel、Context7、ModelScope）は、**ベンダーのアドバイザリや CVE データベースの記述**に基づく。実際に動かして確認したものではない。
+- Semantic Kernel（2件）と ModelScope ms-agent は、**GitHub の公式 Security Advisory（GHSA）の原文**を、この環境から直接読んで確認した。Context7 は、NVD・VulnCheck ともこの環境から接続できず、二次情報（ニュース記事・脆弱性データベースの転載）のみで、**修正版の有無すら情報源により食い違う**。
+- いずれも、**実際に動かして確認したものではない**（原文を読んだだけで、攻撃コードは書いていない）。
 - PLeak の「Trend Micro」「Azure AI Foundry」への言及は、**裏付けが取れていない**（§3 参照）。
 - LLMjacking の被害額は、Sysdig の見積もりであり、情報源により数字が異なる（他の記事では別の集計期間・金額が出ている）。正確な数字は、Sysdig の一次記事（sysdig.com/blog）で確認すること。
 
 ## 8. 参考情報（一次・準一次情報）
 
+- GitHub Security Advisory, GHSA-xjw9-4gw8-4rqx（Semantic Kernel、CVE-2026-26030）: https://github.com/microsoft/semantic-kernel/security/advisories/GHSA-xjw9-4gw8-4rqx
+- GitHub Security Advisory, GHSA-2ww3-72rp-wpp4（Semantic Kernel、CVE-2026-25592）: https://github.com/microsoft/semantic-kernel/security/advisories/GHSA-2ww3-72rp-wpp4
+- GitHub Advisory Database, GHSA-4gc2-344q-r2rw（ModelScope ms-agent、CVE-2026-2256）: https://github.com/advisories/GHSA-4gc2-344q-r2rw
 - Microsoft, CVE-2025-32711（EchoLeak）: https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-32711
 - Aim Security, EchoLeak の技術解説（The Hacker News 経由）: https://thehackernews.com/2025/06/zero-click-ai-vulnerability-exposes.html
 - EchoLeak の学術的な事後分析（arXiv）: https://arxiv.org/html/2509.10540v1

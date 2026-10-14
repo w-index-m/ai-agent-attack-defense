@@ -176,5 +176,6 @@ direction — an LLM-based system becoming the **target** (prompt injection, sys
 leakage, LLMjacking) — is covered separately in
 [`llm-target-attacks.en.md`](llm-target-attacks.en.md) (日本語: [`llm-target-attacks.ja.md`](llm-target-attacks.ja.md)),
 confirmed against primary sources (EchoLeak/CVE-2025-32711, PLeak, Sysdig's LLMjacking reports,
-and several 2026 agent-framework CVEs), with connection points back to R1–R8/G1–G6 noted, not
+and the Semantic Kernel/ModelScope CVEs via their original GitHub Security Advisories — Context7
+rests on secondary sources only), with connection points back to R1–R8/G1–G6 noted, not
 implemented as rules.
