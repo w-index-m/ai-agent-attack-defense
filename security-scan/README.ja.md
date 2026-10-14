@@ -18,6 +18,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`security-summary.ja.md`](security-summary.ja.md) / [`.en.md`](security-summary.en.md) | **セキュリティ問題のまとめ**。攻撃の7段と対応、既知の脆弱性、企業が取るべき対応、作ったもの、検証の状態（正直に）、次にやること。まずここから読む。 |
 | [`defense-playbook.ja.md`](defense-playbook.ja.md) / [`.en.md`](defense-playbook.en.md) | **AI エージェント攻撃 防御プレイブック**。Strix / Cairn / Hermes / ARTEX の見える動きを前提に、攻撃連鎖の7段ごとの予防・検知・応答・確認、インシデント対応、罠（ハニートークン）の設計メモ、最初の1週間、**未実装の一覧**。 |
 | [`jp-advisory-mapping.ja.md`](jp-advisory-mapping.ja.md) / [`.en.md`](jp-advisory-mapping.en.md) | **国内の注意喚起（2026年10月、JPCERT/CC・個人情報保護委員会など）と、このリポジトリの対応表**。API の不正操作、既知の脆弱性（BI ツールを含む）、管理不備、Web シェルの 4 つの型ごとに、予防・検知・足りない点を整理。二次情報に基づくので、原典で確認すること。 |
+| [`llm-target-attacks.ja.md`](llm-target-attacks.ja.md) / [`.en.md`](llm-target-attacks.en.md) | **【スコープ拡張】LLM システム自体への攻撃**（プロンプトインジェクション、システムプロンプト漏洩、間接的プロンプトインジェクション、LLMjacking）の、一次情報に基づく整理。「AI が攻撃する側」ではなく「LLM システムが標的になる側」。既存の R1–R8/G1–G6 との接続点つき（実装ではなく指摘）。 |
 | [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md) | 防御の4層（予防・検知・応答・復旧）と、外部ロードマップ案の対応づけ・評価・不足分の補い方。R1–R8 と ③ の区別、カーネルFIM 解説つき。 |
 | [`glossary.ja.md`](glossary.ja.md) | 用語集（やさしい日本語）。FIM / CSP / WORM / egress / C2 / RCE / IAM などを1行ずつ。新語が出たら追記する。 |
 | [`os-patch-check-notes.md`](os-patch-check-notes.md) | 自分の機器の OS 更新を確認し、SARIF で `vuln_triage` に読み込む。**Linux(RHEL系)用 `scripts/os_patch_check_linux.py`** と **Windows用 `scripts/os_patch_check_windows.py`** に分けている。確認専用。実機では未検証。 |

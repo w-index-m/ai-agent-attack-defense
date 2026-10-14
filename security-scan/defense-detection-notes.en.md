@@ -168,3 +168,13 @@ trio to much of types ④⑤⑥. Priority: **R1/R4 (egress) → R2 (privileged c
 (rapid multi-tool) → R3 (recon) → R5 (persistence) → R6 (correlation)**.
 
 > Detection/defense design only. No attack execution or safety-bypass steps.
+
+## 7. Scope expansion: attacks on LLM systems themselves
+
+Everything above treats AI agents as the **attacker** (Gambit, ARTEX, and similar). The other
+direction — an LLM-based system becoming the **target** (prompt injection, system prompt
+leakage, LLMjacking) — is covered separately in
+[`llm-target-attacks.en.md`](llm-target-attacks.en.md) (日本語: [`llm-target-attacks.ja.md`](llm-target-attacks.ja.md)),
+confirmed against primary sources (EchoLeak/CVE-2025-32711, PLeak, Sysdig's LLMjacking reports,
+and several 2026 agent-framework CVEs), with connection points back to R1–R8/G1–G6 noted, not
+implemented as rules.
