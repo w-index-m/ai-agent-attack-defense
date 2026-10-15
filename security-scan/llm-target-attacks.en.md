@@ -41,6 +41,33 @@ Cases confirmed from primary sources (each is a **specific vendor/product implem
 - An agent process spawning an **unexpected child process** (same idea as this repository's **R7**/**R8**: a process that should not normally be invoked, invoked in a short window).
 - Whether audit logging exists on paths that receive instructions from outside, such as an MCP server (**G1**: skill install/auto-generation/self-modification; **G4**: audit log missing/stopped).
 
+### 2.1 A framework-agnostic generalization (Unit 42, CrewAI/AutoGen study, 2025-05)
+
+Unit 42 built **two functionally identical multi-agent investment-advisory apps** on two different
+open-source frameworks, CrewAI and AutoGen, and demonstrated the same nine attack scenarios against
+both. Their conclusion — **the vulnerabilities live in insecure design patterns, misconfiguration and
+tool integration, not in either framework itself** — matches this repository's own stance that the tool
+is neutral and what matters is design and governance.
+
+| Scenario category | Summary (attack payload wording is not transcribed) | Primary mitigations |
+|---|---|---|
+| Enumerating participant agents / system prompts / tool schemas | Instructs the orchestrator ("don't delegate, answer directly") to reveal internal structure | Prompt hardening, content filtering |
+| Unauthorized internal-network access (an SSRF variant) | Directs a web-reading tool at an internal private IP | Prompt hardening, content filtering, **tool input sanitization** |
+| Sensitive-data exfiltration via a mounted volume | Directs a code-interpreter tool to search a host-mounted directory for high-entropy strings (credential-shaped data) and Base64-encode the output | Prompt hardening, **code-executor sandboxing**, content filtering |
+| Service-account token theft via the cloud metadata service | Directs a code-interpreter tool to hit the cloud metadata endpoint (e.g., GCP's `metadata.google.internal`) with a specific header, retrieving the VM's service-account token | Same as above. **The same attack surface as the "Double Agents" case in §5 of this document** |
+| Exfiltrating an entire DB table via SQL injection | Mixes a SQL-injection payload into a tool's input to dump a table containing other users' transaction history | Prompt hardening, tool input sanitization, **tool vulnerability scanning**, content filtering |
+| BOLA (broken object-level authorization) access to another user's data | An innocuous-looking input (someone else's transaction ID) alone exploits a backend access-control gap | Tool vulnerability scanning (payload detection cannot catch this) |
+| Indirect prompt injection exfiltrating conversation history | A web-reading tool loads an attacker-poisoned page whose embedded instructions direct the agent to send the conversation history to an external domain | Prompt hardening, content filtering. **See §4 of this document (the same EchoLeak-style construct)** |
+
+Unit 42's five pillars of defense (see the source for full detail):
+1. **Prompt hardening**: narrowly scope each agent's role/authority and explicitly refuse out-of-scope requests.
+2. **Content filtering**: an inline defense layer inspecting input/output at runtime.
+3. **Tool input sanitization**: a tool must never unconditionally trust its caller (the agent); check type, range and special characters.
+4. **Tool vulnerability scanning**: run SAST/DAST/SCA regularly against every integrated tool.
+5. **Code-executor sandboxing**: restrict container networking (block internal services and metadata endpoints), minimize mounted volumes, drop unneeded Linux capabilities, block dangerous syscalls, enforce resource quotas.
+
+**No single mitigation is sufficient** — Unit 42's own conclusion is that defense-in-depth is required.
+
 ---
 
 ## 3. System prompt leakage (PLeak)
@@ -90,6 +117,41 @@ Cases confirmed from primary sources (each is a **specific vendor/product implem
 - A sudden spike in cloud billing or usage (an anomalous number of LLM inference calls).
 - Detecting, in cloud audit logs, **the act of disabling logging itself**. This maps almost directly to this repository's **G4** (audit log missing/stopped) as a real-world example.
 
+### 5.1 "Double Agents": Over-Broad Default Permissions in GCP Vertex AI (Unit 42, 2026-03-31)
+
+- **Primary source**: Unit 42 research using an agent they built on Vertex AI's Agent Engine. They
+  collaborated with Google through a responsible-disclosure process; Google revised its official
+  documentation as a result.
+- **Content (attack code not transcribed)**: an agent deployed to Vertex AI has an associated **P4SA
+  (Per-Project, Per-Product Service Agent)** that carries **excessive permissions by default**. A tool
+  inside the agent could reach the cloud metadata service (`metadata.google.internal`) and steal that
+  service agent's credentials (an access token).
+- **What the stolen credentials reached**: ① unrestricted read access to Cloud Storage buckets in the
+  consumer project; ② **restricted container images Google itself manages** (the internal implementation
+  of the Vertex AI Reasoning Engine); ③ sensitive files in the tenant project, including a `code.pkl`
+  (a Python pickle file — Python's own documentation warns that deserializing untrusted pickle data
+  carries RCE risk).
+- **A second structural weakness**: the OAuth scopes assigned at deployment time **reached as far as
+  Gmail, Calendar and Drive** in Google Workspace, and were not editable by default. Actual impact was
+  limited because the corresponding IAM permissions were not separately granted, but Unit 42 flags this
+  as a **design-level departure from least privilege**.
+- **Google's response**: beyond revising its documentation, Google recommended **BYOSA (Bring Your Own
+  Service Account)** — letting an organization replace the default service agent with its own
+  least-privilege service account — and confirmed that production images are protected against tampering.
+
+**Relation to the Gambit chain**: like the Sysdig case at the top of this section, this is "cloud
+credential theft enabling abuse of an LLM platform" — but here the entry point is not an exploited
+vulnerability, it is **excessive permission the cloud provider's own service grants by default**. A
+concrete case showing that Gambit chain step ⑥ (over-broad permissions) can arise from **the platform's
+own design**, with no need for the attacker to actively misconfigure anything.
+
+**Prevent (additional)**:
+- When using a managed AI-agent runtime, **do not take the default service account/service agent's
+  permissions at face value**; check whether an option like BYOSA lets you substitute your own
+  least-privilege account.
+- Remember OAuth scopes are a separate control layer from IAM permissions — check specifically whether
+  the defaults are too broad.
+
 ---
 
 ## 6. Connection points to this repository's existing framework
@@ -109,6 +171,7 @@ Cases confirmed from primary sources (each is a **specific vendor/product implem
 - None of these were run to confirm — only the published text was read; no exploit code was written.
 - The "Trend Micro" and "Azure AI Foundry" claims attached to PLeak are **not corroborated** (see §3).
 - The LLMjacking cost figures are Sysdig's estimates; other articles cite different measurement windows and amounts. Check Sysdig's own posts (sysdig.com/blog) for the exact numbers.
+- §2.1 (Unit 42's CrewAI/AutoGen study) and §5.1 (Unit 42's "Double Agents") both organize Unit 42's own primary articles; no independent additional verification was performed, and attack payloads/code are deliberately not transcribed.
 
 ## 8. References (primary and near-primary sources)
 
@@ -122,6 +185,9 @@ Cases confirmed from primary sources (each is a **specific vendor/product implem
 - VulnCheck, CVE-2026-75130 (Context7 MCP server): https://fieldguide.lutrasecurity.com/CVE-2026-75130/
 - NVD, CVE-2026-2256 (ModelScope ms-agent): https://nvd.nist.gov/vuln/detail/CVE-2026-2256
 - Sysdig, LLMjacking (initial report): https://sysdig.com/blog/
+- Unit 42, "AI Agents Are Here. So Are the Threats." (CrewAI/AutoGen study, 2025-05-01): https://unit42.paloaltonetworks.com/
+- Unit 42, "Double Agents: Exposing Security Blind Spots in GCP Vertex AI" (2026-03-31): https://unit42.paloaltonetworks.com/
 - OWASP, Top 10 for LLM Applications 2025: https://genai.owasp.org/llm-top-10/
+- OWASP, Agentic AI Threats and Mitigation: https://genai.owasp.org/
 
 > Detection and defense design only. No attack procedures or safety-bypass techniques.
