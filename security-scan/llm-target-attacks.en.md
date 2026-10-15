@@ -6,16 +6,17 @@
 > From here, it covers the other direction: "**a system built on an LLM becomes the target**." This is for organizations that use an LLM or AI agent and need to defend it, not for running an attack.
 > The policy is unchanged: **detection and defense design only, no attack reproduction (payloads, exploit code).**
 
-## 1. Four patterns (confirmed against primary sources)
+## 1. Five patterns (confirmed against primary sources)
 
 | Pattern | Case confirmed from a primary source | OWASP Top 10 for LLM (2025) |
 |---|---|---|
 | A. Prompt injection → execution with the agent's privileges | §2 below | **LLM01** (Prompt Injection) + **LLM06** (Excessive Agency) |
 | B. System prompt leakage | §3 below (PLeak) | **LLM07** (System Prompt Leakage) |
-| C. Indirect prompt injection (via external content) | §4 below (EchoLeak) | A variant of **LLM01** + **LLM02** (Sensitive Information Disclosure) |
-| D. LLMjacking (abuse of stolen cloud credentials) | §5 below (Sysdig) | **LLM10** (Unbounded Consumption) |
+| C. Indirect prompt injection (via external content) | §4 below (EchoLeak, plus the large-scale in-the-wild study in §4.1) | A variant of **LLM01** + **LLM02** (Sensitive Information Disclosure) |
+| D. LLMjacking (abuse of stolen cloud credentials) | §5 below (Sysdig, plus "Double Agents" in §5.1) | **LLM10** (Unbounded Consumption) |
+| E. Abuse of multi-agent sessions | §6 below (Agent Session Smuggling) | No clean existing category — a new pattern that exploits implicit trust between agents |
 
-> This repository's existing framework (R1–R8, G1–G6) is designed to **observe the network and hosts to detect an autonomous offensive agent**. Defending the LLM system itself (prompt design inside the app, output validation) is a different observation point. Overlaps are noted in §6.
+> This repository's existing framework (R1–R8, G1–G6) is designed to **observe the network and hosts to detect an autonomous offensive agent**. Defending the LLM system itself (prompt design inside the app, output validation) is a different observation point. Overlaps are noted in §7.
 
 ---
 
@@ -100,6 +101,48 @@ Unit 42's five pillars of defense (see the source for full detail):
 - An LLM/agent service account sending to a **domain it does not normally use** (same idea as R1/R4).
 - Checking generated outbound links for parameters that look like sensitive data.
 
+### 4.1 A Large-Scale In-the-Wild Study (Unit 42, 2026-03-03)
+
+- **Primary source**: Unit 42 analysis based on real telemetry. Where most prior research stopped at
+  proof-of-concept, this is notable for showing, at scale, **evidence that this is already being
+  weaponized in the wild**.
+- **Content**: attackers embed hidden instructions in web pages, which an LLM/agent unintentionally
+  executes while summarizing or analyzing that page's content. Unit 42 proposes a taxonomy along two
+  axes, **attacker intent** and **payload engineering**:
+  - **Intent (by severity)**: Low (forcing irrelevant output, benign anti-scraping) / Medium (biasing
+    hiring or review decisions) / High (bypassing AI ad review, SEO poisoning, forcing unauthorized
+    transactions) / Critical (data destruction, leaking sensitive data or the system prompt, denial of
+    service — e.g. a fork bomb)
+  - **Prompt delivery methods**: visual concealment (zero font size, off-screen positioning,
+    `display:none`, text matching the background color), obfuscation (embedding inside an SVG's CDATA
+    section, hiding inside HTML attributes), dynamic execution (assembling the payload at runtime in
+    JavaScript, delayed Base64 decoding)
+  - **Jailbreak methods**: invisible characters, homoglyph substitution, payload splitting, repeating
+    the instruction across multiple languages, JSON/syntax injection, and **social engineering that
+    impersonates authority** ("god mode," "developer mode," etc.)
+- **Telemetry trends**: the most common attacker intent was "forcing irrelevant output" at 28.6%,
+  followed by "data destruction" at 14.2%. The most common delivery method was **visible plaintext**
+  at 37.8% (suggesting attackers often don't even bother hiding it). The dominant jailbreak method by
+  far was **social engineering** at 85.2% — persuasion and impersonated authority are used far more in
+  practice than technical obfuscation.
+- **First confirmed real-world case**: an attempt to get an AI-based ad-review system to approve a scam
+  advertisement by embedding a hidden prompt claiming "this ad has already been approved" (reported by
+  Unit 42, first observed December 2025).
+
+**Prevent (additional)**:
+- Start from the fact that an **LLM cannot distinguish instructions from data within a single context
+  stream**. Adopt techniques like "spotlighting" — prompt designs that explicitly separate untrusted
+  content from trusted instructions.
+- Newer models' instruction-hierarchy and adversarial-training hardening help somewhat, but are
+  **not sufficient alone**; design-level, layered defense is required.
+
+**Detect (additional)**:
+- Unit 42 concludes that detection must go beyond simple pattern matching to combine **intent
+  analysis, prompt-visibility assessment, and correlation across telemetry sources**.
+
+> Per this document's policy, specific malicious site domains/IOCs are not transcribed here (see the
+> original article's "Indicators of Compromise" section).
+
 ---
 
 ## 5. LLMjacking (abuse of stolen cloud credentials)
@@ -154,7 +197,64 @@ own design**, with no need for the attacker to actively misconfigure anything.
 
 ---
 
-## 6. Connection points to this repository's existing framework
+## 6. Abuse of Multi-Agent Sessions (Agent Session Smuggling, Unit 42, 2025-10-31)
+
+> Patterns A-D so far share one shape: "a single LLM/agent is tricked by malicious data or has its
+> credentials stolen." This is different: **a malicious agent itself abuses a legitimate communication
+> session to trick another agent**. It doesn't fit cleanly into A-D, so it gets its own pattern.
+
+- **Primary source**: Unit 42 research targeting the A2A (Agent2Agent) protocol, a standard for
+  agent-to-agent communication. A PoC built with Google ADK/Gemini 2.5, using two agents: a financial
+  assistant and a research assistant.
+- **Background**: A2A is designed to be "stateful" — it remembers prior turns and maintains a coherent
+  multi-turn conversation. This property means collaborating agents **trust each other by default** in
+  many designs.
+- **The core of the attack**: a malicious remote agent inserts hidden additional instructions, across
+  multiple turns, **between** a legitimate client agent's request and the final response it eventually
+  returns. This can lead to ① context poisoning, ② data exfiltration, or ③ unauthorized tool execution
+  on the client agent's side.
+- **Conditions that make the attack possible (its key properties)**:
+  - **Statefulness**: the design persists session state (conversation history, variables, task
+    progress) tied to a session ID.
+  - **Multi-turn interaction**: enables a gradual, adaptive attack (known to be harder to defend
+    against than a single-shot jailbreak).
+  - **Autonomy and adaptiveness**: a model-driven agent can dynamically craft its instructions based
+    on the client's input and intermediate responses.
+  - **Invisible to the end user**: because a typical chat UI only shows the final response, the
+    smuggled exchange is **invisible to a human**.
+  - MCP (Model Context Protocol) is generally stateless and does not route through an AI model, so
+    this kind of multi-stage, adaptive attack is harder to mount there. This is a risk specific to
+    protocols — like A2A — that combine persistent state with model-driven reasoning.
+- **PoC 1 — sensitive information leakage**: the malicious research assistant, through a series of
+  seemingly innocuous clarification questions, successfully extracted the financial assistant's chat
+  history, system instructions, available tools and tool schemas.
+- **PoC 2 — unauthorized tool invocation**: using the same technique, it got the financial assistant to
+  invoke its `buy_stock` tool, executing a 10-share trade without the user's consent.
+- **Unit 42's conclusion**: this is not a vulnerability in the A2A protocol itself, but a broader design
+  question — **how any stateful protocol interacts with implicit trust between agents**.
+
+**Prevent**:
+- Require **out-of-band human confirmation, which the model cannot influence**, for any high-risk
+  action (a static UI element or push notification, not a path the generative output can shape).
+- **Context grounding**: maintain an "anchor" derived from the original user intent at session start,
+  and continuously check that subsequent exchanges stay semantically aligned with it. A significant
+  deviation should be flagged as a possible hijack and the session terminated.
+- Require **identity verification before agent-to-agent communication**, such as cryptographically
+  signed AgentCards (this prevents impersonation/spoofing, though it cannot stop a trusted agent that
+  has itself been compromised).
+- **Expose the client agent's internal exchanges to the end user** (execution logs, real-time activity
+  indicators), rather than showing only the final response.
+
+**Detect**:
+- Whether an agent-to-agent exchange drifts into topics or instructions unrelated to the user's
+  original intent (the technical basis for context grounding).
+- Whether the client agent invokes a tool without a direct instruction from the user (applying this
+  repository's **R7** idea — "unexpected multi-step execution" — to agent-to-agent communication
+  instead of network/host observation).
+
+---
+
+## 7. Connection points to this repository's existing framework
 
 | Pattern | Connection to the existing framework |
 |---|---|
@@ -162,18 +262,20 @@ own design**, with no need for the attacker to actively misconfigure anything.
 | B. System prompt leakage | Same idea as R3 (burst detection of repeated access) |
 | C. Indirect prompt injection | R1/R4 (watching egress to LLM/messaging APIs), applied to the agent's own outbound traffic |
 | D. LLMjacking | Same pattern as step ⑥ of the Gambit chain (over-broad IAM), G4 (audit log missing/stopped) |
+| E. Abuse of multi-agent sessions | R7 (unexpected multi-step execution) applied to agent-to-agent communication; existing rules observe network/hosts, not session content itself |
 
-**This is only pointing out the connection, not an implemented detection rule.** No R1–R8 rule (Sigma/Falco/Elastic/Datadog) has been written for these four patterns. The layer that matters here — prompt design and output validation inside the application — sits outside what this repository's existing tools (netcheck, vuln_triage, the detection rules) observe.
+**This is only pointing out the connection, not an implemented detection rule.** No R1–R8 rule (Sigma/Falco/Elastic/Datadog) has been written for these five patterns. The layer that matters here — prompt design and output validation inside the application — sits outside what this repository's existing tools (netcheck, vuln_triage, the detection rules) observe.
 
-## 7. Limits and what is unconfirmed
+## 8. Limits and what is unconfirmed
 
 - Both Semantic Kernel cases and ModelScope ms-agent were confirmed by reading **the original GitHub Security Advisory (GHSA) text directly** from this environment. Context7 could not be reached (neither NVD nor VulnCheck resolved from here), so it rests on secondary sources only, and **even whether a fix exists is disputed** across sources.
 - None of these were run to confirm — only the published text was read; no exploit code was written.
 - The "Trend Micro" and "Azure AI Foundry" claims attached to PLeak are **not corroborated** (see §3).
 - The LLMjacking cost figures are Sysdig's estimates; other articles cite different measurement windows and amounts. Check Sysdig's own posts (sysdig.com/blog) for the exact numbers.
-- §2.1 (Unit 42's CrewAI/AutoGen study) and §5.1 (Unit 42's "Double Agents") both organize Unit 42's own primary articles; no independent additional verification was performed, and attack payloads/code are deliberately not transcribed.
+- §2.1 (Unit 42's CrewAI/AutoGen study), §4.1 (Unit 42's web-based IDPI study), §5.1 (Unit 42's "Double Agents") and §6 (Unit 42's Agent Session Smuggling) all organize Unit 42's own primary articles; no independent additional verification was performed, and attack payloads/code are deliberately not transcribed.
+- §6's Agent Session Smuggling is PoC-stage research; Unit 42 itself states the attack has "not [been] observed [...] in the wild."
 
-## 8. References (primary and near-primary sources)
+## 9. References (primary and near-primary sources)
 
 - GitHub Security Advisory, GHSA-xjw9-4gw8-4rqx (Semantic Kernel, CVE-2026-26030): https://github.com/microsoft/semantic-kernel/security/advisories/GHSA-xjw9-4gw8-4rqx
 - GitHub Security Advisory, GHSA-2ww3-72rp-wpp4 (Semantic Kernel, CVE-2026-25592): https://github.com/microsoft/semantic-kernel/security/advisories/GHSA-2ww3-72rp-wpp4
@@ -187,6 +289,8 @@ own design**, with no need for the attacker to actively misconfigure anything.
 - Sysdig, LLMjacking (initial report): https://sysdig.com/blog/
 - Unit 42, "AI Agents Are Here. So Are the Threats." (CrewAI/AutoGen study, 2025-05-01): https://unit42.paloaltonetworks.com/
 - Unit 42, "Double Agents: Exposing Security Blind Spots in GCP Vertex AI" (2026-03-31): https://unit42.paloaltonetworks.com/
+- Unit 42, "Fooling AI Agents: Web-Based Indirect Prompt Injection Observed in the Wild" (2026-03-03): https://unit42.paloaltonetworks.com/
+- Unit 42, "When AI Agents Go Rogue: Agent Session Smuggling Attack in A2A Systems" (2025-10-31): https://unit42.paloaltonetworks.com/
 - OWASP, Top 10 for LLM Applications 2025: https://genai.owasp.org/llm-top-10/
 - OWASP, Agentic AI Threats and Mitigation: https://genai.owasp.org/
 
