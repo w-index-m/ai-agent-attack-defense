@@ -260,11 +260,11 @@ own design**, with no need for the attacker to actively misconfigure anything.
 |---|---|
 | A. Abuse of execution privilege | R7/R8 (unexpected process spawns), G1 (skill auto-generation), G4 (audit logging) |
 | B. System prompt leakage | Same idea as R3 (burst detection of repeated access) |
-| C. Indirect prompt injection | R1/R4 (watching egress to LLM/messaging APIs), applied to the agent's own outbound traffic |
-| D. LLMjacking | Same pattern as step ⑥ of the Gambit chain (over-broad IAM), G4 (audit log missing/stopped) |
-| E. Abuse of multi-agent sessions | R7 (unexpected multi-step execution) applied to agent-to-agent communication; existing rules observe network/hosts, not session content itself |
+| C. Indirect prompt injection | R1/R4 (watching egress to LLM/messaging APIs), applied to the agent's own outbound traffic. **Implemented as R9** (`detections/sigma/r9_idpi_steered_egress.yml`, `detections/datadog/r9_idpi_steered_egress.json`) |
+| D. LLMjacking | Same pattern as step ⑥ of the Gambit chain (over-broad IAM), G4 (audit log missing/stopped). §5.1's cloud-metadata-service credential theft is **implemented as R10** (`detections/sigma/r10_metadata_service_credential_access.yml`, `detections/datadog/r10_metadata_service_credential_access.json`) |
+| E. Abuse of multi-agent sessions | R7 (unexpected multi-step execution) applied to agent-to-agent communication. **Implemented as R11** (`detections/datadog/r11_agent_session_smuggling.json`, though it requires application-level tool-call log instrumentation) |
 
-**This is only pointing out the connection, not an implemented detection rule.** No R1–R8 rule (Sigma/Falco/Elastic/Datadog) has been written for these five patterns. The layer that matters here — prompt design and output validation inside the application — sits outside what this repository's existing tools (netcheck, vuln_triage, the detection rules) observe.
+**A and B are only pointing out the connection, not an implemented detection rule** (their R7/R8/R3 references are an indirect application of rules originally written for the Gambit chain's offensive-agent side; no dedicated rule was written). For C, D and E, actual Sigma/Datadog rules were added to `security-scan/detections/` as R9–R11 (see `security-scan/detections/README.md`). R9/R10 can be detected from standard proxy/network logs; R11 (Agent Session Smuggling) requires application-level tool-call log instrumentation, since no generic network signature exists for it.
 
 ## 8. Limits and what is unconfirmed
 

@@ -184,11 +184,11 @@ Unit 42 が提示する防御の5本柱（詳細は出典を参照）：
 |---|---|
 | A. 実行権限の濫用 | R7/R8（想定外のプロセス起動）、G1（スキルの自動生成）、G4（監査ログ） |
 | B. システムプロンプト漏洩 | R3（反復アクセスのバースト検知）と同じ発想 |
-| C. 間接的プロンプトインジェクション | R1/R4（LLM・メッセージング API への送信の監視）を、エージェント自身の送信に応用 |
-| D. LLMjacking | Gambit 連鎖の⑥（IAM の過大な権限）と同じ構図、G4（監査ログの欠落・停止） |
-| E. マルチエージェント間のセッション悪用 | R7（想定外の多段階実行）をエージェント間通信に応用。既存ルールはネットワーク/ホスト観測のため、セッション内容そのものは観測対象外 |
+| C. 間接的プロンプトインジェクション | R1/R4（LLM・メッセージング API への送信の監視）を、エージェント自身の送信に応用。**R9として実装済み**（`detections/sigma/r9_idpi_steered_egress.yml`、`detections/datadog/r9_idpi_steered_egress.json`） |
+| D. LLMjacking | Gambit 連鎖の⑥（IAM の過大な権限）と同じ構図、G4（監査ログの欠落・停止）。§5.1のクラウドメタデータサービス経由の資格情報窃取は**R10として実装済み**（`detections/sigma/r10_metadata_service_credential_access.yml`、`detections/datadog/r10_metadata_service_credential_access.json`） |
+| E. マルチエージェント間のセッション悪用 | R7（想定外の多段階実行）をエージェント間通信に応用。**R11として実装済み**（`detections/datadog/r11_agent_session_smuggling.json`、ただしアプリ側のツール呼び出しログの計装が前提） |
 
-**ただし、これは接続点の指摘であり、検知ルールの実装ではない。** R1〜R8 のルール（Sigma/Falco/Elastic/Datadog）は、今回の 5 類型向けには作っていない。アプリ内のプロンプト設計・出力検証という層は、このリポジトリの既存ツール（netcheck、vuln_triage、検知ルール）の観測点の外にある。
+**A・Bは接続点の指摘のみで、検知ルールの実装ではない**（R7/R8・R3は本来Gambit連鎖＝攻撃エージェント側向けのルールへの間接的な応用であり、専用ルールは作っていない）。C・D・Eは、`security-scan/detections/`にR9–R11として実際のSigma/Datadogルールを追加した（`security-scan/detections/README.md`参照）。R9/R10は標準的なプロキシ/ネットワークログで検知できるが、R11（Agent Session Smuggling）はアプリケーション側でのツール呼び出しログの計装が前提で、汎用的なネットワークシグネチャは存在しない。
 
 ## 8. 限界・未確認の点
 
