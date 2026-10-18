@@ -4,8 +4,8 @@ Strix(AIエージェントによる自動ペンテスト)をローカル(Windows
 動かす一連の試み([`../strix-local-poc/windows-wsl-ollama-setup.md`](../strix-local-poc/windows-wsl-ollama-setup.md))
 と並行して、「発想を変えて、AIエージェントなしで脆弱性自体を実証する」ために作った最小限のラボ。
 当初はSQLiのみだったが、「Strixは他の脆弱性クラスも見る」という問いを受けてXSS、
-OSコマンドインジェクション・パストラバーサル、さらにCSRF(クロスサイト・リクエスト・
-フォージェリ)にも対応範囲を広げた。
+OSコマンドインジェクション・パストラバーサル・CSRF(クロスサイト・リクエスト・フォージェリ)、
+さらにアクセス制御の不備(IDOR/BOLA)にも対応範囲を広げた。
 
 Claude Codeのクラウドサンドボックス環境は外向きのLLM通信がほぼ全てブロックされているため
 (詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md))、Strixのようなエージェント実行は
@@ -29,7 +29,7 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
     としての組み込みが現実的(例: `scan_all.sh`の出力が期待通りか`pytest`等で検証し、
     `summarize.py`互換のJSON/SARIFを吐かせてCIサマリに乗せる)。
 - `summarize.py`は現状Semgrep/Trivy/gitleaks/ZAPのJSON形式を前提にしている
-  ため、`auto_vuln_scanner.py`/`csrf_check.py`の出力をその形式に変換する層が別途必要。
+  ため、`auto_vuln_scanner.py`/`csrf_check.py`/`idor_check.py`の出力をその形式に変換する層が別途必要。
 
 **次にこの話を再開するときは、ここを読むこと。** (2026-10-19 時点で未着手、との記録)
 
@@ -52,7 +52,7 @@ python3 auto_vuln_scanner.py --url http://8.8.8.8/login --class sqli --baseline 
 
 ## 対象アプリ
 
-[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。5種類の脆弱性クラスを含む。
+[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。6種類の脆弱性クラスを含む。
 
 - `/login`: 文字列連結でSQLを組み立てる、**意図的に脆弱**なエンドポイント(SQLi)
 - `/login_safe`: パラメータ化クエリ(プレースホルダ `?`)を使う、**修正済み**の同じ機能のエンドポイント
@@ -66,6 +66,10 @@ python3 auto_vuln_scanner.py --url http://8.8.8.8/login --class sqli --baseline 
 - `/csrf_login` + `/csrf_transfer`: セッションCookieだけで送金処理を実行する、**意図的に脆弱**な
   エンドポイント(CSRF)。CSRFトークンの検証が一切無い。
 - `/csrf_transfer_safe`: ログイン時に発行したCSRFトークンの一致を検証する、**修正済み**の同じ機能のエンドポイント
+- `/idor_login` + `/idor_account`: ログイン中のユーザーIDと無関係に、指定した`user_id`の
+  アカウント情報をそのまま返す、**意図的に脆弱**なエンドポイント(アクセス制御の不備/IDOR・BOLA)
+- `/idor_account_safe`: 要求された`user_id`がログイン中のセッション本人のものかを検証する、
+  **修正済み**の同じ機能のエンドポイント
 
 起動:
 
@@ -185,6 +189,33 @@ curl -s -b cookies2.txt -X POST "http://127.0.0.1:5000/csrf_transfer_safe" -d "a
 # => CSRF token missing or invalid.
 ```
 
+### 7. アクセス制御の不備(IDOR/BOLA、`/idor_account`)
+
+IDOR(Insecure Direct Object Reference)/BOLA(Broken Object Level Authorization)は、
+「ログインはしているが、**他人のデータへのアクセス権限は無い**」という当たり前の境界が
+チェックされていないケース。悪意あるペイロードは不要で、**正当な自分のセッションのまま、
+URLパラメータの数字(オブジェクトの参照先)を変えるだけ**で成立する。
+
+```bash
+# 一般ユーザー alice としてログイン
+curl -s "http://127.0.0.1:5000/idor_login?username=alice" -c cookies3.txt
+# => Logged in as alice (user_id=1).
+
+# 自分(id=1)ではなく、admin(id=3)のアカウント情報を覗く
+curl -s -b cookies3.txt "http://127.0.0.1:5000/idor_account?user_id=3"
+# => Account 3: {'username': 'admin', 'email': 'admin@example.com',
+#     'private_note': 'Admin recovery codes: 1234-5678'}
+```
+
+一般ユーザーのセッションのまま、管理者アカウントの機密情報(リカバリーコードを含む)が
+そのまま取得できてしまう。対策版(`/idor_account_safe`、要求された`user_id`がセッション
+本人のものかを検証)に同じリクエストを送ると、`403 Forbidden`で拒否される。
+
+```bash
+curl -s -b cookies3.txt "http://127.0.0.1:5000/idor_account_safe?user_id=3"
+# => Forbidden: you may only access your own account.
+```
+
 ## まとめ・学び
 
 - SQLiの本質(文字列連結でSQLを組み立てる = 入力がコードとして解釈される)は、
@@ -205,6 +236,10 @@ curl -s -b cookies2.txt -X POST "http://127.0.0.1:5000/csrf_transfer_safe" -d "a
 [`csrf_check.py`](csrf_check.py): CSRF専用の別スクリプト。「ペイロードを工夫する」のではなく
 「ログイン→セッションCookieだけでトークン無しの状態変更リクエストを送る→成立するか」を
 機械的に判定するため、`auto_vuln_scanner.py`とは別の仕組みになっている(同じスコープガードは共有)。
+
+[`idor_check.py`](idor_check.py): アクセス制御の不備(IDOR/BOLA)専用の別スクリプト。
+「悪意あるペイロード」ではなく「正当な自分のセッションのまま、他人のオブジェクトID(`user_id`)
+を指定する」という、*一見正常なリクエスト*が通ってしまうかを判定するため、これも専用の仕組み。
 
 ```bash
 pip3 install --user requests
@@ -248,11 +283,17 @@ python3 csrf_check.py --url http://127.0.0.1:5000 \
 # CSRF: 修正版 /csrf_transfer_safe をチェック(拒否されるはず)
 python3 csrf_check.py --url http://127.0.0.1:5000 \
   --login-path /csrf_login --transfer-path /csrf_transfer_safe
+
+# IDOR/BOLA: 脆弱版 /idor_account をチェック(alice で admin のデータを覗く)
+python3 idor_check.py --url http://127.0.0.1:5000 --account-path /idor_account
+
+# IDOR/BOLA: 修正版 /idor_account_safe をチェック(拒否されるはず)
+python3 idor_check.py --url http://127.0.0.1:5000 --account-path /idor_account_safe
 ```
 
 ## まとめて1回で実行する
 
-[`scan_all.sh`](scan_all.sh): 上記10パターン(SQLi/XSS/コマンドインジェクション/パストラバーサル/CSRF
+[`scan_all.sh`](scan_all.sh): 上記12パターン(SQLi/XSS/コマンドインジェクション/パストラバーサル/CSRF/IDOR
 × それぞれ脆弱/修正)を1コマンドで実行するラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
 
 ```bash
@@ -274,6 +315,8 @@ python3 vulnerable_app.py &
 | パストラバーサル | `/file_safe`(修正済み) | 3 | 0(誤検知なし) |
 | CSRF | `/csrf_transfer`(脆弱) | 1(トークン無しの偽装リクエスト) | VULNERABLE(トークン無しで送金が成立) |
 | CSRF | `/csrf_transfer_safe`(修正済み) | 1 | Not vulnerable(403で拒否) |
+| IDOR/BOLA | `/idor_account`(脆弱) | 1(他人のuser_id指定) | VULNERABLE(adminの機密情報が取得できる) |
+| IDOR/BOLA | `/idor_account_safe`(修正済み) | 1 | Not vulnerable(403で拒否) |
 
 (パストラバーサルは3種のペイロードのうち1種のみ検出: この最小アプリは入力をそのまま
 `os.path.join`に渡すだけなので、URLエンコード済み(`..%2f`)や二重ドット変種(`....//`)の
@@ -283,8 +326,9 @@ python3 vulnerable_app.py &
 
 脆弱性クラスを追加する方法: 「GETパラメータにペイロードを注入してレスポンスを比較する」という型に
 合うクラス(SQLi/XSS/cmdi/traversal)なら`VULN_CLASSES`にペイロードリストと`detect()`関数を1組
-追加するだけ。CSRFのように型が違う(セッション状態を跨いだ判定が要る)クラスは、`csrf_check.py`
-のように専用スクリプトを別途書く必要がある。いずれにせよLLMの「判断」をルールで置き換えている分、
+追加するだけ。CSRFやIDOR/BOLAのように型が違う(セッション状態を跨いだ判定が要る)クラスは、
+`csrf_check.py`/`idor_check.py`のように専用スクリプトを別途書く必要がある。いずれにせよ
+LLMの「判断」をルールで置き換えている分、
 対応したいクラスの数だけ実装を増やす必要がある(これがStrixのような汎用エージェントとの根本的な
 違い — Strixは未知のケースにもLLMの推論で対応しうるが、このアプローチは既知のパターンにしか反応しない)。
 

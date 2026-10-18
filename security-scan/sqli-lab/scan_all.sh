@@ -31,3 +31,11 @@ echo
 echo "=== CSRF: /csrf_transfer_safe (fixed) ==="
 python3 csrf_check.py --url "$BASE_URL" --login-path /csrf_login --transfer-path /csrf_transfer_safe || true
 echo
+
+echo "=== IDOR/BOLA: /idor_account (vulnerable) ==="
+python3 idor_check.py --url "$BASE_URL" --account-path /idor_account || true
+echo
+
+echo "=== IDOR/BOLA: /idor_account_safe (fixed) ==="
+python3 idor_check.py --url "$BASE_URL" --account-path /idor_account_safe || true
+echo
