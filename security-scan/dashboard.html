@@ -172,6 +172,21 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
     <span class="chip" style="border-color:var(--c4);cursor:pointer" data-type="t6">⑥ アシスタント</span>
     <span class="chip" style="cursor:pointer" data-type="all">すべて表示</span>
   </div>
+  <div class="card" style="margin:0 0 10px">
+    <p class="cap" style="line-height:1.6;margin:0 0 6px"><b>一言でまとめると</b>：R1–R8は、AIエージェントが侵入先で実際にとる行動の型。防御側の共通した答えは「<b>単発では見逃しても、組み合わせ(R6)で必ず引っかける</b>」こと。</p>
+    <table style="font-size:12.5px"><thead>
+      <tr><th>ID</th><th>攻撃側がやること（たとえ話）</th><th>防御側の考え方（たとえ話）</th></tr>
+    </thead><tbody>
+      <tr><td>R1</td><td>侵入先から外部のAIに「次に何をすべきか」を相談し続ける（泥棒がスマホで外部の司令塔に指示を仰ぐイメージ）</td><td>許可したAIサービス以外への発信を遮断する（内線電話を外部へかけられなくする）</td></tr>
+      <tr><td>R2</td><td>本来許されない「何でもできるモード」でコンテナを起動し、強力な道具を使えるようにする</td><td>その起動モード自体を、申請なしには拒否する（安全装置なしでは機械が動かないようにする）</td></tr>
+      <tr><td>R3</td><td>裏口や通用口がないか、片っ端からドアを叩いて回る</td><td>短時間に大量のドアを叩かれたら、警備員が気づいて記録する</td></tr>
+      <tr><td>R4</td><td>乗っ取ったサーバから、外部のチャットアプリ経由で攻撃者本人に結果を報告する</td><td>業務で使わないチャットアプリへの通信を遮断する</td></tr>
+      <tr><td>R5</td><td>一度追い出されても自動的にまた侵入できるよう、裏口の合鍵を複製して隠す（定期実行の仕掛けを仕込む）</td><td>新しい「定期実行の仕掛け」が勝手に作られていないか監視する</td></tr>
+      <tr><td>R7</td><td>1人の作業員が、短時間に泥棒道具一式を次々取り出して使う、いかにも「偵察中」の動き</td><td>1人が短時間に多種の専門道具を立て続けに使っていたら、それ自体を怪しい兆候として検知する</td></tr>
+      <tr><td>R6</td><td>単体では見逃されがちな複数の小さな不審行動を、連鎖させて一気に攻撃を進める</td><td>個々の兆候を組み合わせで評価し、組み合わさったら警報を強くする（ダッシュボードの核）</td></tr>
+      <tr><td>R8</td><td>Webサーバの公開フォルダに、遠隔操作用の裏口プログラムをこっそり置く</td><td>公開フォルダへの新規ファイル配置や、そこから起動した異常なプロセスを検知する</td></tr>
+    </tbody></table>
+  </div>
   <div class="sc">
   <table id="covtab">
     <thead>
