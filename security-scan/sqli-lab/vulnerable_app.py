@@ -1,12 +1,16 @@
 """
 Deliberately vulnerable demo app (SQLi, reflected XSS, OS command
-injection, path traversal, CSRF), for local/offline testing only.
+injection, path traversal, CSRF, IDOR/BOLA, insecure deserialization),
+for local/offline testing only.
 
 Scope: run only against this app, on localhost, in an isolated sandbox.
 Do not deploy this code anywhere reachable by anyone else.
 """
 
+import base64
+import json
 import os
+import pickle
 import secrets as secrets_mod
 import subprocess
 import sqlite3
@@ -235,6 +239,35 @@ def idor_account_safe() -> tuple[str, int]:
 
     account = IDOR_ACCOUNTS[requested_id]
     return f"Account {requested_id}: {account}", 200
+
+
+@app.route("/deserialize", methods=["POST"])
+def deserialize() -> tuple[str, int]:
+    body = request.get_data()
+
+    # VULNERABLE: pickle.loads() on attacker-controlled bytes executes
+    # arbitrary code during unpickling (via __reduce__), not just parses
+    # data. This is remote code execution, not just a data-format bug.
+    try:
+        raw = base64.b64decode(body)
+        obj = pickle.loads(raw)
+    except Exception as exc:  # noqa: BLE001 - deliberately broad for the demo
+        return f"Error: {exc}", 400
+    return f"Deserialized object: {obj!r}", 200
+
+
+@app.route("/deserialize_safe", methods=["POST"])
+def deserialize_safe() -> tuple[str, int]:
+    body = request.get_data()
+
+    # FIXED: json.loads() only ever produces plain data (dict/list/str/
+    # number/bool/None) -- there is no mechanism for it to execute code,
+    # unlike pickle's object-reconstruction protocol.
+    try:
+        obj = json.loads(body)
+    except Exception as exc:  # noqa: BLE001 - deliberately broad for the demo
+        return f"Error: {exc}", 400
+    return f"Deserialized object: {obj!r}", 200
 
 
 if __name__ == "__main__":
