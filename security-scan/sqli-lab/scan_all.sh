@@ -39,3 +39,11 @@ echo
 echo "=== IDOR/BOLA: /idor_account_safe (fixed) ==="
 python3 idor_check.py --url "$BASE_URL" --account-path /idor_account_safe || true
 echo
+
+echo "=== Deserialization RCE: /deserialize (vulnerable) ==="
+python3 deserialize_check.py --url "$BASE_URL/deserialize" || true
+echo
+
+echo "=== Deserialization RCE: /deserialize_safe (fixed) ==="
+python3 deserialize_check.py --url "$BASE_URL/deserialize_safe" || true
+echo
