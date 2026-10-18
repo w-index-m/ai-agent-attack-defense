@@ -121,6 +121,16 @@ python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/search_safe --class xss
   --baseline q=zzz --fuzz q
 ```
 
+## まとめて1回で実行する
+
+[`scan_all.sh`](scan_all.sh): 上記4パターン(SQLi×脆弱/修正、XSS×脆弱/修正)を1コマンドで実行する
+ラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
+
+```bash
+python3 vulnerable_app.py &
+./scan_all.sh
+```
+
 実行結果:
 
 | 脆弱性クラス | 対象 | ペイロード数 | 検出数 |
