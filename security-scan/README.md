@@ -43,7 +43,7 @@ tags (R1–R11, G1–G6), see [`../shared/taxonomy.json`](../shared/taxonomy.jso
 | [`strix-local-backend-notes.md`](strix-local-backend-notes.md) | Strix execution-flow analysis and a Docker-free local backend design. |
 | [`strix-local-poc/`](strix-local-poc/) | PoC for the above (patch, verification scripts, results). |
 | [`cairn-lab/`](cairn-lab/) | Runbook and real config for running Cairn in an authorized, isolated lab; plus a no-attack mock config. |
-| [`strix-local-poc/windows-wsl-ollama-setup.md`](strix-local-poc/windows-wsl-ollama-setup.md) (JA) | Hands-on Windows 11 + WSL2 + local-Ollama setup to run Strix with no cloud LLM cost, against a self-hosted practice target (e.g. DVWA). |
+| [`strix-local-poc/windows-wsl-ollama-setup.md`](strix-local-poc/windows-wsl-ollama-setup.md) (JA) | Hands-on Windows 11 + WSL2 + local-Ollama setup to run Strix with no cloud LLM cost, against a self-hosted practice target (e.g. DVWA). The wiring works end to end, but across four configurations (1.5B, 7B, 7B with forced tool-choice, and an 8B tool-calling model) none sustained a full scan: small CPU-inference models reliably broke on malformed tool-call JSON or fell into pointless command loops. Includes a PowerShell launcher ([`start-strix-test.ps1`](strix-local-poc/start-strix-test.ps1)) that automates the setup steps. |
 
 ### [Scope expansion] LLM systems as the target
 

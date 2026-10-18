@@ -38,7 +38,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`strix-local-backend-notes.md`](strix-local-backend-notes.md) | Strix の実行フロー解析と、Docker 不要ローカル実行の設計。 |
 | [`strix-local-poc/`](strix-local-poc/) | 上記の PoC（パッチ・検証スクリプト・結果）。 |
 | [`cairn-lab/`](cairn-lab/) | Cairn を認可済み隔離ラボで動かすランブックと実設定（`dispatch.lab.yaml` ほか）、攻撃なし mock 設定。 |
-| [`strix-local-poc/windows-wsl-ollama-setup.md`](strix-local-poc/windows-wsl-ollama-setup.md) | Windows 11 + WSL2 + ローカルOllamaで、クラウドLLM課金なしにStrixを動かす実機セットアップ手順（DVWA等の自分で立てた練習環境を対象）。 |
+| [`strix-local-poc/windows-wsl-ollama-setup.md`](strix-local-poc/windows-wsl-ollama-setup.md) | Windows 11 + WSL2 + ローカルOllamaで、クラウドLLM課金なしにStrixを動かす実機セットアップ手順（DVWA等の自分で立てた練習環境を対象）。配線自体は成立するが、4通りの構成（1.5B／7B／7B+強制ツール呼び出し／8Bのツール呼び出し特化モデル）いずれもスキャン完走には至らず、CPU推論の小型モデルではツール呼び出しのJSONが壊れる、または無意味なコマンドループに陥ることを確認。セットアップを自動化するPowerShellスクリプト（[`start-strix-test.ps1`](strix-local-poc/start-strix-test.ps1)）も収録。 |
 
 ### 【スコープ拡張】LLMシステムが標的になる側
 
