@@ -122,7 +122,39 @@ strix -n -t http://localhost:8080 --scan-mode quick --max-budget 10
   同梱されているため追加導入は不要。Docker不要の `local` バックエンドを使う場合は
   `strix-local-backend-notes.md` を参照(caido/nmap等は別途ホストへの導入が必要)。
 
+## 実機での動作確認(手順通りに実施した記録)
+
+上記手順を、実際に Windows 11 + WSL2(Ubuntu) + Docker Desktop + Ollama(`qwen2.5:1.5b`) の
+組み合わせで最後まで実施し、以下を確認した。
+
+- `OLLAMA_HOST=0.0.0.0:11434` 設定 → Ollama 再起動 → `Listening on [::]:11434` を確認。
+- WSL から `localhost` では届かず、`ip route show | grep default` で得た Windows ホストの
+  実IP(例: `172.25.208.1`)で `curl http://<IP>:11434/api/tags` が通ることを確認。
+  （ファイアウォール設定は今回は不要だった。環境により `New-NetFirewallRule` が要る場合がある)
+- `curl -sSL https://strix.ai/install | bash` のインストール直後は、同じシェルでは
+  `strix` コマンドが見つからない(PATH が `.bashrc` に追記されるだけで、今のシェルには
+  未反映)。`source ~/.bashrc` で解決。
+- Docker Desktop の **WSL Integration** が対象ディストロで無効だと、`docker` コマンド自体が
+  WSL側に存在しない(`docker info` 以前の問題)。Settings → Resources → WSL Integration で
+  有効化してから `Apply & Restart` が必要。
+- WSL Integration 有効化後も `docker ps` が
+  `permission denied while trying to connect to the docker API at unix:///var/run/docker.sock`
+  で失敗するケースがあった。原因はユーザーが `docker` グループ未所属。
+  `sudo usermod -aG docker $USER` 後、**ターミナルを再起動しないと反映されない**
+  (`groups` で `docker` が出るか確認)。
+- `docker pull ghcr.io/usestrix/strix-sandbox:1.3.0` は 700MB超あり、回線状況によっては
+  `short read: unexpected EOF` で失敗することがあった。同じコマンドを再実行すれば、
+  `Pull complete` 済みの層はキャッシュされ、失敗した層だけ再取得される。
+- `export` した環境変数(`STRIX_LLM` 等)は、**ターミナルを閉じて開き直すと消える**
+  (`.bashrc` に書いていない限り)。都度 `echo $STRIX_LLM` で確認するのが安全。
+- 上記全てをクリアした状態で `strix -n -t http://localhost:8080 --scan-mode quick
+  --max-budget 10` を実行し、**`ollama/qwen2.5:1.5b` から実際にレスポンスが返ってくる
+  ことを確認した**(Input ~2.0K tokens / Output 269 tokens / Cost $0.0000)。
+  → 「ローカルOllamaでの接続は未検証」としていた前段の記述を、ここで実証済みに更新する。
+  GPU なし(CPU 推論、AMD iGPU 未対応環境)でも、最初の応答に数分程度かかる以外は動作した。
+
 ## 未検証(このメモの範囲外)
 
-- 小型ローカルモデルでのスキャン完走、および検出精度。
+- 1.5B モデルでのスキャン完走、および検出精度(途中でツール呼び出し形式を誤って
+  止まる可能性は残っている。続報があれば追記する)。
 - `qwen2.5:7b` 以上のモデルでの動作。
