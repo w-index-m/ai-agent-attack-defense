@@ -534,6 +534,48 @@ litellmの`acompletion`経由)でのみ404が再現し、縮小版の再現で�
 リクエストサイズそのもの(OpenRouterのゲートウェイが、本来413を返すべき巨大リクエストに
 対して404を返している可能性)が疑わしいが、このメモの時点では**根本原因を特定できていない**。
 
+## 追加パッチ: ツールセットの軽量化(`STRIX_MINIMAL_TOOLS=1`)
+
+ここまでの検証で、**Strix本体のシステムプロンプト＋43個のツール定義が約10万文字/
+47,000トークンにもなる**ことが、ローカル小型モデルの迷走にも、Groq無料枠のTPM超過にも、
+共通して悪さをしていることが分かった。そこで、実際のスキャンに使わないツールを
+opt-inで削るパッチを追加した。
+
+対象(DVWAでのSQLi確認のような、単一エージェント・MCP接続なしのquickスキャン)では、
+以下は実質使われない:
+
+- **MCPツール(5個)**: `list_mcps`等。MCP接続を1つも設定していないので常に空振り。
+  (`groq-empty-schema.patch`で直したのも、まさにこの`list_mcps`のスキーマ不備)
+- **サブエージェント関連(5個)**: `create_agent`等。単一エージェントのquickスキャンでは未使用。
+- **ノート・カバレッジ・脅威モデル管理(13個)**: 進捗記録の付随ツールで、SQLi確認だけなら
+  本質的ではない。
+
+一方、**Todo管理(6個)はあえて残した**。ローカル7Bモデルが「Step1: ログイン→Step2:
+Security設定→Step3: SQLiテスト」と自分でTodoを書き出して進められるようにすることで、
+今まで見られた「`ls`/`pwd`の無意味な繰り返し」を減らせるのではないか、という狙い。
+脆弱性レポート・リクエスト履歴・サイトマップ・scope_rules・Web検索・シェル/ファイル
+システム系のツールは、実際のスキャンに必要なので残した。
+
+結果、**43個→21個**までツール数を削減できた(Filesystem/Shell関連のツールと
+`finish_scan`は別途加わるため、合計の総数はこれより少し増える)。
+
+パッチ: [`strix-minimal-tools.patch`](strix-minimal-tools.patch)
+(`groq-empty-schema.patch`適用後の`strix/agents/factory.py`に対する追加差分)。
+
+適用方法(`groq-empty-schema.patch`を先に当てた後):
+
+```bash
+patch -p0 strix/agents/factory.py < ~/ai-agent-attack-defense/security-scan/strix-local-poc/strix-minimal-tools.patch
+# もしくは patch -p1 ... (pathの深さはpatchコマンドの警告に合わせて調整する)
+
+export STRIX_MINIMAL_TOOLS=1
+uv run strix -n -t http://localhost:8080 --scan-mode quick --max-budget 10 --max-turns 30 \
+  --instruction "..."
+```
+
+このセッション内でのツール数削減の単体検証(`_filtered_base_tools()`の戻り値を直接確認)は
+通ったが、**実際にqwen2.5:7bやGroq/OpenRouterでスキャン完走率が上がるかは未検証**。
+
 ## 未検証(このメモの範囲外)
 
 - `qwen2.5:7b` でのスキャン完走、および実際の脆弱性検出精度(DVWAの既知のSQLi等を

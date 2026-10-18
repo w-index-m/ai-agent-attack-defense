@@ -1,0 +1,84 @@
+--- /tmp/isolate/after_groq_patch.py	2026-10-18 11:58:28.210699866 +0000
++++ strix/agents/factory.py	2026-10-18 11:59:08.809461292 +0000
+@@ -6,6 +6,7 @@
+ import inspect
+ import json
+ import logging
++import os
+ import re
+ from typing import TYPE_CHECKING, Any
+ 
+@@ -646,6 +647,59 @@
+ _EXTRA_TOOLS: list[Tool] = []
+ 
+ 
++# Opt-in trim for weak tool-callers (small local models, and any route whose
++# request-size limits a large toolset blows past -- see
++# security-scan/strix-local-poc/windows-wsl-ollama-setup.md for why this
++# exists). Drops bookkeeping tools (notes/coverage/threat-model), MCP
++# dispatch tools (irrelevant with zero MCP connections configured, and the
++# exact tool whose schema blocked every Groq request before the separate
++# groq-empty-schema.patch), and multi-agent orchestration tools (unused by
++# a single root agent that never spawns children). Enable with
++# STRIX_MINIMAL_TOOLS=1. Todo tools are kept on purpose: a weak model
++# benefits from being able to write down "step 1 / step 2 / step 3" and
++# check them off, which is exactly what was missing when it drifted into
++# pointless ls/pwd loops (see the same notes file). Vulnerability/dependency
++# reporting, requests, sitemap, scope rules, web search and shell/
++# filesystem tools are kept -- those are what an actual scan needs to
++# produce a result.
++_MINIMAL_TOOLS_DROP: frozenset[str] = frozenset(
++    {
++        "create_note",
++        "list_notes",
++        "get_note",
++        "update_note",
++        "delete_note",
++        "record_coverage",
++        "update_coverage",
++        "list_coverage",
++        "get_threat_model",
++        "save_threat_model",
++        "amend_threat_model",
++        "create_dependency_report",
++        "list_mcps",
++        "search_mcp_tools",
++        "get_mcp_tool_schema",
++        "describe_mcp",
++        "call_mcp",
++        "view_agent_graph",
++        "send_message_to_agent",
++        "wait_for_agents",
++        "create_agent",
++        "stop_agent",
++    }
++)
++
++
++def _minimal_tools_enabled() -> bool:
++    return os.environ.get("STRIX_MINIMAL_TOOLS", "").strip().lower() in {"1", "true", "yes"}
++
++
++def _filtered_base_tools() -> tuple[Tool, ...]:
++    if not _minimal_tools_enabled():
++        return _BASE_TOOLS
++    return tuple(t for t in _BASE_TOOLS if getattr(t, "name", None) not in _MINIMAL_TOOLS_DROP)
++
++
+ def _ensure_unique_tool_names(tools: Sequence[Tool]) -> None:
+     seen: set[str] = set()
+     duplicates: set[str] = set()
+@@ -726,10 +780,11 @@
+     if interactive:
+         # Yielding to the user is only meaningful when one is attached.
+         agent_tools.append(wait_for_user)
++    base_tools = _filtered_base_tools()
+     if is_root:
+-        tools: list[Tool] = [*_BASE_TOOLS, *agent_tools, finish_scan]
++        tools: list[Tool] = [*base_tools, *agent_tools, finish_scan]
+     else:
+-        tools = [*_BASE_TOOLS, *agent_tools, agent_finish]
++        tools = [*base_tools, *agent_tools, agent_finish]
+     _ensure_unique_tool_names(tools)
+     tools = [
+         _with_bounded_result(_with_strictness(_with_coerced_arguments(tool), strict_tool_schemas))
