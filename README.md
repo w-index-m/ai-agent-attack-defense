@@ -27,7 +27,7 @@ Legend: **本リポ** = implemented in this repository · **外部案** = extern
 | Path | What it is | How to test |
 |---|---|---|
 | `vuln_triage.html` | Browser page: load Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2 (JSON Lines) output, get priority, fixes and a plan. Runs locally, nothing is uploaded. Secrets are masked. | Open the file in a browser, drop a JSON report. |
-| `.github/workflows/security-scan.yml` + `scripts/summarize.py` | CI scan set: Semgrep, Trivy, gitleaks (+ ZAP baseline if `STAGING_URL` is set, + Rapid7 InsightAppSec if `INSIGHTAPPSEC_SCAN_CONFIG_ID`/`INSIGHTAPPSEC_API_KEY` are set — commercial, requires your own Rapid7 account). | See "CI scan" below. |
+| `.github/workflows/security-scan.yml` + `scripts/summarize.py` | CI scan set: Semgrep, Trivy, gitleaks (+ ZAP baseline if `STAGING_URL` is set). | See "CI scan" below. |
 | `netcheck/` | Confirmation-only checker (ports, banners, headers, TLS, admin-like URLs, exposed config/backup files). Private ranges only by default. Cannot judge SQL injection. | `python3 netcheck/netcheck.py` then open the printed URL. |
 | `scripts/dep_cve_check.py` | Checks your own `requirements.txt` / npm `package-lock.json` against the public OSV.dev vulnerability database; outputs SARIF. | See [`security-scan/dep-cve-check-notes.md`](security-scan/dep-cve-check-notes.md). |
 | `deck/` | Generator scripts for the JP/EN slide decks (pptxgenjs). | See `deck/README.md`. |
@@ -37,7 +37,6 @@ Legend: **本リポ** = implemented in this repository · **外部案** = extern
 2. Repo variables (Settings > Secrets and variables > Actions > Variables):
    - `FAIL_ON`: `none` (default), `critical`, `high`, `medium`, `low`, `secret`. Secrets always fail the run unless `none`.
    - `STAGING_URL`: a **staging** URL you own. Leave unset to skip ZAP. Never point it at production or third parties.
-   - `INSIGHTAPPSEC_SCAN_CONFIG_ID` (variable) + `INSIGHTAPPSEC_API_KEY` (secret): enables a **Rapid7 InsightAppSec** scan step (commercial product, requires your own Rapid7 account and a scan config pre-set against a staging target in the Rapid7 console — not Nexpose, which has no GitHub Action; InsightAppSec is its CI/CD-integrated successor product). Optional `INSIGHTAPPSEC_REGION` (default `us`). Leave `INSIGHTAPPSEC_SCAN_CONFIG_ID` unset to skip it entirely.
 3. Results: job summary and the `security-scan-results` artifact (JSON). Feed those JSON files into `vuln_triage.html`.
 4. Offline test of the summarizer: `python3 scripts/summarize.py <dir-with-json> --fail-on high`.
 5. Ship scan results to a SIEM: `--format elastic --out scan.ndjson` (ECS NDJSON) or `--format datadog --out scan.json` (Datadog Logs JSON). This feeds CI findings into the same platform where the R1–R8 detection rules live.
@@ -75,7 +74,7 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 | パス | 何か | 試し方 |
 |---|---|---|
 | `vuln_triage.html` | ブラウザで動くトリアージ画面。Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2（JSON Lines）の出力を読み込み、優先度・修正案・対応計画を表示。ローカル完結でアップロードなし、秘密情報はマスク。 | ファイルをブラウザで開き、JSON レポートをドロップ。 |
-| `.github/workflows/security-scan.yml` + `scripts/summarize.py` | CI スキャン一式：Semgrep・Trivy・gitleaks（`STAGING_URL` を設定すれば ZAP ベースラインも、`INSIGHTAPPSEC_SCAN_CONFIG_ID`/`INSIGHTAPPSEC_API_KEY` を設定すれば Rapid7 InsightAppSec も ── 商用、要Rapid7アカウント）。 | 下の「CI スキャン」を参照。 |
+| `.github/workflows/security-scan.yml` + `scripts/summarize.py` | CI スキャン一式：Semgrep・Trivy・gitleaks（`STAGING_URL` を設定すれば ZAP ベースラインも）。 | 下の「CI スキャン」を参照。 |
 | `netcheck/` | 確認専用のチェッカー（ポート・バナー・ヘッダ・TLS・管理画面らしき URL・設定/バックアップの露出）。ブラウザ UI 付き。既定ではプライベート範囲のみ。SQL インジェクションの有無は判定しない。 | `python3 netcheck/netcheck.py` を実行し、表示された URL を開く。 |
 | `scripts/dep_cve_check.py` | 自分の `requirements.txt` / npm `package-lock.json` を、公開の脆弱性データベース OSV.dev に照合。SARIF を出力。 | [`security-scan/dep-cve-check-notes.md`](security-scan/dep-cve-check-notes.md) を参照。 |
 | `deck/` | 日英スライドの生成スクリプト（pptxgenjs）。 | `deck/README.md` を参照。 |
@@ -85,7 +84,6 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 2. リポジトリ変数（Settings > Secrets and variables > Actions > Variables）：
    - `FAIL_ON`：`none`（既定）／`critical`／`high`／`medium`／`low`／`secret`。`none` 以外では秘密情報を検出すると必ず失敗。
    - `STAGING_URL`：自分が所有する**ステージング**の URL。未設定なら ZAP をスキップ。**本番や第三者には絶対に向けないこと。**
-   - `INSIGHTAPPSEC_SCAN_CONFIG_ID`（変数）＋ `INSIGHTAPPSEC_API_KEY`（シークレット）：**Rapid7 InsightAppSec** によるスキャンを有効化(商用製品、自分のRapid7アカウントと、Rapid7コンソール側で事前にステージング対象に設定したスキャン設定が別途必要。Nexpose自体にはGitHub Action連携は無く、InsightAppSecがそのCI/CD連携版の後継製品)。任意で`INSIGHTAPPSEC_REGION`(既定`us`)。`INSIGHTAPPSEC_SCAN_CONFIG_ID`を未設定にすれば完全にスキップされる。
 3. 結果：ジョブのサマリと `security-scan-results` アーティファクト（JSON）。その JSON を `vuln_triage.html` に読み込ませます。
 4. 集計のオフライン実行：`python3 scripts/summarize.py <JSONのあるディレクトリ> --fail-on high`。
 

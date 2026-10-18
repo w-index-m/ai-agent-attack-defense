@@ -2,8 +2,6 @@
 # - プルリク・main への push・毎日の定期実行・手動実行で動く
 # - コード/依存/設定/秘密情報の診断は、ネットワーク越しの攻撃はせず、リポジトリを読むだけ
 # - ZAP(Web アプリへの診断)は、検証環境の URL を設定したときだけ動く。本番には向けない
-# - Rapid7 InsightAppSec(商用、要アカウント)は、スキャン設定IDとAPIキーを
-#   設定したときだけ動く。未設定なら完全にスキップされる
 name: security-scan
 
 on:
@@ -74,21 +72,6 @@ jobs:
           chmod 777 results
           docker run --rm -v "$PWD/results:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t "${{ vars.STAGING_URL }}" -J zap.json || true
-
-      # --- Web アプリへの診断(Rapid7 InsightAppSec、検証環境のみ) -----------------
-      # リポジトリ変数 INSIGHTAPPSEC_SCAN_CONFIG_ID と、シークレット
-      # INSIGHTAPPSEC_API_KEY を両方設定したときだけ動く(商用の Rapid7
-      # InsightAppSec アカウントが別途必要)。スキャン対象(scan config)は
-      # Rapid7 のコンソール側で事前に、検証環境に対して設定しておくこと。
-      # 本番や第三者の資産には絶対に向けないこと。
-      - name: Rapid7 InsightAppSec (検証環境のみ・要アカウント)
-        if: ${{ vars.INSIGHTAPPSEC_SCAN_CONFIG_ID != '' }}
-        uses: rapid7/insightappsec-scan-github-actions@v1.3.5
-        with:
-          region: ${{ vars.INSIGHTAPPSEC_REGION || 'us' }}
-          api-key: ${{ secrets.INSIGHTAPPSEC_API_KEY }}
-          scan-config-id: ${{ vars.INSIGHTAPPSEC_SCAN_CONFIG_ID }}
-          wait-for-scan-complete: true
 
       - name: 集計(要約を表示)
         run: |
