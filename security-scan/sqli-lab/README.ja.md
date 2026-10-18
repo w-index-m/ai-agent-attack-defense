@@ -90,6 +90,35 @@ SQL構文として解釈されなくなり、上記3つの攻撃すべてが無�
 - 修正は複雑な話ではなく、**文字列連結をやめてパラメータ化クエリにする**、の一点に尽きる。
   (ORMを使っている場合も、素のSQL文字列を組み立てる箇所が残っていないか要確認。)
 
+## LLM抜きの自動検出スクリプト
+
+[`auto_sqli_scanner.py`](auto_sqli_scanner.py): Strixのように「次に何を試すかをLLMが判断する」のではなく、
+固定のペイロードリストを総当たりし、レスポンスを機械的に比較するだけの、LLM不要・ルールベースの最小スキャナー。
+
+```bash
+pip3 install --user requests
+
+# 脆弱版をスキャン
+python3 auto_sqli_scanner.py --url http://127.0.0.1:5000/login \
+  --baseline username=zzz --baseline password=zzz --fuzz username
+
+# 修正版をスキャン(同じペイロードで検出ゼロになるはず)
+python3 auto_sqli_scanner.py --url http://127.0.0.1:5000/login_safe \
+  --baseline username=zzz --baseline password=zzz --fuzz username
+```
+
+実行結果: 脆弱版では8種のペイロード中5件(認証バイパス3件 + SQLエラー漏洩2件)を検出、
+修正版では同じペイロードで検出ゼロ(誤検知なし)。
+
+Strixとの違い:
+
+| | Strix(AIエージェント) | この簡易スキャナー |
+|---|---|---|
+| 判断方式 | LLMが毎ターン次の一手を考える | 固定ペイロードを総当たり |
+| 必要なもの | LLM API + Dockerサンドボックス | Python + requests のみ |
+| 柔軟性 | 未知のパターンにも適応しうる(が実行が不安定だった) | 既知のペイロードのみ |
+| 今回の結果 | Turn8まで進行、結論不明のまま断念 | 即座に成功、再現性あり |
+
 ## このラボとStrix PoCの関係
 
 - Strix PoC([`../strix-local-poc/`](../strix-local-poc/))は「AIエージェントに自動でSQLiを見つけさせる」
