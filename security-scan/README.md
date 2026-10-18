@@ -12,6 +12,10 @@ techniques. Use only against assets you own or are authorized to test.
 - **[`dashboard.html`](dashboard.html)** — integrated dashboard (open in a browser,
   offline, no external calls): landscape of offensive AI agents → detection coverage →
   preventive controls → CVP tiers → asset links.
+- **[`local-vuln-testing-walkthrough.ja.md`](local-vuln-testing-walkthrough.ja.md)** (JA) — entry
+  point for trying vulnerability checks on your own PC: inventory with netcheck → a self-hosted
+  practice target (DVWA/Juice Shop) → automated scanning with Strix + a local LLM, with links to
+  each step.
 
 ## Documents
 
