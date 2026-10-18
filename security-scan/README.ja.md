@@ -40,7 +40,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`strix-local-poc/`](strix-local-poc/) | 上記の PoC（パッチ・検証スクリプト・結果）。 |
 | [`cairn-lab/`](cairn-lab/) | Cairn を認可済み隔離ラボで動かすランブックと実設定（`dispatch.lab.yaml` ほか）、攻撃なし mock 設定。 |
 | [`strix-local-poc/windows-wsl-ollama-setup.md`](strix-local-poc/windows-wsl-ollama-setup.md) | Windows 11 + WSL2 + ローカルOllamaで、クラウドLLM課金なしにStrixを動かす実機セットアップ手順（DVWA等の自分で立てた練習環境を対象）、Groq/OpenRouterクラウドLLMでの試行、Claude Codeクラウドサンドボックスでの試行を記録。**最終結論：断念。** 試した全構成(ローカル3サイズ・Groq・OpenRouter・クラウドサンドボックス)がそれぞれ異なる構造的な壁(ツール呼び出しJSONの崩壊/無意味なコマンドループ、無料枠のトークン/分制限、大きいリクエストで原因不明の404、LLMプロバイダ全拒否のネットワーク許可リスト)に当たった。セットアップを自動化するPowerShellスクリプト（[`start-strix-test.ps1`](strix-local-poc/start-strix-test.ps1)）も収録(今は断念した旧アプローチの記録)。 |
-| [`sqli-lab/README.ja.md`](sqli-lab/README.ja.md) | **Strix PoCの代わりに完成した成果。** SQLインジェクションと反射型XSSそれぞれの脆弱版/修正版エンドポイントを持つ最小Flask+SQLiteアプリと、LLM不要のルールベース自動検出スクリプト(`auto_vuln_scanner.py`、`VULN_CLASSES`辞書で拡張可能)、1コマンドで全パターンを実行する`scan_all.sh`。LLM・エージェントループ・Docker不要。検証済み：脆弱版はSQLi 8件中5件・XSS 4件中4件を検出、修正版はいずれも誤検知ゼロ。 |
+| [`sqli-lab/README.ja.md`](sqli-lab/README.ja.md) | **Strix PoCの代わりに完成した成果。** 5種類(SQLi・反射型XSS・OSコマンドインジェクション・パストラバーサル・CSRF)それぞれの脆弱版/修正版エンドポイントを持つ最小Flask+SQLiteアプリと、LLM不要のルールベース自動検出スクリプト(`auto_vuln_scanner.py`＋専用の`csrf_check.py`)、1コマンドで全パターンを実行する`scan_all.sh`。LLM・エージェントループ・Docker不要。`netcheck`と同じく既定でローカル/プライベート範囲限定のスコープガード付き。**CIスキャン/`summarize.py`の集計へはまだ組み込まれていない(ファイル内にTODOとして明記)。** |
 
 ### 【スコープ拡張】LLMシステムが標的になる側
 

@@ -14,6 +14,25 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
 
 > ⚠️ 本コードは意図的に脆弱です。自分が所有・管理する隔離環境以外では絶対に動かさないこと。
 
+## 🚧 TODO(未着手): CIの集計(`scripts/summarize.py`)への組み込み
+
+現状、このラボは`.github/workflows/security-scan.yml`には一切組み込まれておらず、
+`scripts/summarize.py`の集計対象にもなっていない。完全に独立した、手動実行のツール群。
+
+組み込む場合の論点(着手前に要検討):
+
+- このラボの対象(`vulnerable_app.py`)は**意図的に脆弱なデモアプリ**であり、このリポジトリ
+  自身のコードではない。CIの既存ステップ(Semgrep/Trivy/gitleaks)が検査しているのは
+  *このリポジトリのコード*なので、`sqli-lab`をそのままCIで回しても「デモアプリの既知の
+  脆弱性を毎回検出するだけ」になり、Semgrep等と同じ意味でのCIゲートにはならない。
+  → 使い道としては「このラボの検出スクリプト自体が壊れていないか」を確認する**回帰テスト**
+    としての組み込みが現実的(例: `scan_all.sh`の出力が期待通りか`pytest`等で検証し、
+    `summarize.py`互換のJSON/SARIFを吐かせてCIサマリに乗せる)。
+- `summarize.py`は現状Semgrep/Trivy/gitleaks/ZAP(+InsightAppSec)のJSON形式を前提にしている
+  ため、`auto_vuln_scanner.py`/`csrf_check.py`の出力をその形式に変換する層が別途必要。
+
+**次にこの話を再開するときは、ここを読むこと。** (2026-10-19 時点で未着手、との記録)
+
 ## スコープ制限(誤って外部に撃たないためのガード)
 
 `auto_vuln_scanner.py`は実際に攻撃ペイロードを送信するツールなので、`netcheck/netcheck.py`
