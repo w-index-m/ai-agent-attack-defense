@@ -81,6 +81,44 @@ def detect_xss(resp: requests.Response, baseline: requests.Response, payload: st
 
 
 # --------------------------------------------------------------------------
+# OS command injection: a marker command's distinctive output leaks into
+# the response when shell metacharacters are not neutralized.
+# --------------------------------------------------------------------------
+
+CMDI_PAYLOADS = [
+    "x; id",
+    "x && id",
+    "x | id",
+    "x `id`",
+    "x $(id)",
+]
+
+
+def detect_cmdi(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    if "uid=" in resp.text and "uid=" not in baseline.text:
+        return "command injection: 'id' output leaked into response"
+    return None
+
+
+# --------------------------------------------------------------------------
+# Path traversal: ../ sequences escape the intended directory and reach
+# an unrelated file (/etc/passwd here, as a readable marker file).
+# --------------------------------------------------------------------------
+
+TRAVERSAL_PAYLOADS = [
+    "../" * 10 + "etc/passwd",
+    "..%2f" * 10 + "etc/passwd",
+    "....//" * 10 + "etc/passwd",
+]
+
+
+def detect_traversal(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    if "root:x:0:0" in resp.text:
+        return "path traversal: read /etc/passwd outside the intended directory"
+    return None
+
+
+# --------------------------------------------------------------------------
 # Registry: add a new vulnerability class here
 # --------------------------------------------------------------------------
 
@@ -94,6 +132,8 @@ class VulnClass:
 VULN_CLASSES: dict[str, VulnClass] = {
     "sqli": VulnClass(SQLI_PAYLOADS, detect_sqli),
     "xss": VulnClass(XSS_PAYLOADS, detect_xss),
+    "cmdi": VulnClass(CMDI_PAYLOADS, detect_cmdi),
+    "traversal": VulnClass(TRAVERSAL_PAYLOADS, detect_traversal),
 }
 
 

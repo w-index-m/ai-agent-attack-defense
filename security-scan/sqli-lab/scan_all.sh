@@ -19,3 +19,7 @@ run "SQLi: /login (vulnerable)"    --url "$BASE_URL/login"       --class sqli --
 run "SQLi: /login_safe (fixed)"    --url "$BASE_URL/login_safe"  --class sqli --baseline username=zzz --baseline password=zzz --fuzz username
 run "XSS: /search (vulnerable)"    --url "$BASE_URL/search"      --class xss  --baseline q=zzz --fuzz q
 run "XSS: /search_safe (fixed)"    --url "$BASE_URL/search_safe" --class xss  --baseline q=zzz --fuzz q
+run "CMDi: /diag (vulnerable)"     --url "$BASE_URL/diag"        --class cmdi --baseline host=zzz --fuzz host
+run "CMDi: /diag_safe (fixed)"     --url "$BASE_URL/diag_safe"   --class cmdi --baseline host=zzz --fuzz host
+run "Traversal: /file (vulnerable)"      --url "$BASE_URL/file"       --class traversal --baseline name=public.txt --fuzz name
+run "Traversal: /file_safe (fixed)"      --url "$BASE_URL/file_safe"  --class traversal --baseline name=public.txt --fuzz name

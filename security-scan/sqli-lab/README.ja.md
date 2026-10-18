@@ -3,7 +3,8 @@
 Strix(AIエージェントによる自動ペンテスト)をローカル(Windows/WSL2 + Ollama/Groq/OpenRouter)で
 動かす一連の試み([`../strix-local-poc/windows-wsl-ollama-setup.md`](../strix-local-poc/windows-wsl-ollama-setup.md))
 と並行して、「発想を変えて、AIエージェントなしで脆弱性自体を実証する」ために作った最小限のラボ。
-当初はSQLiのみだったが、「Strixは他の脆弱性クラスも見る」という問いを受けてXSSにも対応範囲を広げた。
+当初はSQLiのみだったが、「Strixは他の脆弱性クラスも見る」という問いを受けてXSS、さらに
+OSコマンドインジェクション・パストラバーサルにも対応範囲を広げた。
 
 Claude Codeのクラウドサンドボックス環境は外向きのLLM通信がほぼ全てブロックされているため
 (詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md))、Strixのようなエージェント実行は
@@ -14,12 +15,17 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
 
 ## 対象アプリ
 
-[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。SQLiとXSSの両方を含む。
+[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。4種類の脆弱性クラスを含む。
 
 - `/login`: 文字列連結でSQLを組み立てる、**意図的に脆弱**なエンドポイント(SQLi)
 - `/login_safe`: パラメータ化クエリ(プレースホルダ `?`)を使う、**修正済み**の同じ機能のエンドポイント
 - `/search`: 入力をHTMLエスケープせずそのまま反映する、**意図的に脆弱**なエンドポイント(反射型XSS)
 - `/search_safe`: `markupsafe.escape()`でエスケープする、**修正済み**の同じ機能のエンドポイント
+- `/diag`: `subprocess.run(..., shell=True)` + 文字列連結で外部コマンドを組み立てる、**意図的に脆弱**な
+  エンドポイント(OSコマンドインジェクション)
+- `/diag_safe`: `shell=False`でホスト名を1つの引数として渡す、**修正済み**の同じ機能のエンドポイント
+- `/file`: `docs/`配下のファイルを素朴にパス連結で読む、**意図的に脆弱**なエンドポイント(パストラバーサル)
+- `/file_safe`: 解決後のパスが`docs/`配下に収まっているかを検証する、**修正済み**の同じ機能のエンドポイント
 
 起動:
 
@@ -84,6 +90,34 @@ curl -s -G "http://127.0.0.1:5000/login_safe" \
 パラメータ化クエリ(プレースホルダ + バインド)に変えるだけで、同じ入力が
 SQL構文として解釈されなくなり、上記3つの攻撃すべてが無効になる。
 
+### 4. OSコマンドインジェクション(`/diag`)
+
+```bash
+curl -s -G "http://127.0.0.1:5000/diag" --data-urlencode "host=example.com; id"
+# => Checking: example.com
+#    uid=0(root) gid=0(root) groups=0(root)
+```
+
+`;`でコマンドを連結でき、本来意図していない`id`コマンドの出力がそのまま漏洩する。
+`shell=True` + 文字列連結が原因。対策版(`/diag_safe`、`shell=False`でホスト名を
+1つの引数として渡す)に同じ攻撃を送ると、`;`等は単なる文字列として扱われ無効化される。
+
+```bash
+curl -s -G "http://127.0.0.1:5000/diag_safe" --data-urlencode "host=example.com; id"
+# => Checking: example.com; id   (コマンドとして解釈されず、ただの文字列)
+```
+
+### 5. パストラバーサル(`/file`)
+
+```bash
+curl -s -G "http://127.0.0.1:5000/file" --data-urlencode "name=../../../../../../../../../../etc/passwd"
+# => root:x:0:0:root:/root:/bin/bash ...
+```
+
+意図していた`docs/`ディレクトリの外、`/etc/passwd`の内容がそのまま読み出せる。
+対策版(`/file_safe`、解決後のパスが`docs/`配下に収まっているかを検証)に同じ攻撃を送ると、
+`403 Access denied.`で拒否される。
+
 ## まとめ・学び
 
 - SQLiの本質(文字列連結でSQLを組み立てる = 入力がコードとして解釈される)は、
@@ -99,7 +133,7 @@ SQL構文として解釈されなくなり、上記3つの攻撃すべてが無�
 
 [`auto_vuln_scanner.py`](auto_vuln_scanner.py): Strixのように「次に何を試すかをLLMが判断する」のではなく、
 固定のペイロードリストを総当たりし、レスポンスを機械的に比較するだけの、LLM不要・ルールベースのスキャナー。
-`--class`で脆弱性クラスを切り替え可能(現在は`sqli`と`xss`に対応)。
+`--class`で脆弱性クラスを切り替え可能(現在は`sqli`・`xss`・`cmdi`・`traversal`に対応)。
 
 ```bash
 pip3 install --user requests
@@ -119,12 +153,28 @@ python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/search --class xss \
 # XSS: 修正版 /search_safe をスキャン(検出ゼロになるはず)
 python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/search_safe --class xss \
   --baseline q=zzz --fuzz q
+
+# コマンドインジェクション: 脆弱版 /diag をスキャン
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/diag --class cmdi \
+  --baseline host=zzz --fuzz host
+
+# コマンドインジェクション: 修正版 /diag_safe をスキャン(検出ゼロになるはず)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/diag_safe --class cmdi \
+  --baseline host=zzz --fuzz host
+
+# パストラバーサル: 脆弱版 /file をスキャン
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/file --class traversal \
+  --baseline name=public.txt --fuzz name
+
+# パストラバーサル: 修正版 /file_safe をスキャン(検出ゼロになるはず)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/file_safe --class traversal \
+  --baseline name=public.txt --fuzz name
 ```
 
 ## まとめて1回で実行する
 
-[`scan_all.sh`](scan_all.sh): 上記4パターン(SQLi×脆弱/修正、XSS×脆弱/修正)を1コマンドで実行する
-ラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
+[`scan_all.sh`](scan_all.sh): 上記8パターン(SQLi/XSS/コマンドインジェクション/パストラバーサル
+× それぞれ脆弱/修正)を1コマンドで実行するラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
 
 ```bash
 python3 vulnerable_app.py &
@@ -139,6 +189,16 @@ python3 vulnerable_app.py &
 | SQLi | `/login_safe`(修正済み) | 8 | 0(誤検知なし) |
 | XSS | `/search`(脆弱) | 4 | 4(全ペイロードが未エスケープで反映) |
 | XSS | `/search_safe`(修正済み) | 4 | 0(誤検知なし) |
+| コマンドインジェクション | `/diag`(脆弱) | 5 | 5(`id`出力の漏洩を全パターンで検出) |
+| コマンドインジェクション | `/diag_safe`(修正済み) | 5 | 0(誤検知なし) |
+| パストラバーサル | `/file`(脆弱) | 3 | 1(素の`../`での脱出を検出) |
+| パストラバーサル | `/file_safe`(修正済み) | 3 | 0(誤検知なし) |
+
+(パストラバーサルは3種のペイロードのうち1種のみ検出: この最小アプリは入力をそのまま
+`os.path.join`に渡すだけなので、URLエンコード済み(`..%2f`)や二重ドット変種(`....//`)の
+回避テクニックは素の`../`と違って文字列として素通りし、意図通り「刺さらなかった」。
+これはこの簡易実装の限界であり、実際のWAF回避やエンコーディングのバリエーションを
+網羅したい場合はペイロードと検出ロジックの拡充が必要。)
 
 脆弱性クラスを追加する方法: `VULN_CLASSES`にペイロードリストと`detect()`関数を1組追加するだけ。
 LLMの「判断」をルールで置き換えている分、対応したいクラスの数だけルールを増やす必要がある

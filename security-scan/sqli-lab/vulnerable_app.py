@@ -1,11 +1,13 @@
 """
-Deliberately vulnerable demo app (SQLi + reflected XSS), for local/offline
-testing only.
+Deliberately vulnerable demo app (SQLi, reflected XSS, OS command
+injection, path traversal), for local/offline testing only.
 
 Scope: run only against this app, on localhost, in an isolated sandbox.
 Do not deploy this code anywhere reachable by anyone else.
 """
 
+import os
+import subprocess
 import sqlite3
 
 from flask import Flask, request
@@ -13,6 +15,7 @@ from markupsafe import escape
 
 app = Flask(__name__)
 DB_PATH = "/tmp/sqli_lab.db"
+DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs")
 
 
 def init_db() -> None:
@@ -92,6 +95,64 @@ def search_safe() -> tuple[str, int]:
     return f"<html><body>Results for: {escape(q)}</body></html>", 200
 
 
+@app.route("/diag", methods=["GET"])
+def diag() -> tuple[str, int]:
+    host = request.args.get("host", "")
+
+    # VULNERABLE: shell=True + string formatting lets shell metacharacters
+    # (;, $(...), `...`, |) break out of the intended single command.
+    cmd = f"echo Checking: {host}"
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    return f"<pre>{result.stdout}{result.stderr}</pre>", 200
+
+
+@app.route("/diag_safe", methods=["GET"])
+def diag_safe() -> tuple[str, int]:
+    host = request.args.get("host", "")
+
+    # FIXED: no shell=True, host is passed as a single literal argument,
+    # so shell metacharacters have no special meaning.
+    result = subprocess.run(
+        ["echo", "Checking:", host], shell=False, capture_output=True, text=True
+    )
+    return f"<pre>{result.stdout}{result.stderr}</pre>", 200
+
+
+@app.route("/file", methods=["GET"])
+def file_view() -> tuple[str, int]:
+    name = request.args.get("name", "")
+
+    # VULNERABLE: naive path concatenation, ../ escapes DOCS_DIR.
+    path = os.path.join(DOCS_DIR, name)
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return f"<pre>{escape(f.read())}</pre>", 200
+    except OSError as exc:
+        return f"Error: {exc}", 404
+
+
+@app.route("/file_safe", methods=["GET"])
+def file_view_safe() -> tuple[str, int]:
+    name = request.args.get("name", "")
+
+    # FIXED: resolve the real path and reject anything that escapes DOCS_DIR.
+    candidate = os.path.realpath(os.path.join(DOCS_DIR, name))
+    if not candidate.startswith(os.path.realpath(DOCS_DIR) + os.sep):
+        return "Access denied.", 403
+
+    try:
+        with open(candidate, encoding="utf-8", errors="replace") as f:
+            return f"<pre>{escape(f.read())}</pre>", 200
+    except OSError as exc:
+        return f"Error: {exc}", 404
+
+
 if __name__ == "__main__":
+    os.makedirs(DOCS_DIR, exist_ok=True)
+    public_doc = os.path.join(DOCS_DIR, "public.txt")
+    if not os.path.exists(public_doc):
+        with open(public_doc, "w", encoding="utf-8") as f:
+            f.write("This is a public document. Nothing sensitive here.\n")
+
     init_db()
     app.run(host="127.0.0.1", port=5000)
