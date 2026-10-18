@@ -576,6 +576,53 @@ uv run strix -n -t http://localhost:8080 --scan-mode quick --max-budget 10 --max
 このセッション内でのツール数削減の単体検証(`_filtered_base_tools()`の戻り値を直接確認)は
 通ったが、**実際にqwen2.5:7bやGroq/OpenRouterでスキャン完走率が上がるかは未検証**。
 
+## クラウドサンドボックスでの検証(2026-10-18、参考)
+
+「Windows機での試行錯誤より、Claude Codeのクラウド実行環境(セッション自体のサンドボックス)
+で直接試した方が楽だったのでは」という疑問から、実際に確認した記録。
+
+### Dockerは、この環境では動いた(過去の記述を訂正)
+
+`strix-local-backend-notes.md`には「cloud sandboxは通常Docker-in-Dockerを持たない」と
+書いていたが、これは誤りだった(少なくともこのセッションでは)。
+
+```bash
+which docker dockerd   # 両方とも存在
+dockerd > /tmp/dockerd.log 2>&1 &
+docker info             # Server側も正常に応答
+docker run --rm hello-world   # Docker Hubからのpullも含め正常動作
+```
+
+cgroup v1、広めのcapabilities(`CapEff`がほぼ全ビット立っている)を持つ環境だったため、
+dockerdを手動起動するだけでコンテナが動いた。**「クラウドサンドボックスはDocker不可」は
+一般則ではなく、個々の実行環境のcontainer runtime設定次第**、ということが分かった。
+
+### しかし、LLM接続先がほぼ全滅だった
+
+このセッションのネットワークは**許可リスト方式**(拒否リストではなく、明示的に許可された
+ホストしか通さない)。`$HTTPS_PROXY/__agentproxy/status`で確認したところ:
+
+```json
+"noProxy": "...,api.anthropic.com,...,registry.npmjs.org,pypi.org,...",
+"recentRelayFailures": [
+  {"host": "openrouter.ai:443", "detail": "gateway answered 403 ..."},
+  {"host": "ollama.com:443", "detail": "gateway answered 403 ..."}
+]
+```
+
+- `ollama.com`(公式インストーラ) → 403拒否
+- GitHub Releases経由でのOllamaバイナリ取得 → `api.github.com`も含め到達不可/404
+- `openrouter.ai` → 403拒否(Windows側では動いていたのと対照的)
+- 許可されていたのは`api.anthropic.com`(Claude Code自身の内部通信用)のみ。
+  これを他ツール(Strix)に転用するのは、セッション認証情報の目的外利用にあたるため行わない。
+
+**結論**: このクラウドサンドボックスでは、Docker自体は動くにもかかわらず、
+**LLM接続先を用意できず、結局Strixを動かせなかった**。Windows機での試行錯誤は、
+遠回りに見えて、実際には「ネットワークを自分で制御できる環境」を使うという点で、
+むしろ合理的な選択だった。環境によって「何が動いて何が動かないか」は大きく異なるため、
+一般化はできない(今回のクラウドサンドボックスの制約が、他のクラウド実行環境にも
+当てはまるとは限らない)。
+
 ## 未検証(このメモの範囲外)
 
 - `qwen2.5:7b` でのスキャン完走、および実際の脆弱性検出精度(DVWAの既知のSQLi等を

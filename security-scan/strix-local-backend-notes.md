@@ -17,6 +17,17 @@ cloud sandbox は Docker-in-Docker を通常持たないため（`docker info` �
 公式のローカル CLI モードはそのままでは動かない。マネージド版（app.strix.ai）は
 ネットワークポリシーで `app.strix.ai` への到達が拒否される場合がある。
 
+> **訂正(2026-10-18)**: 上記は環境依存。別のセッション(Claude Codeのクラウド実行環境)で
+> 再確認したところ、`docker`/`dockerd`バイナリは同梱されており、`dockerd`を手動起動
+> すれば`docker run hello-world`等、実際にコンテナが動くことを確認した(cgroup v1、
+> 広めのcapabilitiesを持つ環境だった)。**「cloud sandboxはDocker-in-Dockerを持たない」
+> は一般則ではなく、個々の実行環境のcontainer runtime設定次第**。ただし、その環境では
+> 別の壁(ネットワークの許可リストがほぼ全てのLLMプロバイダ・配布元をブロックしており、
+> `api.anthropic.com`以外はOllama公式サイト・GitHub Releases・OpenRouter等すべて拒否)
+> に当たり、結局LLM接続先が用意できずStrixは動かせなかった。詳細は
+> [`strix-local-poc/windows-wsl-ollama-setup.md`](strix-local-poc/windows-wsl-ollama-setup.md)
+> の「クラウドサンドボックスでの検証」節。
+
 ## 実行フロー（コード地図）
 
 ```
