@@ -189,6 +189,54 @@ def csrf_transfer_safe() -> tuple[str, int]:
     return f"Transferred {amount}. New balance: {session['balance']}.", 200
 
 
+# Private per-account data for the IDOR/BOLA demo, keyed by user id.
+IDOR_ACCOUNTS = {
+    1: {"username": "alice", "email": "alice@example.com", "private_note": "Alice's medical records are confidential."},
+    2: {"username": "bob", "email": "bob@example.com", "private_note": "Bob's salary is $75,000."},
+    3: {"username": "admin", "email": "admin@example.com", "private_note": "Admin recovery codes: 1234-5678"},
+}
+
+
+@app.route("/idor_login", methods=["GET"])
+def idor_login() -> tuple[str, int]:
+    username = request.args.get("username", "alice")
+    uid = next((i for i, a in IDOR_ACCOUNTS.items() if a["username"] == username), None)
+    if uid is None:
+        return "Unknown user.", 404
+    session["idor_user_id"] = uid
+    return f"Logged in as {username} (user_id={uid}).", 200
+
+
+@app.route("/idor_account", methods=["GET"])
+def idor_account() -> tuple[str, int]:
+    if "idor_user_id" not in session:
+        return "Not logged in.", 401
+
+    # VULNERABLE: returns whichever user_id is requested, with no check that
+    # it belongs to the logged-in session -- the object reference (user_id)
+    # alone is treated as authorization.
+    requested_id = int(request.args.get("user_id", session["idor_user_id"]))
+    account = IDOR_ACCOUNTS.get(requested_id)
+    if not account:
+        return "Not found.", 404
+    return f"Account {requested_id}: {account}", 200
+
+
+@app.route("/idor_account_safe", methods=["GET"])
+def idor_account_safe() -> tuple[str, int]:
+    if "idor_user_id" not in session:
+        return "Not logged in.", 401
+
+    # FIXED: enforce that the requested object actually belongs to the
+    # logged-in session, instead of trusting the id alone.
+    requested_id = int(request.args.get("user_id", session["idor_user_id"]))
+    if requested_id != session["idor_user_id"]:
+        return "Forbidden: you may only access your own account.", 403
+
+    account = IDOR_ACCOUNTS[requested_id]
+    return f"Account {requested_id}: {account}", 200
+
+
 if __name__ == "__main__":
     os.makedirs(DOCS_DIR, exist_ok=True)
     public_doc = os.path.join(DOCS_DIR, "public.txt")
