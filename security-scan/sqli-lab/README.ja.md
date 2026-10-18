@@ -1,8 +1,9 @@
-# SQLi 実証ラボ(エージェント不要・サンドボックス内完結版)
+# 脆弱性実証ラボ(エージェント不要・サンドボックス内完結版)
 
 Strix(AIエージェントによる自動ペンテスト)をローカル(Windows/WSL2 + Ollama/Groq/OpenRouter)で
 動かす一連の試み([`../strix-local-poc/windows-wsl-ollama-setup.md`](../strix-local-poc/windows-wsl-ollama-setup.md))
-と並行して、「発想を変えて、AIエージェントなしでSQLi自体を実証する」ために作った最小限のラボ。
+と並行して、「発想を変えて、AIエージェントなしで脆弱性自体を実証する」ために作った最小限のラボ。
+当初はSQLiのみだったが、「Strixは他の脆弱性クラスも見る」という問いを受けてXSSにも対応範囲を広げた。
 
 Claude Codeのクラウドサンドボックス環境は外向きのLLM通信がほぼ全てブロックされているため
 (詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md))、Strixのようなエージェント実行は
@@ -13,10 +14,12 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
 
 ## 対象アプリ
 
-[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小ログインアプリ。
+[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。SQLiとXSSの両方を含む。
 
-- `/login`: 文字列連結でSQLを組み立てる、**意図的に脆弱**なエンドポイント
+- `/login`: 文字列連結でSQLを組み立てる、**意図的に脆弱**なエンドポイント(SQLi)
 - `/login_safe`: パラメータ化クエリ(プレースホルダ `?`)を使う、**修正済み**の同じ機能のエンドポイント
+- `/search`: 入力をHTMLエスケープせずそのまま反映する、**意図的に脆弱**なエンドポイント(反射型XSS)
+- `/search_safe`: `markupsafe.escape()`でエスケープする、**修正済み**の同じ機能のエンドポイント
 
 起動:
 
@@ -92,37 +95,64 @@ SQL構文として解釈されなくなり、上記3つの攻撃すべてが無�
 
 ## LLM抜きの自動検出スクリプト
 
-[`auto_sqli_scanner.py`](auto_sqli_scanner.py): Strixのように「次に何を試すかをLLMが判断する」のではなく、
-固定のペイロードリストを総当たりし、レスポンスを機械的に比較するだけの、LLM不要・ルールベースの最小スキャナー。
+[`auto_sqli_scanner.py`](auto_sqli_scanner.py): SQLi専用の、最初に作った最小スキャナー(そのまま残してある)。
+
+[`auto_vuln_scanner.py`](auto_vuln_scanner.py): Strixのように「次に何を試すかをLLMが判断する」のではなく、
+固定のペイロードリストを総当たりし、レスポンスを機械的に比較するだけの、LLM不要・ルールベースのスキャナー。
+`--class`で脆弱性クラスを切り替え可能(現在は`sqli`と`xss`に対応)。
 
 ```bash
 pip3 install --user requests
 
-# 脆弱版をスキャン
-python3 auto_sqli_scanner.py --url http://127.0.0.1:5000/login \
+# SQLi: 脆弱版 /login をスキャン
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/login --class sqli \
   --baseline username=zzz --baseline password=zzz --fuzz username
 
-# 修正版をスキャン(同じペイロードで検出ゼロになるはず)
-python3 auto_sqli_scanner.py --url http://127.0.0.1:5000/login_safe \
+# SQLi: 修正版 /login_safe をスキャン(検出ゼロになるはず)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/login_safe --class sqli \
   --baseline username=zzz --baseline password=zzz --fuzz username
+
+# XSS: 脆弱版 /search をスキャン
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/search --class xss \
+  --baseline q=zzz --fuzz q
+
+# XSS: 修正版 /search_safe をスキャン(検出ゼロになるはず)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/search_safe --class xss \
+  --baseline q=zzz --fuzz q
 ```
 
-実行結果: 脆弱版では8種のペイロード中5件(認証バイパス3件 + SQLエラー漏洩2件)を検出、
-修正版では同じペイロードで検出ゼロ(誤検知なし)。
+実行結果:
 
-Strixとの違い:
+| 脆弱性クラス | 対象 | ペイロード数 | 検出数 |
+|---|---|---|---|
+| SQLi | `/login`(脆弱) | 8 | 5(認証バイパス3 + SQLエラー漏洩2) |
+| SQLi | `/login_safe`(修正済み) | 8 | 0(誤検知なし) |
+| XSS | `/search`(脆弱) | 4 | 4(全ペイロードが未エスケープで反映) |
+| XSS | `/search_safe`(修正済み) | 4 | 0(誤検知なし) |
+
+脆弱性クラスを追加する方法: `VULN_CLASSES`にペイロードリストと`detect()`関数を1組追加するだけ。
+LLMの「判断」をルールで置き換えている分、対応したいクラスの数だけルールを増やす必要がある
+(これがStrixのような汎用エージェントとの根本的な違い — Strixは未知のケースにもLLMの推論で対応しうるが、
+このスクリプトは既知のパターンにしか反応しない)。
+
+Strixとの違い(全体像):
 
 | | Strix(AIエージェント) | この簡易スキャナー |
 |---|---|---|
 | 判断方式 | LLMが毎ターン次の一手を考える | 固定ペイロードを総当たり |
+| 対応範囲 | SQLi/XSS/SSRF/認証不備/ビジネスロジック等、何でも(LLMの推論次第) | `VULN_CLASSES`に実装したクラスのみ |
 | 必要なもの | LLM API + Dockerサンドボックス | Python + requests のみ |
 | 柔軟性 | 未知のパターンにも適応しうる(が実行が不安定だった) | 既知のペイロードのみ |
 | 今回の結果 | Turn8まで進行、結論不明のまま断念 | 即座に成功、再現性あり |
 
 ## このラボとStrix PoCの関係
 
-- Strix PoC([`../strix-local-poc/`](../strix-local-poc/))は「AIエージェントに自動でSQLiを見つけさせる」
-  という、より野心的な目標に取り組んだ(local LLM・Groq・OpenRouter全てで構造的な壁に当たり、
-  未完のまま)。
-- 本ラボは、同じ「SQLiを実際に試す」というゴールを、エージェントを使わずに最短距離で達成した。
-  両者は競合するものではなく、「ツールに頼らなくても検証はできる」という補完的な結論を示している。
+- Strix PoC([`../strix-local-poc/`](../strix-local-poc/))は「AIエージェントに自動で脆弱性を見つけさせる」
+  という、より野心的な目標に取り組んだ(local LLM・Groq・OpenRouter全てで構造的な壁に当たり、未完のまま)。
+  Strix自体はSQLi専用ではなく、SQLi/XSS/SSRF/認証不備/ビジネスロジックの欠陥など広範囲を対象にできる
+  汎用ツールだが、本PoCでは`--instruction`でSQLiのみに意図的にスコープを絞っていた。
+- 本ラボは、同じ「脆弱性を実際に試す」というゴールを、エージェントを使わずに最短距離で達成した。
+  最終的には「LLMは不要だった」という結論に至り、SQLi・XSSの両方をLLM抜きのルールベース
+  スキャナー(`auto_vuln_scanner.py`)で自動検出できることを実証した。
+- 両者は競合するものではなく、「(少なくとも既知の脆弱性パターンについては)ツールに頼らなくても
+  検証はできる」という補完的な結論を示している。

@@ -1,5 +1,6 @@
 """
-Deliberately SQL-injectable demo app, for local/offline SQLi testing only.
+Deliberately vulnerable demo app (SQLi + reflected XSS), for local/offline
+testing only.
 
 Scope: run only against this app, on localhost, in an isolated sandbox.
 Do not deploy this code anywhere reachable by anyone else.
@@ -8,6 +9,7 @@ Do not deploy this code anywhere reachable by anyone else.
 import sqlite3
 
 from flask import Flask, request
+from markupsafe import escape
 
 app = Flask(__name__)
 DB_PATH = "/tmp/sqli_lab.db"
@@ -72,6 +74,22 @@ def login_safe() -> tuple[str, int]:
     if rows:
         return f"Login OK. Rows: {rows}", 200
     return "Login failed.", 401
+
+
+@app.route("/search", methods=["GET"])
+def search() -> tuple[str, int]:
+    q = request.args.get("q", "")
+
+    # VULNERABLE: user input reflected into HTML without escaping.
+    return f"<html><body>Results for: {q}</body></html>", 200
+
+
+@app.route("/search_safe", methods=["GET"])
+def search_safe() -> tuple[str, int]:
+    q = request.args.get("q", "")
+
+    # FIXED: same behavior, but output is HTML-escaped before reflection.
+    return f"<html><body>Results for: {escape(q)}</body></html>", 200
 
 
 if __name__ == "__main__":
