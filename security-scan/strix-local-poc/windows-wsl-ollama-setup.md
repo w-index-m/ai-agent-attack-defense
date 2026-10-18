@@ -314,6 +314,47 @@ OpenAI互換で厳密な検証をするGroqに変えたことで、**Strix自身
 他の候補)への切り替えでは回避できない、**Strixのバージョン(v1.7.0)とGroq(厳密スキーマ
 検証プロバイダ)の組み合わせ自体の非互換性**と判断し、ここで検証を打ち切った。
 
+## Groqのエラーに対するパッチ(未実機検証)
+
+`list_mcps`のJSONスキーマ不備の原因を追ったところ、`strix/agents/factory.py`の
+`_with_strictness()`に行き着いた。Strixが依存する`openai-agents` SDKの
+`FunctionTool.__post_init__`は、`strict_json_schema=True`のときに必ず
+`ensure_strict_json_schema()`を呼び、パラメータなしのツールのスキーマを
+`{"properties": {}, "required": [], "additionalProperties": false, ...}`という、
+SDK自身が定義する「空スキーマの正規形」(`agents.strict_schema._EMPTY_SCHEMA`)に
+正規化する。これ自体は仕様上正しい形のはずだが、Groq(または litellm→Groq間の
+どこか)がこの正規形を「`required`はあるのに`properties`が無い」と誤認識して拒否する。
+
+対策として、パラメータなしのツールだけ`strict_json_schema`を`False`に落とし、SDKの
+自動正規化(`ensure_strict_json_schema`)自体を素通りさせることで、`required`も
+`additionalProperties`も付与されない最小スキーマ(`{"type": "object", "properties": {}}`)
+のまま送信されるようにした。パラメータを持つツール(`call_mcp`等)には影響しない。
+
+パッチ: [`groq-empty-schema.patch`](groq-empty-schema.patch)(`strix/agents/factory.py`の
+`_with_strictness`関数に対する差分)。このセッション内でのスキーマ生成の単体検証
+(`_with_strictness`の戻り値を直接確認)は通ったが、**実際にWindows機でGroqに対して
+スキャンが完走するかは未検証**。
+
+適用手順(WSL側):
+
+```bash
+# 1. インストール済みStrixのfactory.pyの場所を探す
+find / -path "*/strix/agents/factory.py" 2>/dev/null
+
+# 2. 見つかったパスに対して適用(リポジトリをWSL側にも置いている場合)
+patch <見つかったfactory.pyのパス> < groq-empty-schema.patch
+
+# 3. 適用後、再度Groqでの実行を試す
+export STRIX_LLM="groq/openai/gpt-oss-120b"
+strix -t http://localhost:8080 --scan-mode quick --max-budget 10 --max-turns 50 \
+  --instruction "..."
+```
+
+`patch`コマンドが無ければ、`groq-empty-schema.patch`の内容を見ながら該当関数を
+手動で書き換えてもよい。
+
+Strix本家へのフィードバックとしても価値がある内容(GitHub Issueの材料)と考えられる。
+
 ## 結論(2026-10-18 時点)
 
 | 試行 | 症状 |

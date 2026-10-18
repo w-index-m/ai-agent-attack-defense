@@ -1,0 +1,43 @@
+diff --git a/strix/agents/factory.py b/strix/agents/factory.py
+index 6622d3c..e38de76 100644
+--- a/strix/agents/factory.py
++++ b/strix/agents/factory.py
+@@ -274,12 +274,38 @@ def _with_coerced_arguments(tool: FunctionTool) -> FunctionTool:
+     return tool
+ 
+ 
++def _is_empty_params_schema(schema: dict[str, Any] | None) -> bool:
++    """Whether ``schema`` describes a tool that takes no arguments."""
++    return isinstance(schema, dict) and not schema.get("properties")
++
++
+ def _with_strictness(tool: FunctionTool, strict_schemas: bool) -> FunctionTool:
+     """Drop strict JSON-schema mode when the route can't take it (see
+     ``supports_strict_tool_schemas``); the tool stays functionally identical.
+ 
++    Also always drops strict mode for a zero-argument tool (e.g.
++    ``list_mcps``). The SDK's ``FunctionTool.__post_init__`` runs
++    ``ensure_strict_json_schema`` whenever ``strict_json_schema`` is true,
++    which (by design, see ``agents.strict_schema._EMPTY_SCHEMA``) renders a
++    parameterless tool as ``{"properties": {}, "required": [], ...}``. That
++    shape is the SDK's own canonical "no parameters" schema and is spec-valid,
++    but at least one strict OpenAI-compatible backend (Groq, as of
++    2026-10) rejects it outright with "'required' present but 'properties'
++    is missing" -- some layer between litellm and Groq appears to drop the
++    empty ``properties`` dict while keeping the empty ``required`` list.
++    Disabling strict mode for just these schemas sidesteps the SDK's
++    post-init normalization (so no ``required``/``additionalProperties`` is
++    added) without touching tools that take real parameters, and without
++    forcing non-strict mode on providers where the original schema was fine.
++
+     Returns a copy so the shared tool singletons keep their declared mode.
+     """
++    if _is_empty_params_schema(tool.params_json_schema) and tool.strict_json_schema:
++        return dataclasses.replace(
++            tool,
++            strict_json_schema=False,
++            params_json_schema={"type": "object", "properties": {}},
++        )
+     if strict_schemas or not tool.strict_json_schema:
+         return tool
+     return dataclasses.replace(tool, strict_json_schema=False)
