@@ -39,6 +39,7 @@ tags (R1–R11, G1–G6), see [`../shared/taxonomy.json`](../shared/taxonomy.jso
 | [`strix-local-backend-notes.md`](strix-local-backend-notes.md) | Strix execution-flow analysis and a Docker-free local backend design. |
 | [`strix-local-poc/`](strix-local-poc/) | PoC for the above (patch, verification scripts, results). |
 | [`cairn-lab/`](cairn-lab/) | Runbook and real config for running Cairn in an authorized, isolated lab; plus a no-attack mock config. |
+| [`strix-local-poc/windows-wsl-ollama-setup.md`](strix-local-poc/windows-wsl-ollama-setup.md) (JA) | Hands-on Windows 11 + WSL2 + local-Ollama setup to run Strix with no cloud LLM cost, against a self-hosted practice target (e.g. DVWA). |
 
 ### [Scope expansion] LLM systems as the target
 
