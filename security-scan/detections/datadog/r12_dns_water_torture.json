@@ -1,0 +1,23 @@
+{
+  "name": "[R12] Recursive resolver flooded with random-subdomain queries (DNS water torture)",
+  "type": "log_detection",
+  "message": "A high volume of NXDOMAIN-answered queries for distinct, pseudo-random subdomains under a single registered domain was observed at a recursive resolver. This is the classic 'DNS water torture' / random subdomain attack: forcing cache misses so every query is forwarded to the target domain's authoritative nameservers, exhausting their capacity. This is a volumetric availability signal, not proof of malicious intent by itself -- some CDN/anycast setups legitimately generate high-cardinality, often-missing subdomain traffic.\n\nTune: replace the allowlist with domains you expect legitimate high-cardinality subdomain traffic for; adjust the per-domain query-count and NXDOMAIN-ratio thresholds to your resolver's baseline.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1498.002", "tactic:impact"],
+  "queries": [
+    {
+      "name": "dns_nxdomain_burst",
+      "query": "source:dns @dns.answer:NXDOMAIN -@dns.question.registered_domain:(internal.example)",
+      "aggregation": "cardinality",
+      "aggregationField": "@dns.question.name",
+      "groupByFields": ["@dns.question.registered_domain"]
+    }
+  ],
+  "cases": [
+    {
+      "name": "High-cardinality NXDOMAIN burst against one domain",
+      "status": "high",
+      "condition": "dns_nxdomain_burst > 200"
+    }
+  ],
+  "options": { "evaluationWindow": 60, "keepAlive": 600, "maxSignalDuration": 3600 }
+}

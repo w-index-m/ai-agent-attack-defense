@@ -1,0 +1,46 @@
+title: Recursive resolver flooded with random subdomain queries for one domain (DNS water torture)
+id: 7d3e9c1a-5f2b-4a86-b9e1-r12dnswater00
+status: experimental
+description: >
+  Detects a surge of DNS queries for many distinct, pseudo-random subdomains
+  under a single registered domain, observed at a recursive resolver. This is
+  the classic "DNS water torture" / random subdomain attack: an attacker (or
+  a botnet) sends queries for subdomains that don't exist, forcing the
+  recursive resolver to repeatedly miss its cache and forward each one to
+  the target domain's authoritative nameservers, exhausting their capacity.
+  This rule is a resolver-side detection; it does not distinguish attacker
+  traffic from legitimate high-cardinality subdomain usage (CDN/tracking
+  pixels) without tuning the allowlist below.
+references:
+  - https://www.us-cert.gov/ncas/alerts (DNS amplification/water torture advisories)
+author: ai-agent-attack-defense
+date: 2026-10-19
+logsource:
+  category: dns
+detection:
+  selection_nxdomain_burst:
+    dns_query|contains: '.'
+    dns_answer: 'NXDOMAIN'
+  filter_allowlisted:
+    dns_query|endswith:
+      # Replace with domains you expect legitimate high-cardinality
+      # subdomain traffic for (CDN edge nodes, tracking pixels, etc.).
+      - '.internal.example'
+  condition: selection_nxdomain_burst and not filter_allowlisted
+  # Intended aggregation (apply in your SIEM, Sigma correlation isn't used
+  # here): group by (registered_domain, 1-minute window), alert when
+  # distinct_subdomain_count exceeds your baseline (e.g. > 200/min) AND
+  # nxdomain_ratio is high (e.g. > 80%) for that domain.
+fields:
+  - src_ip
+  - dns_query
+  - registered_domain
+  - dns_answer
+  - resolver_host
+falsepositives:
+  - Legitimate services with genuinely high-cardinality, often-missing subdomains (some CDN/anycast setups, DGA-based legitimate software update channels). Tune the allowlist and the NXDOMAIN-ratio threshold to your environment.
+  - A misconfigured client retrying a typo'd hostname repeatedly looks similar at low volume; this rule is only meaningful at the aggregated, per-domain volume level described above.
+level: high
+tags:
+  - attack.impact
+  - attack.t1498.002
