@@ -13,6 +13,23 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
 
 > ⚠️ 本コードは意図的に脆弱です。自分が所有・管理する隔離環境以外では絶対に動かさないこと。
 
+## スコープ制限(誤って外部に撃たないためのガード)
+
+`auto_vuln_scanner.py`は実際に攻撃ペイロードを送信するツールなので、`netcheck/netcheck.py`
+と同じ考え方で、**既定ではローカル(`127.0.0.0/8`)とプライベート範囲(`10.0.0.0/8`・
+`172.16.0.0/12`・`192.168.0.0/16`・`::1`)以外には対して実行できない**ようにしてある。
+`--url`のホスト名を解決し、解決先IPがこれらの範囲外なら即座に拒否する(exit code 2)。
+
+```bash
+# 拒否される例
+python3 auto_vuln_scanner.py --url http://8.8.8.8/login --class sqli --baseline x=x --fuzz x
+# => Refusing to scan: '8.8.8.8' resolves to 8.8.8.8, which is outside
+#    localhost/RFC1918 private ranges. ... pass --i-own-this-target to override.
+```
+
+自分が所有する、プライベート範囲外のホスト(社内ネットワークの外のステージング環境等)を
+明示的にテストしたい場合のみ、`--i-own-this-target`で上書きできる。
+
 ## 対象アプリ
 
 [`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。4種類の脆弱性クラスを含む。

@@ -15,11 +15,44 @@ in this same directory.
 from __future__ import annotations
 
 import argparse
+import ipaddress
+import socket
 import sys
 from dataclasses import dataclass, field
 from typing import Callable
+from urllib.parse import urlparse
 
 import requests
+
+# Same allow-list as netcheck/netcheck.py: loopback + RFC1918 private ranges.
+# This scanner actually fires live attack payloads, so by default it refuses
+# to touch anything that isn't a target you plausibly run yourself.
+ALLOWED_NETWORKS = [
+    ipaddress.ip_network(net)
+    for net in ("127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "::1/128")
+]
+
+
+def _is_allowed_target(url: str) -> tuple[bool, str]:
+    host = urlparse(url).hostname
+    if not host:
+        return False, f"could not parse a hostname out of {url!r}"
+
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        return False, f"could not resolve host {host!r}: {exc}"
+
+    addrs = {info[4][0] for info in infos}
+    for addr in addrs:
+        ip = ipaddress.ip_address(addr)
+        if not any(ip in net for net in ALLOWED_NETWORKS):
+            return False, (
+                f"{host!r} resolves to {addr}, which is outside localhost/RFC1918 "
+                f"private ranges. This scanner only fires live attack payloads at "
+                f"targets you own; pass --i-own-this-target to override."
+            )
+    return True, ""
 
 # --------------------------------------------------------------------------
 # SQLi: same approach as auto_sqli_scanner.py
@@ -192,7 +225,19 @@ def main() -> int:
         required=True,
         help="param name to fuzz, repeatable, e.g. --fuzz q",
     )
+    parser.add_argument(
+        "--i-own-this-target",
+        action="store_true",
+        help="override the localhost/RFC1918-only scope check; only use this "
+        "against a target you actually own or are explicitly authorized to test",
+    )
     args = parser.parse_args()
+
+    if not args.i_own_this_target:
+        allowed, reason = _is_allowed_target(args.url)
+        if not allowed:
+            print(f"Refusing to scan: {reason}", file=sys.stderr)
+            return 2
 
     base_params = dict(kv.split("=", 1) for kv in args.baseline)
     vuln_class = VULN_CLASSES[args.vuln_class_name]
