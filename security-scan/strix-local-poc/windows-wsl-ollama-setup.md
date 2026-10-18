@@ -153,6 +153,24 @@ strix -n -t http://localhost:8080 --scan-mode quick --max-budget 10
   → 「ローカルOllamaでの接続は未検証」としていた前段の記述を、ここで実証済みに更新する。
   GPU なし(CPU 推論、AMD iGPU 未対応環境)でも、最初の応答に数分程度かかる以外は動作した。
 
+## `-n`(headless)は常に付けなくてよい
+
+`AGENTS.md`(Strix公式のエージェント向けガイド)には「ヘッドレス実行には常に`-n`を使う」と
+あるが、これはCI/自動化向けの指示。**手元で対話的に様子を見ながら試す用途では`-n`を外した
+方がよい**。`-n`ありだと要約パネルしか出ず、別ターミナルで`strix view <run-name>`を開いて
+ブラウザで見る、という2系統の操作が必要になる。`-n`を外すと、同じターミナル内の対話型TUI
+(ライブビュー)でエージェントの動き・コマンド・結果が見られ、ブラウザを別途開く必要がない。
+
+```bash
+# 観察しながら試す場合(1ウィンドウで完結)
+strix -t http://localhost:8080 --scan-mode quick --max-budget 10 --max-turns 30 \
+  --instruction "..."
+
+# 自動化/CI向け(-n、要約のみ。strix viewと組み合わせる)
+strix -n -t http://localhost:8080 --scan-mode quick --max-budget 10 --max-turns 30 \
+  --instruction "..."
+```
+
 ## モデルサイズ別の実機比較(`qwen2.5:1.5b` vs `qwen2.5:7b`)
 
 ハードウェア: AMD Ryzen 7 7735HS(内蔵GPU、ただしドライバ未更新のためCPU推論)、実装RAM 32GB
@@ -218,6 +236,33 @@ curl http://host.docker.internal:8080
   止めずに並行して見られる。WSLは `gio: ... Operation not supported` という警告付きで
   ブラウザを自動起動できないので、表示されたURLを手動でコピーしてWindows側のブラウザに
   貼る。
+
+## 自動化スクリプト(Windows側から一括起動)
+
+ここまでの手順(Docker起動確認・Ollama起動確認・DVWAコンテナ起動確認・WSL側での環境変数
+設定とstrix実行)を、PowerShellスクリプトとして自動化したものが
+[`start-strix-test.ps1`](start-strix-test.ps1)。
+
+Windows側から直接 `wsl.exe` を呼ぶ構成(Python経由ではない)。Windows側のプロセス
+(Docker Desktop・Ollama)はPowerShellから、実行自体はWSL側のStrixに委譲するのが素直なため。
+
+```powershell
+# 既定値(DVWA、qwen2.5:7b、対話TUI)で実行
+.\security-scan\strix-local-poc\start-strix-test.ps1
+
+# 指示付き・モデル指定
+.\security-scan\strix-local-poc\start-strix-test.ps1 `
+  -Model "qwen2.5-coder:7b" `
+  -Instruction "This is DVWA. Log in with admin:password, set DVWA Security to Low, then test the SQL Injection page only."
+```
+
+未検証の部分(初回実行時に確認すること):
+- `$DockerDesktopPath` の既定値(`C:\Program Files\Docker\Docker\Docker Desktop.exe`)が
+  実際のインストール先と一致しているか。
+- 既にOllamaアプリ(GUI版)が `OLLAMA_HOST` 未設定のまま起動している場合、スクリプトは
+  `http://localhost:11434/api/tags` への疎通だけ見て「起動済み」と判断する。WSL側から
+  到達できない構成(0.0.0.0で待ち受けていない)のまま進んでしまう可能性があるため、
+  その場合は一度Ollamaアプリを終了してからスクリプトを再実行すること。
 
 ## 未検証(このメモの範囲外)
 
