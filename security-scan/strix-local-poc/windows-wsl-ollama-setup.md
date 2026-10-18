@@ -363,7 +363,8 @@ Strix本家へのフィードバックとしても価値がある内容(GitHub I
 | `qwen2.5:7b`(ローカル・通常) | 最初の数手は対象に即した正しい判断(`curl http://host.docker.internal:8080`等)。ターンが進むと`ls`/`pwd`等の無意味な繰り返しループに陥る。指示(`--instruction`)で的を絞っても、SQLiページへの実際のリクエスト(`id=1'`)までは到達したが、その後また無関係な探索に戻った。 |
 | `hermes3:8b`(ローカル) | 1手目のツール呼び出しからJSONが壊れてパース失敗。 |
 | `qwen2.5:7b` + `STRIX_FORCE_REQUIRED_TOOL_CHOICE=true`(ローカル) | 同上、1手目からJSONが壊れてパース失敗。 |
-| `groq/openai/gpt-oss-120b`(クラウド) | モデルの応答以前に、Strix内部の`list_mcps`ツールのJSONスキーマ不備でリクエスト自体がGroqに拒否される。 |
+| `groq/openai/gpt-oss-120b`(クラウド、パッチ前) | モデルの応答以前に、Strix内部の`list_mcps`ツールのJSONスキーマ不備でリクエスト自体がGroqに拒否される。 |
+| `groq/openai/gpt-oss-120b` / `gpt-oss-20b`(クラウド、`groq-empty-schema.patch`適用後) | スキーマエラーは解消したが、Strix本体のシステムプロンプト＋ツール定義だけで約47,000トークンになり、Groq無料枠のTPM上限(8,000/分)をモデルに関係なく超過。1ターンも成立せず`persistent rate limit`で停止。 |
 
 **このマシン・このモデルサイズ帯(ローカル、CPU推論、1.5B〜8B)では、Strixが要求する
 「長い引数を含む正確なJSON形式のツール呼び出し」を安定して生成できない。クラウド側
@@ -460,6 +461,32 @@ Model groq/openai/gpt-oss-120b
 → パッチの有効性は、この時点で(エラーが出なくなったという消極的な形で)確認できた。
 スキャンが完走するか、`gpt-oss-120b`の実際の検出精度がどうかは、このメモの時点では
 計測中/未確定。
+
+### 続報: Groq無料枠では、モデルに関係なく1ターン目から構造的に失敗する
+
+続けて実行したところ、別の種類の失敗に遭遇した。`strix.log`で確認した原因は以下。
+
+```
+prompt_len=102392   (Strix自身のシステムプロンプトの文字数)
+...
+GroqException - "Request too large for model `openai/gpt-oss-120b` ...
+on tokens per minute (TPM): Limit 8000, Requested 47316 ..."
+```
+
+Strix本体のシステムプロンプト＋44個のツール定義だけで**約47,000トークン**になり、
+これは**選んだモデルに関係なく**(`gpt-oss-120b`・`gpt-oss-20b`の両方で同じ数値)、
+Groqの無料枠(`on_demand`サービスティア)の上限(**1分あたり8,000トークン**)を最初から
+6倍近く超えている。`--instruction`を短くしても、Strix本体のプロンプト自体が大きすぎる
+ため効果がない。Strix側は5回まで自動リトライ(最大32秒間隔のバックオフ)するが、
+Groq側のTPM上限は変わらないので全て同じ理由で失敗し、最終的に
+`persistent rate limit from the LLM provider` として停止する
+(`SESSION ENDED`、`Vulnerabilities 0`、`Tokens 0`— 1ターンも成立していない)。
+
+**結論**: Groqの無料枠(`on_demand`ティア)では、モデル選択に関係なく、Strixは
+原理的に1ターン目すら通らない。回避するには、Groqの有料プラン(Dev Tier)へのアップグレード、
+または別プロバイダ(無料枠のTPM制限がより緩いもの)への切り替えが必要。この問題は
+`groq-empty-schema.patch`とは無関係(パッチ自体は有効であることは、前段の実行で
+スキーマエラーが出なくなった事実から確認済み)。
 
 ## 未検証(このメモの範囲外)
 
