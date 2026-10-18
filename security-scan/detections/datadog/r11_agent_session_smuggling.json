@@ -1,0 +1,18 @@
+{
+  "name": "[R11] Tool call inside a multi-agent session with no direct user instruction",
+  "type": "log_detection",
+  "message": "A client agent invoked a tool during a cross-agent (e.g. A2A) session, in a turn that was not a direct response to the end user's own instruction. This is the behavioral signature Unit 42 describes in \"When AI Agents Go Rogue: Agent Session Smuggling Attack in A2A Systems\" (2025-10-31): a malicious remote agent injects hidden instructions between a legitimate request and the final response, inducing unauthorized tool calls the user never sees. Unit 42 states this attack has not been observed in the wild (PoC-stage research) — treat a hit as a strong anomaly worth reviewing, not a confirmed compromise.\n\nRequires application-level instrumentation: your agent framework must log each tool_call event with the originating session turn and whether it traces back to a user-authored message (user_initiated:false below is the key signal). This is unlike R1-R10, which read standard network/proxy logs; there is no generic network signature for this attack, since the whole point is that it happens inside an already-trusted session.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1565", "tactic:command-and-control"],
+  "queries": [
+    {
+      "name": "tool_call_without_user_instruction",
+      "query": "source:agent-framework @event.type:tool_call @session.cross_agent:true @session.user_initiated:false",
+      "aggregation": "count",
+      "groupByFields": ["@session.id", "@agent.remote_name", "@tool.name"]
+    }
+  ],
+  "cases": [
+    { "name": "Unexplained tool call in a cross-agent session", "status": "high", "condition": "tool_call_without_user_instruction > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

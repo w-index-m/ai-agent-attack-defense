@@ -168,3 +168,18 @@ trio to much of types ④⑤⑥. Priority: **R1/R4 (egress) → R2 (privileged c
 (rapid multi-tool) → R3 (recon) → R5 (persistence) → R6 (correlation)**.
 
 > Detection/defense design only. No attack execution or safety-bypass steps.
+
+## 7. Scope expansion: attacks on LLM systems themselves
+
+Everything above treats AI agents as the **attacker** (Gambit, ARTEX, and similar). The other
+direction — an LLM-based system becoming the **target** (prompt injection, system prompt
+leakage, LLMjacking) — is covered separately in
+[`llm-target-attacks.en.md`](llm-target-attacks.en.md) (日本語: [`llm-target-attacks.ja.md`](llm-target-attacks.ja.md)),
+confirmed against primary sources (EchoLeak/CVE-2025-32711, PLeak, Sysdig's LLMjacking reports,
+the Semantic Kernel/ModelScope CVEs via their original GitHub Security Advisories — Context7
+rests on secondary sources only — and several Unit 42 studies: a large-scale in-the-wild IDPI
+telemetry analysis, the GCP Vertex AI "Double Agents" case, and "agent session smuggling" in
+A2A systems), with connection points back to R1–R8/G1–G6 noted. Three of its five patterns
+(indirect prompt injection, LLMjacking's metadata-service variant, and abuse of multi-agent
+sessions) now have actual Sigma/Datadog rules in `detections/`, as **R9–R11** (see
+`detections/README.md`); the rest remain pointed out, not implemented as rules.

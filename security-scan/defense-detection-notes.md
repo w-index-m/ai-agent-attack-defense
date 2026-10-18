@@ -244,6 +244,8 @@ LLM 利用ガバナンス（プロンプト/ツール呼び出しの監査、安
 > まとめ：**ATT&CK＝攻撃者の“行為”の共通語（強い対応）**、**ATLAS＝AI を巡る脅威の地図（接続点）**、
 > **OWASP-LLM＝自組織 LLM アプリの守り（接続点）**。新ルールには、まず ATT&CK ID、該当すれば ATLAS/OWASP-LLM ID を併記する。
 
+> **この節の接続点を、実例つきで掘り下げたのが [`llm-target-attacks.ja.md`](llm-target-attacks.ja.md)（[EN](llm-target-attacks.en.md)）。** EchoLeak（CVE-2025-32711）、PLeak、Semantic Kernel/ModelScope の CVE（GitHub Security Advisory の原文で確認済み。Context7 のみ二次情報）、LLMjacking（Sysdig）、Unit 42 の複数研究（Web経由IDPIの大規模実態調査、GCP Vertex AI "Double Agents"、A2Aプロトコルの "Agent Session Smuggling"）を確認した上で、本ノートの R1–R8/G1–G6 との接続点を示す。「AI が攻撃する側」ではなく「LLM システムが標的になる側」を扱う、スコープ拡張の文書。**このうちC・D・Eの3パターンは、R9–R11として `detections/` に実際の検知ルール（Sigma/Datadog）を追加済み**（`detections/README.md` 参照）。
+
 ## 4. SOC トリアージ手順（優先度順）
 
 1. **R1/R4 ヒット** → 送信元ホストの業務用途を確認。正規でなければ即封じ込め（egress 遮断）＋プロセス/コンテナ調査。

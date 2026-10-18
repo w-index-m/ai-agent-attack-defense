@@ -1,0 +1,46 @@
+title: LLM/agent egress steered by injected content to a non-allowlisted domain
+id: 9c2f4a1e-6b3d-4f87-a1d2-r9idpiegress0
+status: experimental
+description: >
+  Detects an LLM/agent process sending data to a destination outside its
+  approved domain allowlist, immediately after fetching external web content.
+  Web-based indirect prompt injection (IDPI) works by embedding hidden
+  instructions in a page the agent reads (summarization, content analysis),
+  which then steers the agent to send data elsewhere (Unit 42, "Fooling AI
+  Agents: Web-Based Indirect Prompt Injection Observed in the Wild",
+  2026-03-03). This rule does not inspect page content; it is a
+  behavioral proxy — an unapproved-domain egress that correlates in time
+  with an agent's own web-fetch activity — not proof of IDPI by itself.
+references:
+  - https://unit42.paloaltonetworks.com/
+author: ai-agent-attack-defense
+date: 2026-10-16
+logsource:
+  category: proxy
+detection:
+  selection_agent_ua:
+    user_agent|contains:
+      - 'python-requests'
+      - 'node-fetch'
+      - 'LangChain'
+      - 'AutoGen'
+      - 'CrewAI'
+      - 'openclaw'
+  filter_allowlisted:
+    dest_host|endswith:
+      # Replace with your own approved egress domains (CDNs, your SaaS tools, etc.).
+      - '.internal.example'
+  condition: selection_agent_ua and not filter_allowlisted
+fields:
+  - src_ip
+  - dest_host
+  - user_agent
+  - http_referer
+  - bytes_out
+falsepositives:
+  - Legitimate agent integrations that routinely call many external APIs; tune the allowlist to your environment rather than relying on this rule alone.
+  - Generic HTTP client user agents are also used by many non-agent automation tools (scrapers, monitors); correlate with known agent service accounts/hosts.
+level: medium
+tags:
+  - attack.command_and_control
+  - attack.t1204

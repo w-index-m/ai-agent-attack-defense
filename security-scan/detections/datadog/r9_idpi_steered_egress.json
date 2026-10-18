@@ -1,0 +1,18 @@
+{
+  "name": "[R9] LLM/agent egress to a non-allowlisted domain (possible IDPI)",
+  "type": "log_detection",
+  "message": "An LLM/agent process (identified by user agent) sent data to a domain outside the approved allowlist. This is a behavioral proxy for web-based indirect prompt injection (IDPI) steering the agent's output elsewhere, per Unit 42's large-scale in-the-wild IDPI telemetry study (2026-03-03) — it is not proof of IDPI on its own. Correlate with the agent's recent web-fetch activity and review the destination.\n\nTune: replace the allowlist with your own approved egress domains; scope user-agent matching to your actual agent stack.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1204", "tactic:command-and-control"],
+  "queries": [
+    {
+      "name": "idpi_egress",
+      "query": "source:(proxy OR firewall) @http.useragent:(*python-requests* OR *node-fetch* OR *LangChain* OR *AutoGen* OR *CrewAI* OR *openclaw*) -@network.destination.name:(*.internal.example)",
+      "aggregation": "count",
+      "groupByFields": ["@network.client.ip", "@network.destination.name"]
+    }
+  ],
+  "cases": [
+    { "name": "Agent egress to unapproved domain", "status": "medium", "condition": "idpi_egress > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

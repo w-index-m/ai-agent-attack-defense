@@ -99,6 +99,18 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   <a href="#assets">⑥ リポジトリ資産</a>
 </nav>
 
+<div class="card" style="margin-bottom:14px">
+  <h3 style="margin:0 0 6px;font-size:14px">このダッシュボードの主眼</h3>
+  <p class="cap" style="line-height:1.7;margin:0">
+    主眼は「<b>攻撃者がAIエージェントを使って攻めてくること</b>」への防御。
+    ①（敵がどう動くか）②（自社が検知できるか）③（LLMと無関係な、昔からの基本対策も含む一般的な予防策）が全体の主軸で、
+    ⑤⑥は認定プログラム対応・資料リンク。
+    一方、「<b>自社がAIエージェントを導入して使う側になった時の注意</b>」は④だけが対応する、全体の一部。
+    ④のG1–G6は、自社のAI利用が「攻撃者に乗っ取られる／暴走する」側に回らないためのガバナンスであり、
+    ①〜③（外から攻められる話）とは観測点も対応も別物なので、混同しないこと。
+  </p>
+</div>
+
 <!-- ① MAP -->
 <section id="map">
   <h2>① 攻撃用AIエージェント マップ <span class="en">Landscape</span></h2>
@@ -159,6 +171,21 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
     <span class="chip" style="border-color:var(--c3);cursor:pointer" data-type="t5">⑤ 基盤</span>
     <span class="chip" style="border-color:var(--c4);cursor:pointer" data-type="t6">⑥ アシスタント</span>
     <span class="chip" style="cursor:pointer" data-type="all">すべて表示</span>
+  </div>
+  <div class="card" style="margin:0 0 10px">
+    <p class="cap" style="line-height:1.6;margin:0 0 6px"><b>一言でまとめると</b>：R1–R8は、AIエージェントが侵入先で実際にとる行動の型。防御側の共通した答えは「<b>単発では見逃しても、組み合わせ(R6)で必ず引っかける</b>」こと。</p>
+    <table style="font-size:12.5px"><thead>
+      <tr><th>ID</th><th>攻撃側がやること（たとえ話）</th><th>防御側の考え方（たとえ話）</th></tr>
+    </thead><tbody>
+      <tr><td>R1</td><td>侵入先から外部のAIに「次に何をすべきか」を相談し続ける（泥棒がスマホで外部の司令塔に指示を仰ぐイメージ）</td><td>許可したAIサービス以外への発信を遮断する（内線電話を外部へかけられなくする）</td></tr>
+      <tr><td>R2</td><td>本来許されない「何でもできるモード」でコンテナを起動し、強力な道具を使えるようにする</td><td>その起動モード自体を、申請なしには拒否する（安全装置なしでは機械が動かないようにする）</td></tr>
+      <tr><td>R3</td><td>裏口や通用口がないか、片っ端からドアを叩いて回る</td><td>短時間に大量のドアを叩かれたら、警備員が気づいて記録する</td></tr>
+      <tr><td>R4</td><td>乗っ取ったサーバから、外部のチャットアプリ経由で攻撃者本人に結果を報告する</td><td>業務で使わないチャットアプリへの通信を遮断する</td></tr>
+      <tr><td>R5</td><td>一度追い出されても自動的にまた侵入できるよう、裏口の合鍵を複製して隠す（定期実行の仕掛けを仕込む）</td><td>新しい「定期実行の仕掛け」が勝手に作られていないか監視する</td></tr>
+      <tr><td>R7</td><td>1人の作業員が、短時間に泥棒道具一式を次々取り出して使う、いかにも「偵察中」の動き</td><td>1人が短時間に多種の専門道具を立て続けに使っていたら、それ自体を怪しい兆候として検知する</td></tr>
+      <tr><td>R6</td><td>単体では見逃されがちな複数の小さな不審行動を、連鎖させて一気に攻撃を進める</td><td>個々の兆候を組み合わせで評価し、組み合わさったら警報を強くする（ダッシュボードの核）</td></tr>
+      <tr><td>R8</td><td>Webサーバの公開フォルダに、遠隔操作用の裏口プログラムをこっそり置く</td><td>公開フォルダへの新規ファイル配置や、そこから起動した異常なプロセスを検知する</td></tr>
+    </tbody></table>
   </div>
   <div class="sc">
   <table id="covtab">
@@ -229,6 +256,19 @@ code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background
   </div>
   <h3 style="margin:14px 0 2px;font-size:14px">監査イベント G1–G6（ガバナンス層）</h3>
   <p class="note">ネットワーク/ホストの R1–R8 とは観測点が異なり、<b>アプリ/監査ログ層</b>（エージェント監査ログ・スキルレジストリ・LLM/ツールゲートウェイ・ログ基盤）で見る。</p>
+  <div class="card" style="margin:0 0 10px">
+    <p class="cap" style="line-height:1.6;margin:0 0 6px"><b>一言でまとめると</b>：G1–G6は全部、「AIに、自分自身の制約を自分で変えさせない」という1つの大原則の現れ方のバリエーション。防御側の共通した答えは「その判断・制御は、AIの外側（人間、または人間が設定した固定ルール）に置く」こと。</p>
+    <table style="font-size:12.5px"><thead>
+      <tr><th>ID</th><th>攻撃側がやろうとすること（たとえ話）</th><th>防御側の考え方（たとえ話）</th></tr>
+    </thead><tbody>
+      <tr><td>G1</td><td>新しい攻撃用の道具を自分で作る／既存の道具を勝手に改造する（隠れて違法な工具を自作するイメージ）</td><td>認められた道具しか使わせない。検品（署名・一覧照合）を通らない道具は使えなくする</td></tr>
+      <tr><td>G2</td><td>自分自身の安全装置を、自分で外そうとする（運転手がスピードリミッターを自分で解除しようとするイメージ）</td><td>安全装置を「運転手(AI)の手が届かない場所」に置く</td></tr>
+      <tr><td>G3</td><td>直接ダメと言われたことを、言い方を変えて遠回しに誘導する（裏口から入ろうとするイメージ）</td><td>「言い方が怪しい」「何度も違う角度から同じことを試している」というパターンを見つけて記録する</td></tr>
+      <tr><td>G4</td><td>自分がやったことの証拠を消そうとする（防犯カメラの電源を切るイメージ）</td><td>映像を即座に別の金庫（外部・書き込み禁止の場所）へ送る。カメラが止まったこと自体をアラームにする</td></tr>
+      <tr><td>G5</td><td>最初は小さい権限で始め、少しずつ範囲を広げようとする（借りる鍵が徐々に増えていくイメージ）</td><td>鍵を渡すたびに上司の承認を必須にし、期限付きにして自動的に返却させる</td></tr>
+      <tr><td>G6</td><td>自分の分身（子AI）を大量に作り、少しずつ分担させて全体としては大きな攻撃になるようにする</td><td>同時に働ける分身の数に上限を設け、急な大量発生を異常として検知する</td></tr>
+    </tbody></table>
+  </div>
   <div class="sc"><table><thead>
     <tr><th>ID</th><th>監査イベント</th><th>データソース</th><th>優先度</th><th>対応</th></tr>
   </thead><tbody>

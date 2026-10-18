@@ -4,3 +4,5 @@ patches/
 __pycache__/
 results/
 node_modules/
+security-scan/sqli-lab/docs/
+security-scan/sqli-lab/venv/
