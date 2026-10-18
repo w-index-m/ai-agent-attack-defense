@@ -382,6 +382,85 @@ Strix自身(`list_mcps`ツール)のスキーマ不備でブロックされる**
   自体は変わらないが、試行回数を増やしやすくなる)。
 - OpenRouter等、別のOpenAI互換プロバイダでも同じスキーマ検証エラーが出るか確認。
 
+## パッチの実機適用(2026-10-18、Windows 11 + WSL2)
+
+`groq-empty-schema.patch`を、実際にWindows機のWSL上で適用し、Groqへの再接続を試した記録。
+
+### 前提: インストール済みStrixはパッチを当てられない
+
+`curl -sSL https://strix.ai/install | bash` で入る`strix`コマンドは、**単一のコンパイル済み
+バイナリ(ELF、PyInstaller等でまとめられたもの)**で、`agents/factory.py`のような裸の
+Pythonソースファイルは存在しない。`find ~/.strix -iname "factory.py"`は何も見つからない。
+パッチを当てるには、**ソースから動かす形に切り替える**必要がある。
+
+### ソースからのセットアップ
+
+```bash
+# uv(Pythonパッケージ管理)の導入
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.local/bin/env
+
+# Strixのソースを取得して依存関係を導入
+git clone https://github.com/usestrix/strix.git ~/strix-src
+cd ~/strix-src
+uv sync   # strix-agent==1.7.0 がeditableインストールされる
+```
+
+このリポジトリ自体もWSL側にクローンし、対象のブランチに切り替えてパッチファイルを取得する。
+
+```bash
+git clone https://github.com/w-index-m/ai-agent-attack-defense.git ~/ai-agent-attack-defense
+cd ~/ai-agent-attack-defense
+git fetch origin claude/github-access-check-mc93sm
+git checkout claude/github-access-check-mc93sm
+```
+
+パッチ適用:
+
+```bash
+cd ~/strix-src
+patch -p1 < ~/ai-agent-attack-defense/security-scan/strix-local-poc/groq-empty-schema.patch
+# patching file strix/agents/factory.py
+# Hunk #1 succeeded at 280 (offset 6 lines).
+```
+
+### 実行は `strix` ではなく `uv run strix`
+
+ソースから動かす場合、実行コマンドの先頭に`uv run`を付ける(ソースツリーのeditable
+インストールを使わせるため)。
+
+```bash
+uv run strix -n -t http://localhost:8080 --scan-mode quick --max-budget 10 --max-turns 30 \
+  --instruction "..."
+```
+
+**つまずいた点**: `-n`を付けずに対話TUIで実行しようとすると、
+`INTERACTIVE SETUP UNAVAILABLE: Bubble Tea TUI binary not found` で止まる。
+TUI(Goで書かれた別バイナリ)は、公式配布されるビルド済みwheelに同梱されているが、
+`git clone` + `uv sync`のソース実行では同梱されない。**ソースから動かす場合は`-n`
+(ヘッドレス)必須**、進捗は`uv run strix view <run-name>`で見る。
+
+### 結果: スキーマエラーは解消、別の設定ミスに遭遇
+
+1回目の実行で `litellm.InternalServerError: GroqException - 'ascii' codec can't encode
+characters in position 12-14: ordinal not in range(128)` というエラーが出たが、これは
+**パッチとは無関係の設定ミス**: `GROQ_API_KEY`に実際のキーではなく、
+`<Groqキーをここに>`のようなプレースホルダー文字列(日本語の説明文)をそのまま
+`export`してしまっていたことが原因。`echo "$GROQ_API_KEY" | cat -A`で中身を目視確認し、
+実際のAPIキー文字列に置き換えて解決。
+
+実際のキーに直して再実行したところ、
+
+```
+Penetration test initiated
+Model groq/openai/gpt-oss-120b
+```
+
+で起動し、**以前のように`list_mcps`のJSONスキーマエラーで即座に落ちることはなくなった**。
+→ パッチの有効性は、この時点で(エラーが出なくなったという消極的な形で)確認できた。
+スキャンが完走するか、`gpt-oss-120b`の実際の検出精度がどうかは、このメモの時点では
+計測中/未確定。
+
 ## 未検証(このメモの範囲外)
 
 - `qwen2.5:7b` でのスキャン完走、および実際の脆弱性検出精度(DVWAの既知のSQLi等を
