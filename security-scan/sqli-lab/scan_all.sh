@@ -23,3 +23,11 @@ run "CMDi: /diag (vulnerable)"     --url "$BASE_URL/diag"        --class cmdi --
 run "CMDi: /diag_safe (fixed)"     --url "$BASE_URL/diag_safe"   --class cmdi --baseline host=zzz --fuzz host
 run "Traversal: /file (vulnerable)"      --url "$BASE_URL/file"       --class traversal --baseline name=public.txt --fuzz name
 run "Traversal: /file_safe (fixed)"      --url "$BASE_URL/file_safe"  --class traversal --baseline name=public.txt --fuzz name
+
+echo "=== CSRF: /csrf_transfer (vulnerable) ==="
+python3 csrf_check.py --url "$BASE_URL" --login-path /csrf_login --transfer-path /csrf_transfer || true
+echo
+
+echo "=== CSRF: /csrf_transfer_safe (fixed) ==="
+python3 csrf_check.py --url "$BASE_URL" --login-path /csrf_login --transfer-path /csrf_transfer_safe || true
+echo

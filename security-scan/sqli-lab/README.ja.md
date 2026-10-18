@@ -3,8 +3,9 @@
 Strix(AIエージェントによる自動ペンテスト)をローカル(Windows/WSL2 + Ollama/Groq/OpenRouter)で
 動かす一連の試み([`../strix-local-poc/windows-wsl-ollama-setup.md`](../strix-local-poc/windows-wsl-ollama-setup.md))
 と並行して、「発想を変えて、AIエージェントなしで脆弱性自体を実証する」ために作った最小限のラボ。
-当初はSQLiのみだったが、「Strixは他の脆弱性クラスも見る」という問いを受けてXSS、さらに
-OSコマンドインジェクション・パストラバーサルにも対応範囲を広げた。
+当初はSQLiのみだったが、「Strixは他の脆弱性クラスも見る」という問いを受けてXSS、
+OSコマンドインジェクション・パストラバーサル、さらにCSRF(クロスサイト・リクエスト・
+フォージェリ)にも対応範囲を広げた。
 
 Claude Codeのクラウドサンドボックス環境は外向きのLLM通信がほぼ全てブロックされているため
 (詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md))、Strixのようなエージェント実行は
@@ -32,7 +33,7 @@ python3 auto_vuln_scanner.py --url http://8.8.8.8/login --class sqli --baseline 
 
 ## 対象アプリ
 
-[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。4種類の脆弱性クラスを含む。
+[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。5種類の脆弱性クラスを含む。
 
 - `/login`: 文字列連結でSQLを組み立てる、**意図的に脆弱**なエンドポイント(SQLi)
 - `/login_safe`: パラメータ化クエリ(プレースホルダ `?`)を使う、**修正済み**の同じ機能のエンドポイント
@@ -43,6 +44,9 @@ python3 auto_vuln_scanner.py --url http://8.8.8.8/login --class sqli --baseline 
 - `/diag_safe`: `shell=False`でホスト名を1つの引数として渡す、**修正済み**の同じ機能のエンドポイント
 - `/file`: `docs/`配下のファイルを素朴にパス連結で読む、**意図的に脆弱**なエンドポイント(パストラバーサル)
 - `/file_safe`: 解決後のパスが`docs/`配下に収まっているかを検証する、**修正済み**の同じ機能のエンドポイント
+- `/csrf_login` + `/csrf_transfer`: セッションCookieだけで送金処理を実行する、**意図的に脆弱**な
+  エンドポイント(CSRF)。CSRFトークンの検証が一切無い。
+- `/csrf_transfer_safe`: ログイン時に発行したCSRFトークンの一致を検証する、**修正済み**の同じ機能のエンドポイント
 
 起動:
 
@@ -135,6 +139,33 @@ curl -s -G "http://127.0.0.1:5000/file" --data-urlencode "name=../../../../../..
 対策版(`/file_safe`、解決後のパスが`docs/`配下に収まっているかを検証)に同じ攻撃を送ると、
 `403 Access denied.`で拒否される。
 
+### 6. CSRF(`/csrf_transfer`)
+
+CSRFは他の脆弱性と違い、ペイロードを工夫する攻撃ではなく、**「正規ユーザーのセッションCookieに
+ただ乗りする」攻撃**。攻撃者は自分のサイトに自動送信フォームを仕込むだけで、ユーザー本人の
+ブラウザが(ログイン中の)セッションCookieを一緒に送ってしまう。
+
+```bash
+# 1. 正規ユーザーとしてログイン(Cookieを保存)
+curl -s "http://127.0.0.1:5000/csrf_login" -c cookies.txt
+# => Logged in as alice. Balance: 100.
+
+# 2. 攻撃者の偽フォームを模擬: 同じCookieで、CSRFトークン無しに送金を実行
+curl -s -b cookies.txt -X POST "http://127.0.0.1:5000/csrf_transfer" -d "amount=50"
+# => Transferred 50. New balance: 50.   ← トークンを知らなくても送金が成立してしまう
+```
+
+対策版(`/csrf_transfer_safe`、ログイン時に発行したCSRFトークンとの一致を検証)に同じ
+攻撃(トークン無し)を送ると、`403 CSRF token missing or invalid.`で拒否される。
+トークンは同一オリジンのページしか読み取れない(ブラウザのSame-Origin Policyで保護される)ため、
+第三者のサイトからは正しいトークンを知りようがない。
+
+```bash
+curl -s "http://127.0.0.1:5000/csrf_login" -c cookies2.txt
+curl -s -b cookies2.txt -X POST "http://127.0.0.1:5000/csrf_transfer_safe" -d "amount=50"
+# => CSRF token missing or invalid.
+```
+
 ## まとめ・学び
 
 - SQLiの本質(文字列連結でSQLを組み立てる = 入力がコードとして解釈される)は、
@@ -151,6 +182,10 @@ curl -s -G "http://127.0.0.1:5000/file" --data-urlencode "name=../../../../../..
 [`auto_vuln_scanner.py`](auto_vuln_scanner.py): Strixのように「次に何を試すかをLLMが判断する」のではなく、
 固定のペイロードリストを総当たりし、レスポンスを機械的に比較するだけの、LLM不要・ルールベースのスキャナー。
 `--class`で脆弱性クラスを切り替え可能(現在は`sqli`・`xss`・`cmdi`・`traversal`に対応)。
+
+[`csrf_check.py`](csrf_check.py): CSRF専用の別スクリプト。「ペイロードを工夫する」のではなく
+「ログイン→セッションCookieだけでトークン無しの状態変更リクエストを送る→成立するか」を
+機械的に判定するため、`auto_vuln_scanner.py`とは別の仕組みになっている(同じスコープガードは共有)。
 
 ```bash
 pip3 install --user requests
@@ -186,11 +221,19 @@ python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/file --class traversal 
 # パストラバーサル: 修正版 /file_safe をスキャン(検出ゼロになるはず)
 python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/file_safe --class traversal \
   --baseline name=public.txt --fuzz name
+
+# CSRF: 脆弱版 /csrf_transfer をチェック
+python3 csrf_check.py --url http://127.0.0.1:5000 \
+  --login-path /csrf_login --transfer-path /csrf_transfer
+
+# CSRF: 修正版 /csrf_transfer_safe をチェック(拒否されるはず)
+python3 csrf_check.py --url http://127.0.0.1:5000 \
+  --login-path /csrf_login --transfer-path /csrf_transfer_safe
 ```
 
 ## まとめて1回で実行する
 
-[`scan_all.sh`](scan_all.sh): 上記8パターン(SQLi/XSS/コマンドインジェクション/パストラバーサル
+[`scan_all.sh`](scan_all.sh): 上記10パターン(SQLi/XSS/コマンドインジェクション/パストラバーサル/CSRF
 × それぞれ脆弱/修正)を1コマンドで実行するラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
 
 ```bash
@@ -210,6 +253,8 @@ python3 vulnerable_app.py &
 | コマンドインジェクション | `/diag_safe`(修正済み) | 5 | 0(誤検知なし) |
 | パストラバーサル | `/file`(脆弱) | 3 | 1(素の`../`での脱出を検出) |
 | パストラバーサル | `/file_safe`(修正済み) | 3 | 0(誤検知なし) |
+| CSRF | `/csrf_transfer`(脆弱) | 1(トークン無しの偽装リクエスト) | VULNERABLE(トークン無しで送金が成立) |
+| CSRF | `/csrf_transfer_safe`(修正済み) | 1 | Not vulnerable(403で拒否) |
 
 (パストラバーサルは3種のペイロードのうち1種のみ検出: この最小アプリは入力をそのまま
 `os.path.join`に渡すだけなので、URLエンコード済み(`..%2f`)や二重ドット変種(`....//`)の
@@ -217,10 +262,12 @@ python3 vulnerable_app.py &
 これはこの簡易実装の限界であり、実際のWAF回避やエンコーディングのバリエーションを
 網羅したい場合はペイロードと検出ロジックの拡充が必要。)
 
-脆弱性クラスを追加する方法: `VULN_CLASSES`にペイロードリストと`detect()`関数を1組追加するだけ。
-LLMの「判断」をルールで置き換えている分、対応したいクラスの数だけルールを増やす必要がある
-(これがStrixのような汎用エージェントとの根本的な違い — Strixは未知のケースにもLLMの推論で対応しうるが、
-このスクリプトは既知のパターンにしか反応しない)。
+脆弱性クラスを追加する方法: 「GETパラメータにペイロードを注入してレスポンスを比較する」という型に
+合うクラス(SQLi/XSS/cmdi/traversal)なら`VULN_CLASSES`にペイロードリストと`detect()`関数を1組
+追加するだけ。CSRFのように型が違う(セッション状態を跨いだ判定が要る)クラスは、`csrf_check.py`
+のように専用スクリプトを別途書く必要がある。いずれにせよLLMの「判断」をルールで置き換えている分、
+対応したいクラスの数だけ実装を増やす必要がある(これがStrixのような汎用エージェントとの根本的な
+違い — Strixは未知のケースにもLLMの推論で対応しうるが、このアプローチは既知のパターンにしか反応しない)。
 
 Strixとの違い(全体像):
 

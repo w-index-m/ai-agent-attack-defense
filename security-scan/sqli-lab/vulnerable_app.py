@@ -1,19 +1,22 @@
 """
 Deliberately vulnerable demo app (SQLi, reflected XSS, OS command
-injection, path traversal), for local/offline testing only.
+injection, path traversal, CSRF), for local/offline testing only.
 
 Scope: run only against this app, on localhost, in an isolated sandbox.
 Do not deploy this code anywhere reachable by anyone else.
 """
 
 import os
+import secrets as secrets_mod
 import subprocess
 import sqlite3
 
-from flask import Flask, request
+from flask import Flask, request, session
 from markupsafe import escape
 
 app = Flask(__name__)
+# Demo-only secret key, fine for a local lab; never do this in anything real.
+app.secret_key = "sqli-lab-demo-key-not-for-production"
 DB_PATH = "/tmp/sqli_lab.db"
 DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs")
 
@@ -145,6 +148,45 @@ def file_view_safe() -> tuple[str, int]:
             return f"<pre>{escape(f.read())}</pre>", 200
     except OSError as exc:
         return f"Error: {exc}", 404
+
+
+@app.route("/csrf_login", methods=["GET"])
+def csrf_login() -> tuple[str, int]:
+    # Establishes a logged-in session (cookie-based), like any normal login.
+    session["user"] = "alice"
+    session["balance"] = 100
+    session["csrf_token"] = secrets_mod.token_hex(16)
+    return f"Logged in as alice. Balance: {session['balance']}.", 200
+
+
+@app.route("/csrf_transfer", methods=["POST"])
+def csrf_transfer() -> tuple[str, int]:
+    if "user" not in session:
+        return "Not logged in.", 401
+
+    # VULNERABLE: the only check is "is there a valid session cookie?".
+    # A forged cross-site POST (e.g. an auto-submitting form on an attacker's
+    # page) rides along with the browser's session cookie and succeeds too.
+    amount = int(request.form.get("amount", request.args.get("amount", "0")))
+    session["balance"] -= amount
+    return f"Transferred {amount}. New balance: {session['balance']}.", 200
+
+
+@app.route("/csrf_transfer_safe", methods=["POST"])
+def csrf_transfer_safe() -> tuple[str, int]:
+    if "user" not in session:
+        return "Not logged in.", 401
+
+    # FIXED: also requires a csrf_token that matches the one issued at
+    # login time. A third-party page cannot read it (same-origin policy)
+    # or guess it (random), so it cannot forge a valid request.
+    token = request.form.get("csrf_token", request.args.get("csrf_token", ""))
+    if not token or not secrets_mod.compare_digest(token, session.get("csrf_token", "")):
+        return "CSRF token missing or invalid.", 403
+
+    amount = int(request.form.get("amount", request.args.get("amount", "0")))
+    session["balance"] -= amount
+    return f"Transferred {amount}. New balance: {session['balance']}.", 200
 
 
 if __name__ == "__main__":
