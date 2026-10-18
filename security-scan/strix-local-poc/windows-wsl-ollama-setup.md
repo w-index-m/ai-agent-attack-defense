@@ -365,14 +365,19 @@ Strix本家へのフィードバックとしても価値がある内容(GitHub I
 | `qwen2.5:7b` + `STRIX_FORCE_REQUIRED_TOOL_CHOICE=true`(ローカル) | 同上、1手目からJSONが壊れてパース失敗。 |
 | `groq/openai/gpt-oss-120b`(クラウド、パッチ前) | モデルの応答以前に、Strix内部の`list_mcps`ツールのJSONスキーマ不備でリクエスト自体がGroqに拒否される。 |
 | `groq/openai/gpt-oss-120b` / `gpt-oss-20b`(クラウド、`groq-empty-schema.patch`適用後) | スキーマエラーは解消したが、Strix本体のシステムプロンプト＋ツール定義だけで約47,000トークンになり、Groq無料枠のTPM上限(8,000/分)をモデルに関係なく超過。1ターンも成立せず`persistent rate limit`で停止。 |
+| `openrouter/nvidia/nemotron-3-super-120b-a12b:free`(クラウド) | モデル・APIキー・litellm経由の単発呼び出しは正常動作を確認したが、Strix実際のリクエスト(44ツール＋巨大プロンプト)でのみ`404 page not found`が再現。縮小再現では起きず、根本原因は未特定(リクエストサイズが疑わしい)。 |
 
 **このマシン・このモデルサイズ帯(ローカル、CPU推論、1.5B〜8B)では、Strixが要求する
 「長い引数を含む正確なJSON形式のツール呼び出し」を安定して生成できない。クラウド側
-(Groq、厳密なOpenAI互換スキーマ検証)に切り替えても、今度はモデルの出来とは無関係に
-Strix自身(`list_mcps`ツール)のスキーマ不備でブロックされる**、というのが今回の一連の
-実験で得られた結論。Strix自体の技術検証(Docker不要バックエンド、WSL2環境でのOllama
-接続、Groq接続)は一通り成立することを確認できたが、**実用的な自動診断としての完走・
-検出精度は、ローカル・クラウドのどちらの構成でも確認できなかった**。
+(Groq、厳密なOpenAI互換スキーマ検証)に切り替えると、パッチ適用でStrix自身の
+`list_mcps`スキーマ不備は解消できたが、今度は無料枠のTPM制限という全く別の壁に
+ぶつかる。OpenRouterの無料枠も、原因不明の404で完走できなかった**、というのが
+今回の一連の実験で得られた結論。**ローカルでもクラウドでも、Strixを手軽に完走させる
+のは簡単ではない**ことが、モデル・プロバイダを変えるたびに毎回違う種類の壁にぶつかる、
+という形で裏付けられた。Strix自体の技術検証(Docker不要バックエンド、WSL2環境での
+Ollama接続、Groq/OpenRouter接続、ソースへのパッチ適用)は一通り成立することを確認
+できたが、**実用的な自動診断としての完走・検出精度は、ローカル・クラウドのどちらの
+構成でも確認できなかった**。
 
 次に試す価値がありそうな方向性(いずれも未検証):
 - Strixの新しいバージョンがリリースされ、`list_mcps`のスキーマ不備が修正されるのを待つ
@@ -487,6 +492,47 @@ Groq側のTPM上限は変わらないので全て同じ理由で失敗し、最�
 または別プロバイダ(無料枠のTPM制限がより緩いもの)への切り替えが必要。この問題は
 `groq-empty-schema.patch`とは無関係(パッチ自体は有効であることは、前段の実行で
 スキーマエラーが出なくなった事実から確認済み)。
+
+## 追加検証: OpenRouter(無料枠、Groqとは別種の制限で頭打ち)
+
+GroqのTPM制限を回避できないか、OpenRouterの無料枠(`:free`サフィックス付きモデル)も試した。
+
+```bash
+export OPENROUTER_API_KEY="<OpenRouterのキー>"
+export STRIX_LLM="openrouter/nvidia/nemotron-3-super-120b-a12b:free"
+```
+
+モデル一覧は、OpenRouterの公開API(`https://openrouter.ai/api/v1/models`)から、
+`:free`サフィックスかつ`tools`対応・コンテキスト長の大きいものを抽出して選定した。
+
+```bash
+curl -s https://openrouter.ai/api/v1/models | python3 -c "
+import json, sys
+data = json.load(sys.stdin)['data']
+free = [m for m in data if m['id'].endswith(':free')]
+tool_free = [m for m in free if 'tools' in m.get('supported_parameters', [])]
+tool_free.sort(key=lambda m: -m.get('context_length', 0))
+for m in tool_free[:15]:
+    print(f\"{m['id']:<50} ctx={m['context_length']:>7}\")
+"
+```
+
+結果、`strix -n -t ...`実行時に`litellm.NotFoundError: OpenrouterException - 404 page not found`
+で毎回失敗した。切り分けのため、litellmを直接呼び出して段階的に検証した。
+
+1. **litellm経由でシンプルな単発呼び出し** → 成功(`litellm.completion(model=..., messages=[...])`で
+   正常な応答が返る)。OpenRouterへcurlで直接叩いても正常(モデルID・APIキーは問題なし)。
+2. **ストリーミング＋ツール1個を付けて再現** → これも成功(`finish_reason='stop'`まで到達)。
+   Strixが実際に行う「ストリーミング＋ツール呼び出し」という呼び方自体は原因ではない。
+3. litellmの内部ロジック(`resolve_api_type`、`uses_chat_completions_tool_schema`)も確認したが、
+   このモデルはlitellmの価格表カタログに未登録(`This model isn't mapped yet`)のため、
+   安全側のchat completionsルートにフォールバックしており、OpenAIの「Responses API」
+   エンドポイントを誤って叩いている、という当初の仮説は否定された。
+
+**未解明**: Strixの実際のリクエスト(44個のツール定義＋約10万文字のシステムプロンプト、
+litellmの`acompletion`経由)でのみ404が再現し、縮小版の再現では起きなかった。
+リクエストサイズそのもの(OpenRouterのゲートウェイが、本来413を返すべき巨大リクエストに
+対して404を返している可能性)が疑わしいが、このメモの時点では**根本原因を特定できていない**。
 
 ## 未検証(このメモの範囲外)
 
