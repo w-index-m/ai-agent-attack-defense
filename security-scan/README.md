@@ -58,7 +58,7 @@ tags (R1–R11, G1–G6), see [`../shared/taxonomy.json`](../shared/taxonomy.jso
 
 | File | Contents |
 |---|---|
-| [`detections/`](detections/) | Detection rule implementations: Sigma / Falco / Datadog (R1–R8, the Gambit lineage) + Sigma / Datadog (R9–R11, LLM-target-attacks patterns C/D/E). Tune thresholds/allowlists per environment. |
+| [`detections/`](detections/) | Detection rule implementations: Sigma / Falco / Datadog (R1–R8, the Gambit lineage) + Sigma / Datadog (R9–R11, LLM-target-attacks patterns C/D/E) + Sigma / Datadog (R12, DNS water torture / random-subdomain-attack detection — general infra-availability signal, not AI-agent-specific, kept in the same detection content base). Tune thresholds/allowlists per environment. |
 
 ### Tools to check your own environment
 
