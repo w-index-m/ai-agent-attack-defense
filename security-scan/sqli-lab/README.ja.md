@@ -28,7 +28,7 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
   → 使い道としては「このラボの検出スクリプト自体が壊れていないか」を確認する**回帰テスト**
     としての組み込みが現実的(例: `scan_all.sh`の出力が期待通りか`pytest`等で検証し、
     `summarize.py`互換のJSON/SARIFを吐かせてCIサマリに乗せる)。
-- `summarize.py`は現状Semgrep/Trivy/gitleaks/ZAP(+InsightAppSec)のJSON形式を前提にしている
+- `summarize.py`は現状Semgrep/Trivy/gitleaks/ZAPのJSON形式を前提にしている
   ため、`auto_vuln_scanner.py`/`csrf_check.py`の出力をその形式に変換する層が別途必要。
 
 **次にこの話を再開するときは、ここを読むこと。** (2026-10-19 時点で未着手、との記録)
