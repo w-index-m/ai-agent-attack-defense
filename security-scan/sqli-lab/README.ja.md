@@ -30,8 +30,7 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
     としての組み込みが現実的(例: `scan_all.sh`の出力が期待通りか`pytest`等で検証し、
     `summarize.py`互換のJSON/SARIFを吐かせてCIサマリに乗せる)。
 - `summarize.py`は現状Semgrep/Trivy/gitleaks/ZAPのJSON形式を前提にしている
-  ため、`auto_vuln_scanner.py`/`csrf_check.py`/`idor_check.py`/`deserialize_check.py`の出力を
-  その形式に変換する層が別途必要。
+  ため、`auto_vuln_scanner.py`/`session_vuln_check.py`の出力をその形式に変換する層が別途必要。
 
 **次にこの話を再開するときは、ここを読むこと。** (2026-10-19 時点で未着手、との記録)
 
@@ -270,23 +269,20 @@ JSONはデータの表現方法であり、どんな値を解釈しても「関�
 
 ## LLM抜きの自動検出スクリプト
 
-[`auto_sqli_scanner.py`](auto_sqli_scanner.py): SQLi専用の、最初に作った最小スキャナー(そのまま残してある)。
+このラボのスクリプトは、検出の「型」ごとに2本にまとめてある(かつては脆弱性クラスごとに
+別ファイルだったが、同じ型のものは統合した)。
 
 [`auto_vuln_scanner.py`](auto_vuln_scanner.py): Strixのように「次に何を試すかをLLMが判断する」のではなく、
 固定のペイロードリストを総当たりし、レスポンスを機械的に比較するだけの、LLM不要・ルールベースのスキャナー。
-`--class`で脆弱性クラスを切り替え可能(現在は`sqli`・`xss`・`cmdi`・`traversal`に対応)。
+**「GETパラメータにペイロードを注入してレスポンスを比較する」という型**に合う4クラス
+(`sqli`・`xss`・`cmdi`・`traversal`)を`--class`で切り替え可能。
 
-[`csrf_check.py`](csrf_check.py): CSRF専用の別スクリプト。「ペイロードを工夫する」のではなく
-「ログイン→セッションCookieだけでトークン無しの状態変更リクエストを送る→成立するか」を
-機械的に判定するため、`auto_vuln_scanner.py`とは別の仕組みになっている(同じスコープガードは共有)。
-
-[`idor_check.py`](idor_check.py): アクセス制御の不備(IDOR/BOLA)専用の別スクリプト。
-「悪意あるペイロード」ではなく「正当な自分のセッションのまま、他人のオブジェクトID(`user_id`)
-を指定する」という、*一見正常なリクエスト*が通ってしまうかを判定するため、これも専用の仕組み。
-
-[`deserialize_check.py`](deserialize_check.py): 安全でないデシリアライズ(RCE)専用の別スクリプト。
-攻撃コード入りのpickleペイロードを自分で組み立てて送信し、実行させたコマンド(`id`)の出力が
-レスポンスに現れるかで、PoCの成立を直接確認する。
+[`session_vuln_check.py`](session_vuln_check.py): 上記の型に合わない3クラス(`csrf`・`idor`・`deserialize`)
+をまとめた、もう1本のスクリプト。これらは「ペイロードを工夫する」のではなく、**セッション状態を
+跨いだ判定**(CSRF: ログイン→Cookieのみでトークン無しの状態変更が通るか、IDOR: 正当な自分の
+セッションのまま他人のオブジェクトIDを指定して通るか)や、**攻撃用バイト列の組み立て**
+(deserialize: 攻撃コード入りpickleペイロードを作って送信し、実行結果がレスポンスに現れるか)
+が必要なため、`auto_vuln_scanner.py`とは別の仕組みになっている(同じスコープガードは共有)。
 
 ```bash
 pip3 install --user requests
@@ -324,24 +320,28 @@ python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/file_safe --class trave
   --baseline name=public.txt --fuzz name
 
 # CSRF: 脆弱版 /csrf_transfer をチェック
-python3 csrf_check.py --url http://127.0.0.1:5000 \
-  --login-path /csrf_login --transfer-path /csrf_transfer
+python3 session_vuln_check.py --class csrf --url http://127.0.0.1:5000 \
+  --transfer-path /csrf_transfer
 
 # CSRF: 修正版 /csrf_transfer_safe をチェック(拒否されるはず)
-python3 csrf_check.py --url http://127.0.0.1:5000 \
-  --login-path /csrf_login --transfer-path /csrf_transfer_safe
+python3 session_vuln_check.py --class csrf --url http://127.0.0.1:5000 \
+  --transfer-path /csrf_transfer_safe
 
 # IDOR/BOLA: 脆弱版 /idor_account をチェック(alice で admin のデータを覗く)
-python3 idor_check.py --url http://127.0.0.1:5000 --account-path /idor_account
+python3 session_vuln_check.py --class idor --url http://127.0.0.1:5000 \
+  --account-path /idor_account
 
 # IDOR/BOLA: 修正版 /idor_account_safe をチェック(拒否されるはず)
-python3 idor_check.py --url http://127.0.0.1:5000 --account-path /idor_account_safe
+python3 session_vuln_check.py --class idor --url http://127.0.0.1:5000 \
+  --account-path /idor_account_safe
 
 # デシリアライズRCE: 脆弱版 /deserialize をチェック
-python3 deserialize_check.py --url http://127.0.0.1:5000/deserialize
+python3 session_vuln_check.py --class deserialize --url http://127.0.0.1:5000 \
+  --deserialize-path /deserialize
 
 # デシリアライズRCE: 修正版 /deserialize_safe をチェック(拒否されるはず)
-python3 deserialize_check.py --url http://127.0.0.1:5000/deserialize_safe
+python3 session_vuln_check.py --class deserialize --url http://127.0.0.1:5000 \
+  --deserialize-path /deserialize_safe
 ```
 
 ## まとめて1回で実行する
@@ -381,10 +381,11 @@ python3 vulnerable_app.py &
 網羅したい場合はペイロードと検出ロジックの拡充が必要。)
 
 脆弱性クラスを追加する方法: 「GETパラメータにペイロードを注入してレスポンスを比較する」という型に
-合うクラス(SQLi/XSS/cmdi/traversal)なら`VULN_CLASSES`にペイロードリストと`detect()`関数を1組
-追加するだけ。CSRF・IDOR/BOLA・デシリアライズRCEのように型が違う(セッション状態を跨いだ判定や、
-攻撃用バイト列の組み立てが要る)クラスは、`csrf_check.py`/`idor_check.py`/`deserialize_check.py`
-のように専用スクリプトを別途書く必要がある。いずれにせよLLMの「判断」をルールで置き換えている分、
+合うクラス(SQLi/XSS/cmdi/traversal)なら、`auto_vuln_scanner.py`の`VULN_CLASSES`にペイロード
+リストと`detect()`関数を1組追加するだけ。CSRF・IDOR/BOLA・デシリアライズRCEのように型が違う
+(セッション状態を跨いだ判定や、攻撃用バイト列の組み立てが要る)クラスは、`session_vuln_check.py`
+の`CLASSES`に同様に`check()`関数を1組追加する(型が全く新しい場合のみ、さらに別のスクリプトが要る)。
+いずれにせよLLMの「判断」をルールで置き換えている分、
 対応したいクラスの数だけ実装を増やす必要がある(これがStrixのような汎用エージェントとの根本的な
 違い — Strixは未知のケースにもLLMの推論で対応しうるが、このアプローチは既知のパターンにしか反応しない)。
 
@@ -425,9 +426,9 @@ GET /login_safe?(同じペイロード全部)                      401  (全て�
 
 ## 補足: これは「Strixの簡易版」ではない
 
-`auto_vuln_scanner.py`は便宜上「Strixの代替」と呼んでいるが、正確には**Strixの一部機能
-(次に何を試すかの判断)だけを、既知の2クラスに限定してルールに置き換えたもの**であり、
-Strixそのものの簡易版ではない。Strixが持っていて、このスクリプトには無いもの:
+`auto_vuln_scanner.py`/`session_vuln_check.py`は便宜上「Strixの代替」と呼んでいるが、正確には
+**Strixの一部機能(次に何を試すかの判断)だけを、既知の7クラスに限定してルールに置き換えたもの**
+であり、Strixそのものの簡易版ではない。Strixが持っていて、このスクリプトには無いもの:
 
 - **攻撃対象の自動発見**: どのURL・どのパラメータが存在するかを、人間が指定しなくても
   自分でクロール/ブラウジングして見つける機能。このスクリプトは`--url`と`--fuzz`を
@@ -445,7 +446,7 @@ Strixそのものの簡易版ではない。Strixが持っていて、このス�
   Strix自体はSQLi専用ではなく、SQLi/XSS/SSRF/認証不備/ビジネスロジックの欠陥など広範囲を対象にできる
   汎用ツールだが、本PoCでは`--instruction`でSQLiのみに意図的にスコープを絞っていた。
 - 本ラボは、同じ「脆弱性を実際に試す」というゴールを、エージェントを使わずに最短距離で達成した。
-  最終的には「LLMは不要だった」という結論に至り、SQLi・XSSの両方をLLM抜きのルールベース
+  最終的には「LLMは不要だった」という結論に至り、SQLi・XSS等7クラスをLLM抜きのルールベース
   スキャナー(`auto_vuln_scanner.py`)で自動検出できることを実証した。
 - 両者は競合するものではなく、「(少なくとも既知の脆弱性パターンについては)ツールに頼らなくても
   検証はできる」という補完的な結論を示している。

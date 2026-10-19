@@ -55,7 +55,7 @@ def _is_allowed_target(url: str) -> tuple[bool, str]:
     return True, ""
 
 # --------------------------------------------------------------------------
-# SQLi: same approach as auto_sqli_scanner.py
+# SQLi
 # --------------------------------------------------------------------------
 
 SQL_ERROR_MARKERS = (
