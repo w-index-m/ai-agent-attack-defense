@@ -152,6 +152,60 @@ def detect_traversal(resp: requests.Response, baseline: requests.Response, paylo
 
 
 # --------------------------------------------------------------------------
+# Mass assignment: inject a field (is_admin) the caller should never be
+# able to set, and see if it gets bound onto the created object anyway.
+# --------------------------------------------------------------------------
+
+MASS_ASSIGNMENT_PAYLOADS = [
+    "true",
+    "1",
+    "True",
+]
+
+
+def detect_mass_assignment(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    marker = f"'is_admin': '{payload}'"
+    if marker in resp.text and marker not in baseline.text:
+        return "mass assignment: is_admin accepted from request params and bound onto the new account"
+    return None
+
+
+# --------------------------------------------------------------------------
+# SSRF: ask the server to fetch a URL pointing at an internal-only service
+# and look for that service's own secret coming back in the response.
+# --------------------------------------------------------------------------
+
+SSRF_SECRET_MARKER = "INTERNAL-SECRET-KEY-DO-NOT-EXPOSE"
+
+SSRF_PAYLOADS = [
+    "http://127.0.0.1:5001/latest/meta-data/secret-key",
+    "http://localhost:5001/latest/meta-data/secret-key",
+]
+
+
+def detect_ssrf(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    if SSRF_SECRET_MARKER in resp.text:
+        return "SSRF confirmed: an internal-only service's secret was fetched via the server"
+    return None
+
+
+# --------------------------------------------------------------------------
+# Account enumeration: a known-already-registered value should look no
+# different from an unregistered one, if the endpoint is fixed.
+# --------------------------------------------------------------------------
+
+ACCOUNT_ENUM_PAYLOADS = [
+    "alice@example.com",
+]
+
+
+def detect_account_enum(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    if resp.status_code != baseline.status_code or "already registered" in resp.text.lower():
+        return f"account enumeration: distinct response reveals {payload!r} is already registered"
+    return None
+
+
+# --------------------------------------------------------------------------
 # Registry: add a new vulnerability class here
 # --------------------------------------------------------------------------
 
@@ -167,6 +221,9 @@ VULN_CLASSES: dict[str, VulnClass] = {
     "xss": VulnClass(XSS_PAYLOADS, detect_xss),
     "cmdi": VulnClass(CMDI_PAYLOADS, detect_cmdi),
     "traversal": VulnClass(TRAVERSAL_PAYLOADS, detect_traversal),
+    "mass_assignment": VulnClass(MASS_ASSIGNMENT_PAYLOADS, detect_mass_assignment),
+    "ssrf": VulnClass(SSRF_PAYLOADS, detect_ssrf),
+    "account_enum": VulnClass(ACCOUNT_ENUM_PAYLOADS, detect_account_enum),
 }
 
 

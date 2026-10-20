@@ -23,6 +23,12 @@ run "CMDi: /diag (vulnerable)"     --url "$BASE_URL/diag"        --class cmdi --
 run "CMDi: /diag_safe (fixed)"     --url "$BASE_URL/diag_safe"   --class cmdi --baseline host=zzz --fuzz host
 run "Traversal: /file (vulnerable)"      --url "$BASE_URL/file"       --class traversal --baseline name=public.txt --fuzz name
 run "Traversal: /file_safe (fixed)"      --url "$BASE_URL/file_safe"  --class traversal --baseline name=public.txt --fuzz name
+run "Mass Assignment: /signup (vulnerable)"      --url "$BASE_URL/signup"      --class mass_assignment --baseline username=zzz --fuzz is_admin
+run "Mass Assignment: /signup_safe (fixed)"      --url "$BASE_URL/signup_safe" --class mass_assignment --baseline username=zzz --fuzz is_admin
+run "SSRF: /fetch_url (vulnerable)"      --url "$BASE_URL/fetch_url"      --class ssrf --baseline url=https://example.invalid/ --fuzz url
+run "SSRF: /fetch_url_safe (fixed)"      --url "$BASE_URL/fetch_url_safe" --class ssrf --baseline url=https://example.invalid/ --fuzz url
+run "Account Enum: /register (vulnerable)"      --url "$BASE_URL/register"      --class account_enum --baseline email=brand-new-unused@example.com --fuzz email
+run "Account Enum: /register_safe (fixed)"      --url "$BASE_URL/register_safe" --class account_enum --baseline email=brand-new-unused2@example.com --fuzz email
 
 echo "=== CSRF: /csrf_transfer (vulnerable) ==="
 python3 session_vuln_check.py --class csrf --url "$BASE_URL" --transfer-path /csrf_transfer || true
@@ -46,4 +52,12 @@ echo
 
 echo "=== Deserialization RCE: /deserialize_safe (fixed) ==="
 python3 session_vuln_check.py --class deserialize --url "$BASE_URL" --deserialize-path /deserialize_safe || true
+echo
+
+echo "=== Stored XSS: /reviews (vulnerable) ==="
+python3 session_vuln_check.py --class stored_xss --url "$BASE_URL" --post-path /review --list-path /reviews || true
+echo
+
+echo "=== Stored XSS: /reviews_safe (fixed) ==="
+python3 session_vuln_check.py --class stored_xss --url "$BASE_URL" --post-path /review_safe --list-path /reviews_safe || true
 echo

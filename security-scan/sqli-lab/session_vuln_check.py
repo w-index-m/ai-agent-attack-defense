@@ -14,6 +14,10 @@ request shape, or a crafted binary payload instead:
               attacker-chosen callable, POST it, and look for the
               executed command's own output in the response -- direct
               proof code ran server-side, not a guess.
+  stored_xss  POST a payload to one endpoint, then GET a *different*
+              endpoint later to see if it comes back unescaped -- the
+              payload doesn't need to be in the victim's own request at
+              all, unlike reflected XSS.
 
 Scope: run only against targets you own/control, e.g. vulnerable_app.py
 in this same directory.
@@ -97,6 +101,24 @@ def check_deserialize(args: argparse.Namespace) -> tuple[bool, str]:
 
 
 # --------------------------------------------------------------------------
+# Stored XSS: post once, read back later from a different endpoint
+# --------------------------------------------------------------------------
+
+STORED_XSS_PAYLOAD = "<script>alert('stored-xss')</script>"
+
+
+def check_stored_xss(args: argparse.Namespace) -> tuple[bool, str]:
+    post_resp = requests.post(f"{args.url}{args.post_path}", data={"text": STORED_XSS_PAYLOAD}, timeout=10)
+    if post_resp.status_code != 200:
+        return False, f"posting the review failed (status {post_resp.status_code}), cannot test"
+
+    get_resp = requests.get(f"{args.url}{args.list_path}", timeout=10)
+    if STORED_XSS_PAYLOAD in get_resp.text:
+        return True, f"stored payload came back unescaped from {args.list_path}"
+    return False, f"stored payload was escaped or absent (status {get_resp.status_code})"
+
+
+# --------------------------------------------------------------------------
 # Registry: add a new session/payload-shaped class here
 # --------------------------------------------------------------------------
 
@@ -112,6 +134,7 @@ CLASSES: dict[str, SessionVulnClass] = {
     "csrf": SessionVulnClass(check_csrf, "VULNERABLE", "Not vulnerable (CSRF token enforced)"),
     "idor": SessionVulnClass(check_idor, "VULNERABLE", "Not vulnerable (ownership enforced)"),
     "deserialize": SessionVulnClass(check_deserialize, "VULNERABLE", "Not vulnerable"),
+    "stored_xss": SessionVulnClass(check_stored_xss, "VULNERABLE", "Not vulnerable (escaped on render)"),
 }
 
 
@@ -127,6 +150,8 @@ def main() -> int:
     parser.add_argument(
         "--deserialize-path", default="/deserialize", help="deserialize: the unpickling endpoint path"
     )
+    parser.add_argument("--post-path", default="/review", help="stored_xss: the endpoint to POST the payload to")
+    parser.add_argument("--list-path", default="/reviews", help="stored_xss: the endpoint to GET and check")
     parser.add_argument(
         "--i-own-this-target",
         action="store_true",
