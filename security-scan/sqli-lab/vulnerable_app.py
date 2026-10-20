@@ -1,20 +1,26 @@
 """
 Deliberately vulnerable demo app (SQLi, reflected XSS, OS command
-injection, path traversal, CSRF, IDOR/BOLA, insecure deserialization),
-for local/offline testing only.
+injection, path traversal, CSRF, IDOR/BOLA, insecure deserialization,
+stored XSS, mass assignment, SSRF, account enumeration), for
+local/offline testing only.
 
 Scope: run only against this app, on localhost, in an isolated sandbox.
 Do not deploy this code anywhere reachable by anyone else.
 """
 
 import base64
+import ipaddress
 import json
 import os
 import pickle
 import secrets as secrets_mod
+import socket
 import subprocess
 import sqlite3
+import threading
+from urllib.parse import urlparse
 
+import requests
 from flask import Flask, request, session
 from markupsafe import escape
 
@@ -270,7 +276,163 @@ def deserialize_safe() -> tuple[str, int]:
     return f"Deserialized object: {obj!r}", 200
 
 
+# Stored XSS: separate storage per vulnerable/safe so the two never mix.
+REVIEWS: list[str] = []
+REVIEWS_SAFE: list[str] = []
+
+
+@app.route("/review", methods=["POST"])
+def review_post() -> tuple[str, int]:
+    text = request.form.get("text", request.args.get("text", ""))
+    REVIEWS.append(text)
+    return "Review submitted.", 200
+
+
+@app.route("/reviews", methods=["GET"])
+def reviews_list() -> tuple[str, int]:
+    # VULNERABLE: previously-stored input is reflected without escaping,
+    # every time anyone views the list -- unlike reflected XSS, the
+    # payload doesn't need to be in the victim's own request at all.
+    items = "".join(f"<li>{r}</li>" for r in REVIEWS)
+    return f"<ul>{items}</ul>", 200
+
+
+@app.route("/review_safe", methods=["POST"])
+def review_post_safe() -> tuple[str, int]:
+    text = request.form.get("text", request.args.get("text", ""))
+    REVIEWS_SAFE.append(text)
+    return "Review submitted.", 200
+
+
+@app.route("/reviews_safe", methods=["GET"])
+def reviews_list_safe() -> tuple[str, int]:
+    # FIXED: escaped at render time, same as the reflected-XSS fix.
+    items = "".join(f"<li>{escape(r)}</li>" for r in REVIEWS_SAFE)
+    return f"<ul>{items}</ul>", 200
+
+
+# Mass assignment: separate storage per vulnerable/safe.
+SIGNUP_ACCOUNTS: dict[str, dict] = {}
+SIGNUP_ACCOUNTS_SAFE: dict[str, dict] = {}
+
+
+@app.route("/signup", methods=["GET"])
+def signup() -> tuple[str, int]:
+    username = request.args.get("username", "")
+    if not username:
+        return "username required", 400
+
+    # VULNERABLE: every submitted field is blindly bound onto the new
+    # account, including ones the caller should never control (is_admin).
+    account = dict(request.args)
+    account.setdefault("is_admin", "false")
+    SIGNUP_ACCOUNTS[username] = account
+    return f"Account created: {account}", 200
+
+
+@app.route("/signup_safe", methods=["GET"])
+def signup_safe() -> tuple[str, int]:
+    username = request.args.get("username", "")
+    if not username:
+        return "username required", 400
+
+    # FIXED: explicit allowlist of bindable fields -- is_admin is never
+    # settable by the caller no matter what they submit.
+    account = {
+        "username": username,
+        "password": request.args.get("password", ""),
+        "is_admin": "false",
+    }
+    SIGNUP_ACCOUNTS_SAFE[username] = account
+    return f"Account created: {account}", 200
+
+
+# SSRF: a second, "internal-only" service the main app can legitimately
+# reach server-side, but which outside callers should never reach
+# directly (think: a cloud metadata endpoint or an internal admin API).
+def _run_internal_only_service() -> None:
+    internal_app = Flask("internal_only_service")
+
+    @internal_app.route("/latest/meta-data/secret-key")
+    def secret() -> tuple[str, int]:
+        return "INTERNAL-SECRET-KEY-DO-NOT-EXPOSE", 200
+
+    internal_app.run(host="127.0.0.1", port=5001, use_reloader=False)
+
+
+def _resolves_to_private_or_loopback(host: str) -> bool:
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_loopback or ip.is_private or ip.is_link_local:
+            return True
+    return False
+
+
+@app.route("/fetch_url", methods=["GET"])
+def fetch_url() -> tuple[str, int]:
+    url = request.args.get("url", "")
+
+    # VULNERABLE: fetches whatever URL the caller supplies with no
+    # restriction on scheme/host -- the server becomes a proxy an
+    # attacker can use to reach otherwise-unreachable internal services.
+    try:
+        r = requests.get(url, timeout=3)
+        return f"Fetched: {r.text[:500]}", 200
+    except requests.RequestException as exc:
+        return f"Fetch failed: {exc}", 502
+
+
+@app.route("/fetch_url_safe", methods=["GET"])
+def fetch_url_safe() -> tuple[str, int]:
+    url = request.args.get("url", "")
+    host = urlparse(url).hostname or ""
+
+    # FIXED: refuse anything that resolves to loopback/private/link-local
+    # addresses -- the classic SSRF-to-internal-service guard.
+    if _resolves_to_private_or_loopback(host):
+        return "Refused: internal/private address not allowed.", 403
+
+    try:
+        r = requests.get(url, timeout=3)
+        return f"Fetched: {r.text[:500]}", 200
+    except requests.RequestException as exc:
+        return f"Fetch failed: {exc}", 502
+
+
+# Account enumeration: separate storage per vulnerable/safe.
+KNOWN_EMAILS = {"alice@example.com"}
+KNOWN_EMAILS_SAFE = {"alice@example.com"}
+
+
+@app.route("/register", methods=["GET"])
+def register() -> tuple[str, int]:
+    email = request.args.get("email", "")
+
+    # VULNERABLE: a distinct error (and status code) reveals whether the
+    # email is already registered, enabling account enumeration.
+    if email in KNOWN_EMAILS:
+        return "Error: this email is already registered.", 409
+    KNOWN_EMAILS.add(email)
+    return "Registration received.", 200
+
+
+@app.route("/register_safe", methods=["GET"])
+def register_safe() -> tuple[str, int]:
+    email = request.args.get("email", "")
+
+    # FIXED: identical response either way -- nothing observable reveals
+    # whether the email was already registered.
+    KNOWN_EMAILS_SAFE.add(email)
+    return "If this email is valid, a confirmation has been sent.", 200
+
+
 if __name__ == "__main__":
+    threading.Thread(target=_run_internal_only_service, daemon=True).start()
+
     os.makedirs(DOCS_DIR, exist_ok=True)
     public_doc = os.path.join(DOCS_DIR, "public.txt")
     if not os.path.exists(public_doc):

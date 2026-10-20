@@ -5,8 +5,9 @@ Strix(AIエージェントによる自動ペンテスト)をローカル(Windows
 と並行して、「発想を変えて、AIエージェントなしで脆弱性自体を実証する」ために作った最小限のラボ。
 当初はSQLiのみだったが、「Strixは他の脆弱性クラスも見る」という問いを受けてXSS、
 OSコマンドインジェクション・パストラバーサル・CSRF(クロスサイト・リクエスト・フォージェリ)・
-アクセス制御の不備(IDOR/BOLA)、さらに安全でないデシリアライズによるRCE
-(リモートコード実行)にも対応範囲を広げた。
+アクセス制御の不備(IDOR/BOLA)・安全でないデシリアライズによるRCE(リモートコード実行)、
+さらに実際にStrixを使った第三者の記事(Zenn)との照合をきっかけに、格納型XSS・
+マスアサインメント・SSRF・アカウント列挙の4クラスを追加し、計11クラスに拡張した。
 
 Claude Codeのクラウドサンドボックス環境は外向きのLLM通信がほぼ全てブロックされているため
 (詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md))、Strixのようなエージェント実行は
@@ -53,7 +54,7 @@ python3 auto_vuln_scanner.py --url http://8.8.8.8/login --class sqli --baseline 
 
 ## 対象アプリ
 
-[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。7種類の脆弱性クラスを含む。
+[`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。11種類の脆弱性クラスを含む。
 
 - `/login`: 文字列連結でSQLを組み立てる、**意図的に脆弱**なエンドポイント(SQLi)
 - `/login_safe`: パラメータ化クエリ(プレースホルダ `?`)を使う、**修正済み**の同じ機能のエンドポイント
@@ -76,11 +77,29 @@ python3 auto_vuln_scanner.py --url http://8.8.8.8/login --class sqli --baseline 
   サーバー上で任意のコードが実行される。
 - `/deserialize_safe`: `pickle`の代わりに`json.loads()`を使う、**修正済み**の同じ機能のエンドポイント
   (JSONはコード実行の仕組みを一切持たない単純なデータ形式)
+- `/review` + `/reviews`: 投稿した内容をエスケープせずに一覧表示する、**意図的に脆弱**な
+  エンドポイント(格納型XSS)。反射型と違い、被害者自身がリクエストに攻撃文字列を含める必要が無い。
+- `/review_safe` + `/reviews_safe`: 表示時に`markupsafe.escape()`でエスケープする、
+  **修正済み**の同じ機能のエンドポイント
+- `/signup`: 送信された全フィールド(`is_admin`含む)をそのまま新規アカウントに反映する、
+  **意図的に脆弱**なエンドポイント(マスアサインメント)
+- `/signup_safe`: 許可したフィールド(username/password)だけを明示的に反映する、
+  **修正済み**の同じ機能のエンドポイント(`is_admin`は何を送っても常に`false`)
+- `/fetch_url`: 指定されたURLを制限無くサーバー側から取得して返す、**意図的に脆弱**な
+  エンドポイント(SSRF)。`127.0.0.1:5001`で動く「内部限定サービス」(クラウドのメタデータ
+  サービス相当)の秘密情報を、このエンドポイント経由で外部から取得できてしまう。
+- `/fetch_url_safe`: 取得先がloopback/プライベート/リンクローカルアドレスに解決される場合は
+  拒否する、**修正済み**の同じ機能のエンドポイント
+- `/register`: 既に登録済みのメールアドレスにだけ異なるエラー(409)を返す、**意図的に脆弱**な
+  エンドポイント(アカウント列挙)。レスポンスの違いから、登録済みメールアドレスを総当たりで
+  特定できてしまう。
+- `/register_safe`: 登録済みかどうかに関わらず同じレスポンスを返す、**修正済み**の同じ機能の
+  エンドポイント
 
 起動:
 
 ```bash
-pip3 install --user flask
+pip3 install --user flask requests
 python3 vulnerable_app.py   # http://127.0.0.1:5000
 ```
 
@@ -258,6 +277,89 @@ JSONはデータの表現方法であり、どんな値を解釈しても「関�
 `pickle`/`yaml.load`(デフォルト設定)/Javaの素の`ObjectInputStream`等、
 「手順まで復元する」形式を避け、JSON等の**データのみ**を表す形式を使うのが鉄則。
 
+### 9. 格納型XSS(`/review` → `/reviews`)
+
+反射型XSS(③)は「自分のリクエストに攻撃文字列を含める」必要があったが、格納型は違う。
+**一度誰か(攻撃者)が投稿すれば、以後その内容を見る全員が被害者になる。**
+
+```bash
+# 攻撃者がレビューとして悪意あるスクリプトを投稿
+curl -s -X POST "http://127.0.0.1:5000/review" -d "text=<script>alert('stored-xss')</script>"
+
+# 別の誰か(被害者)が後から一覧を見ると、スクリプトがそのまま埋め込まれている
+curl -s "http://127.0.0.1:5000/reviews"
+# => <ul><li><script>alert('stored-xss')</script></li></ul>
+```
+
+対策版(`/review_safe` → `/reviews_safe`、表示時にエスケープ)に同じ投稿をしても、
+一覧には無害な文字列として表示されるだけで、スクリプトとしては実行されない。
+
+### 10. マスアサインメント(`/signup`)
+
+新規登録フォームが「送られてきたフィールドをそのままオブジェクトに反映する」設計だと、
+フォーム画面に存在しないフィールド名であっても、攻撃者がリクエストに直接追加するだけで
+通ってしまうことがある。
+
+```bash
+curl -s "http://127.0.0.1:5000/signup?username=mallory&is_admin=true"
+# => Account created: {'username': 'mallory', 'is_admin': 'true'}
+```
+
+画面上は`is_admin`を選べるUIなど無いのに、パラメータを直接追加するだけで管理者権限付きの
+アカウントが作成できてしまっている。対策版(`/signup_safe`、許可したフィールドだけ明示的に
+反映)では、同じパラメータを送っても`is_admin`は常に`false`のまま。
+
+```bash
+curl -s "http://127.0.0.1:5000/signup_safe?username=mallory&is_admin=true"
+# => Account created: {'username': 'mallory', 'password': '', 'is_admin': 'false'}
+```
+
+### 11. SSRF(`/fetch_url`)
+
+サーバー自身に外部のURLを取得させる機能(プレビュー表示・Webhook検証等)が、取得先を
+制限していないと、**外部から直接は届かないはずの内部限定サービス**(クラウドのメタデータ
+サービスが典型例)に、サーバーを踏み台にして届いてしまう。
+
+```bash
+curl -s "http://127.0.0.1:5000/fetch_url?url=http://127.0.0.1:5001/latest/meta-data/secret-key"
+# => Fetched: INTERNAL-SECRET-KEY-DO-NOT-EXPOSE
+```
+
+`127.0.0.1:5001`は本来、アプリ自身だけがアクセスすべき内部サービス(ここでは模擬的な
+メタデータAPI)だが、`/fetch_url`がリクエストを代理してしまうため、外部の攻撃者がその
+秘密情報を取得できてしまう。対策版(`/fetch_url_safe`、取得先がloopback/プライベート/
+リンクローカルに解決される場合は拒否)に同じリクエストを送ると、`403`で拒否される。
+
+```bash
+curl -s "http://127.0.0.1:5000/fetch_url_safe?url=http://127.0.0.1:5001/latest/meta-data/secret-key"
+# => Refused: internal/private address not allowed.
+```
+
+### 12. アカウント列挙(`/register`)
+
+新規登録時に「このメールアドレスは既に使われています」という**正直すぎるエラー**を返すと、
+攻撃者はそのレスポンスの違いだけを頼りに、総当たりで登録済みメールアドレス(=実在する
+アカウント)を特定できてしまう。
+
+```bash
+# 未登録のメールアドレス
+curl -s "http://127.0.0.1:5000/register?email=brand-new-unused@example.com"
+# => Registration received.
+
+# 既に登録済みのメールアドレス(alice@example.com)
+curl -s "http://127.0.0.1:5000/register?email=alice@example.com"
+# => Error: this email is already registered.   ← レスポンスの違いで存在が分かってしまう
+```
+
+対策版(`/register_safe`、どちらの場合も同じレスポンス)では、既存・未登録のどちらを
+送っても全く同じ応答が返り、外部から判別できない。
+
+```bash
+curl -s "http://127.0.0.1:5000/register_safe?email=alice@example.com"
+curl -s "http://127.0.0.1:5000/register_safe?email=brand-new-unused@example.com"
+# => どちらも同じ: "If this email is valid, a confirmation has been sent."
+```
+
 ## まとめ・学び
 
 - SQLiの本質(文字列連結でSQLを組み立てる = 入力がコードとして解釈される)は、
@@ -274,15 +376,18 @@ JSONはデータの表現方法であり、どんな値を解釈しても「関�
 
 [`auto_vuln_scanner.py`](auto_vuln_scanner.py): Strixのように「次に何を試すかをLLMが判断する」のではなく、
 固定のペイロードリストを総当たりし、レスポンスを機械的に比較するだけの、LLM不要・ルールベースのスキャナー。
-**「GETパラメータにペイロードを注入してレスポンスを比較する」という型**に合う4クラス
-(`sqli`・`xss`・`cmdi`・`traversal`)を`--class`で切り替え可能。
+**「GETパラメータにペイロードを注入してレスポンスを比較する」という型**に合う7クラス
+(`sqli`・`xss`・`cmdi`・`traversal`・`mass_assignment`・`ssrf`・`account_enum`)を
+`--class`で切り替え可能。
 
-[`session_vuln_check.py`](session_vuln_check.py): 上記の型に合わない3クラス(`csrf`・`idor`・`deserialize`)
-をまとめた、もう1本のスクリプト。これらは「ペイロードを工夫する」のではなく、**セッション状態を
-跨いだ判定**(CSRF: ログイン→Cookieのみでトークン無しの状態変更が通るか、IDOR: 正当な自分の
-セッションのまま他人のオブジェクトIDを指定して通るか)や、**攻撃用バイト列の組み立て**
-(deserialize: 攻撃コード入りpickleペイロードを作って送信し、実行結果がレスポンスに現れるか)
-が必要なため、`auto_vuln_scanner.py`とは別の仕組みになっている(同じスコープガードは共有)。
+[`session_vuln_check.py`](session_vuln_check.py): 上記の型に合わない4クラス
+(`csrf`・`idor`・`deserialize`・`stored_xss`)をまとめた、もう1本のスクリプト。これらは
+「ペイロードを工夫する」のではなく、**セッション状態を跨いだ判定**(CSRF: ログイン→Cookieのみで
+トークン無しの状態変更が通るか、IDOR: 正当な自分のセッションのまま他人のオブジェクトIDを
+指定して通るか)、**攻撃用バイト列の組み立て**(deserialize: 攻撃コード入りpickleペイロードを
+作って送信し、実行結果がレスポンスに現れるか)、または**2段階のリクエスト**(stored_xss:
+1回目でペイロードを投稿し、2回目の別リクエストで未エスケープのまま現れるか)が必要なため、
+`auto_vuln_scanner.py`とは別の仕組みになっている(同じスコープガードは共有)。
 
 ```bash
 pip3 install --user requests
@@ -342,13 +447,44 @@ python3 session_vuln_check.py --class deserialize --url http://127.0.0.1:5000 \
 # デシリアライズRCE: 修正版 /deserialize_safe をチェック(拒否されるはず)
 python3 session_vuln_check.py --class deserialize --url http://127.0.0.1:5000 \
   --deserialize-path /deserialize_safe
+
+# マスアサインメント: 脆弱版 /signup をスキャン(is_adminを注入)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/signup --class mass_assignment \
+  --baseline username=zzz --fuzz is_admin
+
+# マスアサインメント: 修正版 /signup_safe をスキャン(検出ゼロになるはず)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/signup_safe --class mass_assignment \
+  --baseline username=zzz --fuzz is_admin
+
+# SSRF: 脆弱版 /fetch_url をスキャン(内部限定サービスの秘密を狙う)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/fetch_url --class ssrf \
+  --baseline url=https://example.invalid/ --fuzz url
+
+# SSRF: 修正版 /fetch_url_safe をスキャン(検出ゼロになるはず)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/fetch_url_safe --class ssrf \
+  --baseline url=https://example.invalid/ --fuzz url
+
+# アカウント列挙: 脆弱版 /register をスキャン(既知の登録済みメールを試す)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/register --class account_enum \
+  --baseline email=brand-new-unused@example.com --fuzz email
+
+# アカウント列挙: 修正版 /register_safe をスキャン(検出ゼロになるはず)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/register_safe --class account_enum \
+  --baseline email=brand-new-unused2@example.com --fuzz email
+
+# 格納型XSS: 脆弱版 /review → /reviews をチェック
+python3 session_vuln_check.py --class stored_xss --url http://127.0.0.1:5000 \
+  --post-path /review --list-path /reviews
+
+# 格納型XSS: 修正版 /review_safe → /reviews_safe をチェック(拒否されるはず)
+python3 session_vuln_check.py --class stored_xss --url http://127.0.0.1:5000 \
+  --post-path /review_safe --list-path /reviews_safe
 ```
 
 ## まとめて1回で実行する
 
-[`scan_all.sh`](scan_all.sh): 上記14パターン(SQLi/XSS/コマンドインジェクション/パストラバーサル/CSRF/IDOR/
-デシリアライズRCE × それぞれ脆弱/修正)を1コマンドで実行するラッパースクリプト。
-`vulnerable_app.py`が起動済みであることが前提。
+[`scan_all.sh`](scan_all.sh): 上記22パターン(11クラス × それぞれ脆弱/修正)を1コマンドで
+実行するラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
 
 ```bash
 python3 vulnerable_app.py &
@@ -373,6 +509,14 @@ python3 vulnerable_app.py &
 | IDOR/BOLA | `/idor_account_safe`(修正済み) | 1 | Not vulnerable(403で拒否) |
 | デシリアライズRCE | `/deserialize`(脆弱) | 1(攻撃コード入りpickle) | VULNERABLE(`id`コマンドの出力がレスポンスに漏洩) |
 | デシリアライズRCE | `/deserialize_safe`(修正済み) | 1 | Not vulnerable(JSON構文エラーで400、コード実行なし) |
+| マスアサインメント | `/signup`(脆弱) | 3(`is_admin`のtrue/1/True) | 3(全パターンで管理者権限が付与される) |
+| マスアサインメント | `/signup_safe`(修正済み) | 3 | 0(誤検知なし) |
+| SSRF | `/fetch_url`(脆弱) | 2(IP直指定/`localhost`) | 2(内部限定サービスの秘密を取得) |
+| SSRF | `/fetch_url_safe`(修正済み) | 2 | 0(誤検知なし) |
+| アカウント列挙 | `/register`(脆弱) | 1(既知の登録済みメール) | VULNERABLE(409エラーで存在が判明) |
+| アカウント列挙 | `/register_safe`(修正済み) | 1 | Not vulnerable(常に同じレスポンス) |
+| 格納型XSS | `/review`→`/reviews`(脆弱) | 1 | VULNERABLE(投稿が未エスケープのまま一覧に反映) |
+| 格納型XSS | `/review_safe`→`/reviews_safe`(修正済み) | 1 | Not vulnerable(エスケープ済み) |
 
 (パストラバーサルは3種のペイロードのうち1種のみ検出: この最小アプリは入力をそのまま
 `os.path.join`に渡すだけなので、URLエンコード済み(`..%2f`)や二重ドット変種(`....//`)の
@@ -381,10 +525,11 @@ python3 vulnerable_app.py &
 網羅したい場合はペイロードと検出ロジックの拡充が必要。)
 
 脆弱性クラスを追加する方法: 「GETパラメータにペイロードを注入してレスポンスを比較する」という型に
-合うクラス(SQLi/XSS/cmdi/traversal)なら、`auto_vuln_scanner.py`の`VULN_CLASSES`にペイロード
-リストと`detect()`関数を1組追加するだけ。CSRF・IDOR/BOLA・デシリアライズRCEのように型が違う
-(セッション状態を跨いだ判定や、攻撃用バイト列の組み立てが要る)クラスは、`session_vuln_check.py`
-の`CLASSES`に同様に`check()`関数を1組追加する(型が全く新しい場合のみ、さらに別のスクリプトが要る)。
+合うクラス(SQLi/XSS/cmdi/traversal/mass_assignment/ssrf/account_enum)なら、
+`auto_vuln_scanner.py`の`VULN_CLASSES`にペイロードリストと`detect()`関数を1組追加するだけ。
+CSRF・IDOR/BOLA・デシリアライズRCE・格納型XSSのように型が違う(セッション状態を跨いだ判定、
+攻撃用バイト列の組み立て、2段階のリクエストが要る)クラスは、`session_vuln_check.py`の
+`CLASSES`に同様に`check()`関数を1組追加する(型が全く新しい場合のみ、さらに別のスクリプトが要る)。
 いずれにせよLLMの「判断」をルールで置き換えている分、
 対応したいクラスの数だけ実装を増やす必要がある(これがStrixのような汎用エージェントとの根本的な
 違い — Strixは未知のケースにもLLMの推論で対応しうるが、このアプローチは既知のパターンにしか反応しない)。
@@ -427,7 +572,7 @@ GET /login_safe?(同じペイロード全部)                      401  (全て�
 ## 補足: これは「Strixの簡易版」ではない
 
 `auto_vuln_scanner.py`/`session_vuln_check.py`は便宜上「Strixの代替」と呼んでいるが、正確には
-**Strixの一部機能(次に何を試すかの判断)だけを、既知の7クラスに限定してルールに置き換えたもの**
+**Strixの一部機能(次に何を試すかの判断)だけを、既知の11クラスに限定してルールに置き換えたもの**
 であり、Strixそのものの簡易版ではない。Strixが持っていて、このスクリプトには無いもの:
 
 - **攻撃対象の自動発見**: どのURL・どのパラメータが存在するかを、人間が指定しなくても
@@ -446,7 +591,13 @@ GET /login_safe?(同じペイロード全部)                      401  (全て�
   Strix自体はSQLi専用ではなく、SQLi/XSS/SSRF/認証不備/ビジネスロジックの欠陥など広範囲を対象にできる
   汎用ツールだが、本PoCでは`--instruction`でSQLiのみに意図的にスコープを絞っていた。
 - 本ラボは、同じ「脆弱性を実際に試す」というゴールを、エージェントを使わずに最短距離で達成した。
-  最終的には「LLMは不要だった」という結論に至り、SQLi・XSS等7クラスをLLM抜きのルールベース
-  スキャナー(`auto_vuln_scanner.py`)で自動検出できることを実証した。
+  最終的には「LLMは不要だった」という結論に至り、SQLi・XSS等11クラスをLLM抜きのルールベース
+  スキャナー(`auto_vuln_scanner.py`/`session_vuln_check.py`)で自動検出できることを実証した。
+  さらに、実際にStrixを使った第三者のレポート([Zenn記事](https://zenn.dev/turquoise123/articles/df481032f6b405)、
+  OpenAI gpt-5.1でブラックボックス診断を実行し6件検出、所要30分・$19.77)との照合で、
+  格納型XSS・マスアサインメント・SSRF・アカウント列挙の4クラスが抜けていたことが分かり、追加した。
+  (なお同記事はOpenAIという有料プロバイダで実際にStrixが完走しており、本PoCで「Strixは動かせ
+  なかった」という結論はローカルLLM/Groq/OpenRouterという安価な選択肢に限った話だったことも
+  裏付けている。)
 - 両者は競合するものではなく、「(少なくとも既知の脆弱性パターンについては)ツールに頼らなくても
   検証はできる」という補完的な結論を示している。
