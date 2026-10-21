@@ -1,0 +1,18 @@
+{
+  "name": "[R14] TLS handshake succeeded against a revoked eMudhra compromised intermediate CA chain",
+  "type": "log_detection",
+  "message": "A TLS client completed a handshake against a certificate chaining to one of the eight eMudhra intermediate CA certificates whose private keys were publicly proven compromised on 2026-10-17 (Mozilla Bugzilla bug 2083449: faulty key-generation script produced weaker keys, used in production; proof of key control was published for all eight). Firefox/Chrome already block these via OneCRL/CRLSet, so a successful handshake here means the reporting client's own trust store (curl, a language runtime's bundled roots, an embedded device, a CI pipeline) has not yet picked up the revocation and can be transparently impersonated by anyone holding the recovered keys.\n\nConfirm which host/service emitted this log, patch its CA bundle per the affected-software table in the eMudhra incident writeups, and treat any TLS session to the named server_name during the exposure window (intermediates issued since April 2025) as potentially intercepted.\n\nTune: add any lab/CI environment deliberately testing against these exact certificates to an allowlist here.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1553.004", "technique:T1552.004", "tactic:initial-access"],
+  "queries": [
+    {
+      "name": "emudhra_compromised_ca_handshake_success",
+      "query": "source:tls_handshake @tls.handshake_result:success (@tls.server_cert.issuer:(*\"EM DV TLS CA - G3B\"* OR *\"EM DV TLS CA - G3C\"* OR *\"EM OV TLS CA - G3B\"* OR *\"EM OV TLS CA - G3C\"* OR *\"EM EV TLS CA - G3B\"* OR *\"EM EV TLS CA - G3C\"*))",
+      "aggregation": "count",
+      "groupByFields": ["@client.host", "@tls.server_name"]
+    }
+  ],
+  "cases": [
+    { "name": "TLS client trusted a revoked eMudhra intermediate", "status": "critical", "condition": "emudhra_compromised_ca_handshake_success > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}
