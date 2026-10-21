@@ -207,17 +207,22 @@ flowchart LR
   D --> owD["OWASP LLM10"]:::owasp
   E --> owE["該当なし<br/>(新しい類型)"]:::owasp
 
-  owA --> stA["接続点のみ<br/>R7/R8・G1・G4"]:::noimpl
-  owB --> stB["接続点のみ<br/>R3と同じ発想"]:::noimpl
+  owA --> stA["接続点のみ<br/>R7/R8・G1・G4<br/>(defense-detection-notes.md §3.2)"]:::noimpl
+  owB --> stB["接続点のみ<br/>R3と同じ発想<br/>(専用ルールなし)"]:::noimpl
   owC --> stC["R9 実装済み"]:::impl
   owD --> stD["R10 実装済み"]:::impl
   owE --> stE["R11 実装済み<br/>(要アプリ計装)"]:::impl
+
+  stC --> fC["detections/sigma/<br/>r9_idpi_steered_egress.yml<br/>detections/datadog/<br/>r9_idpi_steered_egress.json"]:::file
+  stD --> fD["detections/sigma/<br/>r10_metadata_service_credential_access.yml<br/>detections/datadog/<br/>r10_metadata_service_credential_access.json"]:::file
+  stE --> fE["detections/datadog/<br/>r11_agent_session_smuggling.json<br/>(汎用シグネチャなし、<br/>アプリ側ツール呼び出しログ前提)"]:::file
 
   classDef evidence fill:#eef2f2,color:#18262b,stroke:#d6dedf;
   classDef pattern fill:#2a78d6,color:#fff,stroke:#215fa8;
   classDef owasp fill:#8a5fd1,color:#fff,stroke:#6c45ab;
   classDef impl fill:#1baf7a,color:#06211f,stroke:#148a60;
   classDef noimpl fill:#8aa0a3,color:#0b0b0b,stroke:#6d8285,stroke-dasharray: 3 2;
+  classDef file fill:#0f6f68,color:#fff,stroke:#0a4f4a;
 ```
 
 | 今回の類型 | 既存の整理との接続 |
