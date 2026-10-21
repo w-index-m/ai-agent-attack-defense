@@ -146,17 +146,28 @@ flowchart LR
   V13 --> R13["R13 wp2shell"]:::det
   V14 --> R14["R14 eMudhra CA信頼"]:::det
 
-  R8 --> D8["detections/（r8）<br/>jp-advisory-mapping.ja.md"]:::artifact
-  R9 & R10 & R11 --> D911["detections/（r9,r10,r11）<br/>llm-target-attacks.ja.md"]:::artifact
-  R12 --> D12["detections/（r12）"]:::artifact
-  R13 --> D13["detections/（r13）"]:::artifact
-  R14 --> D14["detections/（r14）"]:::artifact
+  R8 --> D8["detections/sigma/<br/>r8_webshell_placement_and_spawn.yml<br/>detections/falco/<br/>cairn-ai-agent.yaml<br/>jp-advisory-mapping.ja.md"]:::artifact
+  R9 --> D9["detections/sigma,datadog/<br/>r9_idpi_steered_egress.*"]:::artifact
+  R10 --> D10["detections/sigma,datadog/<br/>r10_metadata_service_credential_access.*"]:::artifact
+  R11 --> D11["detections/datadog/<br/>r11_agent_session_smuggling.json"]:::artifact
+  R12 --> D12["detections/sigma,datadog/<br/>r12_dns_water_torture.*"]:::artifact
+  R13 --> D13["detections/sigma,datadog/<br/>r13_wp2shell_wordpress_batch_exploitation.*"]:::artifact
+  R14 --> D14["detections/sigma,datadog/<br/>r14_emudhra_compromised_ca_trust.*"]:::artifact
+
+  subgraph LAB["関連する教材: sqli-lab/vulnerable_app.py"]
+    direction TB
+    sl_sqli["/login, /review 等<br/>SQLiクラス一式"]:::lab
+    sl_rce["/deserialize<br/>pickle RCE"]:::lab
+  end
+  sl_sqli -.同じ「SQLi→侵害」の構図を体験できる教材.-> R13
+  sl_rce -.同じ「RCE/Webシェル着地」を体験できる教材.-> R8
 
   classDef origin fill:#2a78d6,color:#fff,stroke:#215fa8;
   classDef verify fill:#eef2f2,color:#18262b,stroke:#d6dedf;
   classDef rejected fill:#cc3b3b,color:#fff,stroke:#8f1f1f,stroke-dasharray: 4 3;
   classDef det fill:#eda100,color:#18262b,stroke:#b57e00;
   classDef artifact fill:#1baf7a,color:#06211f,stroke:#148a60;
+  classDef lab fill:#0f6f68,color:#fff,stroke:#0a4f4a,stroke-dasharray: 2 2;
 ```
 
 ### トレーサビリティ表（R8–R14）

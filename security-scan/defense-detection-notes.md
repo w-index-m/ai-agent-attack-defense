@@ -247,7 +247,8 @@ LLM 利用ガバナンス（プロンプト/ツール呼び出しの監査、安
 ### 3.2 フェーズ → 検知 → ATLAS/OWASP 接続点（図解）
 
 上の表と §3.1 を一枚にまとめたもの。実線は本ノートの検知（R1–R8/G1–G6）への対応、
-点線は ATLAS/OWASP-LLM への**接続点**（1:1 対応ではない）を表す。
+緑は `detections/` 配下の実装ファイルへのひもづけ、点線は ATLAS/OWASP-LLM への**接続点**
+（1:1 対応ではない）を表す。
 
 ```mermaid
 flowchart LR
@@ -271,6 +272,26 @@ flowchart LR
   P6 --> R2b["R2 / 認証ログ"]:::det
   P7 --> EXFIL["R1・R4 + DLP相関"]:::det
 
+  subgraph IMPL["実装ファイル（security-scan/detections/）"]
+    direction TB
+    i3["sigma/r3_recon_enumeration_burst.yml<br/>datadog,elastic/r3_recon_burst.*"]:::impl
+    i2["sigma/r2_privileged_container_spawn.yml<br/>elastic/r2_privileged_container.json<br/>falco/cairn-ai-agent.yaml"]:::impl
+    i7["sigma/r7_rapid_multitool_execution.yml<br/>elastic/r7_multitool.json<br/>falco/cairn-ai-agent.yaml"]:::impl
+    i4["sigma/r4_messaging_c2_from_servers.yml<br/>datadog,elastic/r4_messaging_c2.*"]:::impl
+    i5["sigma/r5_persistence_cron_systemd.yml<br/>elastic/r5_persistence.json<br/>falco/cairn-ai-agent.yaml"]:::impl
+    igov["専用ルールなし<br/>（本ノート§3記載のみ、G1–G6）"]:::noimpl
+    i1["sigma/r1_llm_api_egress_from_servers.yml<br/>datadog,elastic/r1_llm_egress.*"]:::impl
+  end
+  R3 --> i3
+  R2 --> i2
+  R7 --> i7
+  R4 --> i4
+  R5 --> i5
+  GOV --> igov
+  R2b --> i2
+  EXFIL --> i1
+  EXFIL --> i4
+
   subgraph CONN["参考：ATLAS / OWASP-LLM との接続点"]
     direction TB
     A1["ATLAS<br/>LLM Jailbreak /<br/>Prompt Injection"]:::ext
@@ -287,6 +308,8 @@ flowchart LR
 
   classDef phase fill:#2a78d6,color:#fff,stroke:#215fa8;
   classDef det fill:#eda100,color:#18262b,stroke:#b57e00;
+  classDef impl fill:#1baf7a,color:#06211f,stroke:#148a60;
+  classDef noimpl fill:#8aa0a3,color:#0b0b0b,stroke:#6d8285,stroke-dasharray: 3 2;
   classDef ext fill:#eef2f2,color:#18262b,stroke:#d6dedf,stroke-dasharray: 3 2;
 ```
 
