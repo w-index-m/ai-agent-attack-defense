@@ -40,7 +40,10 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`strix-local-poc/`](strix-local-poc/) | 上記の PoC（パッチ・検証スクリプト・結果）。 |
 | [`cairn-lab/`](cairn-lab/) | Cairn を認可済み隔離ラボで動かすランブックと実設定（`dispatch.lab.yaml` ほか）、攻撃なし mock 設定。 |
 | [`strix-local-poc/windows-wsl-ollama-setup.md`](strix-local-poc/windows-wsl-ollama-setup.md) | Windows 11 + WSL2 + ローカルOllamaで、クラウドLLM課金なしにStrixを動かす実機セットアップ手順（DVWA等の自分で立てた練習環境を対象）、Groq/OpenRouterクラウドLLMでの試行、Claude Codeクラウドサンドボックスでの試行を記録。**最終結論：断念。** 試した全構成(ローカル3サイズ・Groq・OpenRouter・クラウドサンドボックス)がそれぞれ異なる構造的な壁(ツール呼び出しJSONの崩壊/無意味なコマンドループ、無料枠のトークン/分制限、大きいリクエストで原因不明の404、LLMプロバイダ全拒否のネットワーク許可リスト)に当たった。セットアップを自動化するPowerShellスクリプト（[`start-strix-test.ps1`](strix-local-poc/start-strix-test.ps1)）も収録(今は断念した旧アプローチの記録)。 |
-| [`sqli-lab/README.ja.md`](sqli-lab/README.ja.md) | **Strix PoCの代わりに完成した成果。** 11種類(SQLi・反射型/格納型XSS・OSコマンドインジェクション・パストラバーサル・CSRF・IDOR/BOLA・デシリアライズRCE・マスアサインメント・SSRF・アカウント列挙 ── 後半4つは第三者による実際のStrix実行レポートとの照合で追加)それぞれの脆弱版/修正版エンドポイントを持つ最小Flask+SQLiteアプリと、LLM不要のルールベーススクリプト2本(GETパラメータ総当たり型の`auto_vuln_scanner.py`、セッション/バイナリペイロード型の`session_vuln_check.py`)、1コマンドで全パターンを実行する`scan_all.sh`。LLM・エージェントループ・Docker不要。`netcheck`と同じく既定でローカル/プライベート範囲限定のスコープガード付き。**CIスキャン/`summarize.py`の集計へはまだ組み込まれていない(ファイル内にTODOとして明記)。** |
+| [`sqli-lab/README.ja.md`](sqli-lab/README.ja.md) | **Strix PoCの代わりに完成した成果。** 11種類(SQLi・反射型/格納型XSS・OSコマンドインジェクション・パストラバーサル・CSRF・IDOR/BOLA・デシリアライズRCE・マスアサインメント・SSRF・アカウント列挙 ── 後半4つは第三者による実際のStrix実行レポートとの照合で追加)それぞれの脆弱版/修正版エンドポイントを持つ最小Flask+SQLiteアプリと、LLM不要のルールベーススクリプト2本(GETパラメータ総当たり型の`auto_vuln_scanner.py`、セッション/バイナリペイロード型の`session_vuln_check.py`)、1コマンドで全パターンを実行する`scan_all.sh`。LLM・エージェントループ・Docker不要。`netcheck`と同じく既定でローカル/プライベート範囲限定のスコープガード付き。`run_regression.py`も追加し、CIスキャンに組み込み済み(脆弱性診断ゲートではなく回帰テストとして。
+`vulnerable_app.py`はこのリポジトリ自身のコードではなく意図的な脆弱デモアプリのため)。
+全脆弱/修正版エンドポイントが正しく分類され続けているかを検証し、不一致を`summarize.py`の
+新しい`sqli_lab`ソース経由で報告する。 |
 
 ### 【スコープ拡張】LLMシステムが標的になる側
 
