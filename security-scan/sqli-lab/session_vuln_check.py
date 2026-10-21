@@ -128,12 +128,29 @@ class SessionVulnClass:
     check: Callable[[argparse.Namespace], tuple[bool, str]]
     vulnerable_label: str
     safe_label: str
+    # Only set when this repo has already verified a real-world incident in
+    # the same vulnerability class against a primary source (see
+    # ../lineage.md). Left unset rather than guessed -- not every class here
+    # has one.
+    reference: str | None = None
 
 
 CLASSES: dict[str, SessionVulnClass] = {
     "csrf": SessionVulnClass(check_csrf, "VULNERABLE", "Not vulnerable (CSRF token enforced)"),
     "idor": SessionVulnClass(check_idor, "VULNERABLE", "Not vulnerable (ownership enforced)"),
-    "deserialize": SessionVulnClass(check_deserialize, "VULNERABLE", "Not vulnerable"),
+    "deserialize": SessionVulnClass(
+        check_deserialize,
+        "VULNERABLE",
+        "Not vulnerable",
+        reference=(
+            "Same end-state as the JPCERT/CC advisory (2026-10-08/09): remote code "
+            "execution that leaves a persistent server-side webshell/foothold "
+            "(there, a WAR's bundled JSP; here, a pickle payload). This repo's R8: "
+            "../detections/sigma/r8_webshell_placement_and_spawn.yml. Not a "
+            "reproduction of that specific advisory -- a synthetic demo of the "
+            "same vulnerability class (insecure deserialization)."
+        ),
+    ),
     "stored_xss": SessionVulnClass(check_stored_xss, "VULNERABLE", "Not vulnerable (escaped on render)"),
 }
 
@@ -177,6 +194,8 @@ def main() -> int:
     vulnerable, detail = vuln_class.check(args)
     if vulnerable:
         print(f"{vuln_class.vulnerable_label}: {detail}")
+        if vuln_class.reference:
+            print(f"Related real-world incident: {vuln_class.reference}")
         return 1
 
     print(f"{vuln_class.safe_label}: {detail}")

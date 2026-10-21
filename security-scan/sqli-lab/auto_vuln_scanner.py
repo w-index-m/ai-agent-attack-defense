@@ -214,15 +214,38 @@ def detect_account_enum(resp: requests.Response, baseline: requests.Response, pa
 class VulnClass:
     payloads: list[str]
     detect: Callable[[requests.Response, requests.Response, str], str | None]
+    # Only set when this repo has already verified a real-world incident in
+    # the same vulnerability class against a primary source (see
+    # ../lineage.md). Left unset rather than guessed -- not every class here
+    # has one.
+    reference: str | None = None
 
 
 VULN_CLASSES: dict[str, VulnClass] = {
-    "sqli": VulnClass(SQLI_PAYLOADS, detect_sqli),
+    "sqli": VulnClass(
+        SQLI_PAYLOADS,
+        detect_sqli,
+        reference=(
+            "wp2shell: WordPress REST API batch-endpoint route confusion "
+            "(CVE-2026-63030) exposing an unauthenticated SQLi (CVE-2026-60137), "
+            "used in the wild to place a webshell (Wiz, 2026-10). This repo's R13: "
+            "../detections/sigma/r13_wp2shell_wordpress_batch_exploitation.yml"
+        ),
+    ),
     "xss": VulnClass(XSS_PAYLOADS, detect_xss),
     "cmdi": VulnClass(CMDI_PAYLOADS, detect_cmdi),
     "traversal": VulnClass(TRAVERSAL_PAYLOADS, detect_traversal),
     "mass_assignment": VulnClass(MASS_ASSIGNMENT_PAYLOADS, detect_mass_assignment),
-    "ssrf": VulnClass(SSRF_PAYLOADS, detect_ssrf),
+    "ssrf": VulnClass(
+        SSRF_PAYLOADS,
+        detect_ssrf,
+        reference=(
+            "Double Agents: GCP Vertex AI's overly broad default service-account "
+            "permissions, reachable via SSRF to the cloud metadata service, abused "
+            "for LLMjacking (Unit 42). This repo's R10: "
+            "../detections/sigma/r10_metadata_service_credential_access.yml"
+        ),
+    ),
     "account_enum": VulnClass(ACCOUNT_ENUM_PAYLOADS, detect_account_enum),
 }
 
@@ -317,6 +340,9 @@ def main() -> int:
         print(f"  param={f.param!r} payload={f.payload!r}")
         print(f"    reason: {f.reason}")
         print()
+
+    if vuln_class.reference:
+        print(f"Related real-world incident: {vuln_class.reference}")
 
     return 1
 
