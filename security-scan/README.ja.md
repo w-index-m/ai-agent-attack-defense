@@ -54,7 +54,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 
 | ファイル | 内容 |
 |---|---|
-| [`detections/`](detections/) | 検知ルールの実装：Sigma / Falco / Datadog（R1–R8、Gambit系）＋Sigma / Datadog（R9–R11、LLM標的攻撃のパターンC・D・E）＋Sigma / Datadog（R12、DNS水攻め/ランダムサブドメイン攻撃の検知。AIエージェント特有ではない汎用インフラ可用性シグナルだが同じ検知基盤に収録）。閾値・allowlist は環境でチューニング。 |
+| [`detections/`](detections/) | 検知ルールの実装：Sigma / Falco / Datadog（R1–R8、Gambit系）＋Sigma / Datadog（R9–R11、LLM標的攻撃のパターンC・D・E）＋Sigma / Datadog（R12、DNS水攻め/ランダムサブドメイン攻撃の検知。AIエージェント特有ではない汎用インフラ可用性シグナルだが同じ検知基盤に収録）＋Sigma / Datadog（R13、実在するWordPressの「wp2shell」脆弱性チェーンの検知。CVE-2026-63030のルート混同＋CVE-2026-60137のSQLiでWebシェルが設置される実際に悪用中の脆弱性で、発見自体がAI支援によるソース監査という点でも注目）。閾値・allowlist は環境でチューニング。 |
 
 ### 自分の環境を確認するツール
 
