@@ -244,6 +244,52 @@ LLM 利用ガバナンス（プロンプト/ツール呼び出しの監査、安
 > まとめ：**ATT&CK＝攻撃者の“行為”の共通語（強い対応）**、**ATLAS＝AI を巡る脅威の地図（接続点）**、
 > **OWASP-LLM＝自組織 LLM アプリの守り（接続点）**。新ルールには、まず ATT&CK ID、該当すれば ATLAS/OWASP-LLM ID を併記する。
 
+### 3.2 フェーズ → 検知 → ATLAS/OWASP 接続点（図解）
+
+上の表と §3.1 を一枚にまとめたもの。実線は本ノートの検知（R1–R8/G1–G6）への対応、
+点線は ATLAS/OWASP-LLM への**接続点**（1:1 対応ではない）を表す。
+
+```mermaid
+flowchart LR
+  subgraph PHASE["ATT&CK フェーズ（攻撃連鎖）"]
+    direction TB
+    P1["偵察<br/>T1595 / T1046"]:::phase
+    P2["実行・ツール<br/>T1059 等"]:::phase
+    P3["C2<br/>T1071"]:::phase
+    P4["永続化<br/>T1053"]:::phase
+    P5["防御回避<br/>T1562 相当"]:::phase
+    P6["探索/横移動<br/>T1046・認証異常"]:::phase
+    P7["持ち出し<br/>T1041"]:::phase
+  end
+
+  P1 --> R3["R3<br/>偵察列挙バースト"]:::det
+  P2 --> R2["R2<br/>特権コンテナ"]:::det
+  P2 --> R7["R7<br/>多ツール連続実行"]:::det
+  P3 --> R4["R4<br/>メッセージングC2"]:::det
+  P4 --> R5["R5<br/>永続化作成"]:::det
+  P5 --> GOV["ガバナンス検知<br/>G1–G6"]:::det
+  P6 --> R2b["R2 / 認証ログ"]:::det
+  P7 --> EXFIL["R1・R4 + DLP相関"]:::det
+
+  subgraph CONN["参考：ATLAS / OWASP-LLM との接続点"]
+    direction TB
+    A1["ATLAS<br/>LLM Jailbreak /<br/>Prompt Injection"]:::ext
+    A2["ATLAS<br/>ML Model Inference<br/>API Access"]:::ext
+    O1["OWASP LLM06<br/>Excessive Agency"]:::ext
+    O2["OWASP LLM02<br/>Sensitive Info Disclosure"]:::ext
+    O3["OWASP LLM01/LLM10<br/>Injection / Unbounded"]:::ext
+  end
+  GOV -.自組織LLMの兵器化を捉える.-> A1
+  EXFIL -.持ち出し検知が接続.-> O2
+  R2 -.過大権限の封じ込め.-> O1
+  R7 -.過大権限の封じ込め.-> O1
+  A2 -.露出は攻撃面最小化・悪用はR1の裏返し.-> O3
+
+  classDef phase fill:#2a78d6,color:#fff,stroke:#215fa8;
+  classDef det fill:#eda100,color:#18262b,stroke:#b57e00;
+  classDef ext fill:#eef2f2,color:#18262b,stroke:#d6dedf,stroke-dasharray: 3 2;
+```
+
 > **この節の接続点を、実例つきで掘り下げたのが [`llm-target-attacks.ja.md`](llm-target-attacks.ja.md)（[EN](llm-target-attacks.en.md)）。** EchoLeak（CVE-2025-32711）、PLeak、Semantic Kernel/ModelScope の CVE（GitHub Security Advisory の原文で確認済み。Context7 のみ二次情報）、LLMjacking（Sysdig）、Unit 42 の複数研究（Web経由IDPIの大規模実態調査、GCP Vertex AI "Double Agents"、A2Aプロトコルの "Agent Session Smuggling"）を確認した上で、本ノートの R1–R8/G1–G6 との接続点を示す。「AI が攻撃する側」ではなく「LLM システムが標的になる側」を扱う、スコープ拡張の文書。**このうちC・D・Eの3パターンは、R9–R11として `detections/` に実際の検知ルール（Sigma/Datadog）を追加済み**（`detections/README.md` 参照）。
 
 ## 4. SOC トリアージ手順（優先度順）

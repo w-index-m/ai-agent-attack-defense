@@ -180,6 +180,46 @@ Unit 42 が提示する防御の5本柱（詳細は出典を参照）：
 
 ## 7. このリポジトリの既存の整理との接続点
 
+下図は §1 の 5 類型を、一次情報の事例 → OWASP LLM Top 10 との接続点 → 本リポジトリでの実装状況、まで
+一枚でたどったもの。緑は実際の検知ルール（Sigma/Datadog）まで実装済み、グレー点線は「接続点の指摘のみ」
+で専用ルールは作っていないことを表す。
+
+```mermaid
+flowchart LR
+  subgraph EV["一次情報で確認した事例"]
+    direction TB
+    evA["EchoLeak / Semantic Kernel×2 /<br/>ModelScope（Context7のみ二次情報）"]:::evidence
+    evB["PLeak<br/>(一部の言及は裏付け未確認)"]:::evidence
+    evC["EchoLeak +<br/>Unit 42 大規模Web実態調査"]:::evidence
+    evD["Sysdig LLMjacking +<br/>Double Agents(Vertex AI)"]:::evidence
+    evE["Unit 42 Agent Session<br/>Smuggling(実悪用は未観測)"]:::evidence
+  end
+
+  evA --> A["A. 実行権限の濫用<br/>(プロンプト注入→エージェント権限)"]:::pattern
+  evB --> B["B. システムプロンプト漏洩"]:::pattern
+  evC --> C["C. 間接的<br/>プロンプトインジェクション"]:::pattern
+  evD --> D["D. LLMjacking"]:::pattern
+  evE --> E["E. マルチエージェント<br/>セッション悪用"]:::pattern
+
+  A --> owA["OWASP LLM01+LLM06"]:::owasp
+  B --> owB["OWASP LLM07"]:::owasp
+  C --> owC["OWASP LLM01+LLM02"]:::owasp
+  D --> owD["OWASP LLM10"]:::owasp
+  E --> owE["該当なし<br/>(新しい類型)"]:::owasp
+
+  owA --> stA["接続点のみ<br/>R7/R8・G1・G4"]:::noimpl
+  owB --> stB["接続点のみ<br/>R3と同じ発想"]:::noimpl
+  owC --> stC["R9 実装済み"]:::impl
+  owD --> stD["R10 実装済み"]:::impl
+  owE --> stE["R11 実装済み<br/>(要アプリ計装)"]:::impl
+
+  classDef evidence fill:#eef2f2,color:#18262b,stroke:#d6dedf;
+  classDef pattern fill:#2a78d6,color:#fff,stroke:#215fa8;
+  classDef owasp fill:#8a5fd1,color:#fff,stroke:#6c45ab;
+  classDef impl fill:#1baf7a,color:#06211f,stroke:#148a60;
+  classDef noimpl fill:#8aa0a3,color:#0b0b0b,stroke:#6d8285,stroke-dasharray: 3 2;
+```
+
 | 今回の類型 | 既存の整理との接続 |
 |---|---|
 | A. 実行権限の濫用 | R7/R8（想定外のプロセス起動）、G1（スキルの自動生成）、G4（監査ログ） |
