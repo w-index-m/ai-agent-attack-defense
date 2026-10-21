@@ -158,9 +158,11 @@ flowchart LR
     direction TB
     sl_sqli["/login, /review 等<br/>SQLiクラス一式"]:::lab
     sl_rce["/deserialize<br/>pickle RCE"]:::lab
+    sl_ssrf["/fetch_url<br/>SSRF→内部メタデータ"]:::lab
   end
   sl_sqli -.同じ「SQLi→侵害」の構図を体験できる教材.-> R13
   sl_rce -.同じ「RCE/Webシェル着地」を体験できる教材.-> R8
+  sl_ssrf -.同じ「SSRF→メタデータ窃取」の構図を体験できる教材.-> R10
 
   classDef origin fill:#2a78d6,color:#fff,stroke:#215fa8;
   classDef verify fill:#eef2f2,color:#18262b,stroke:#d6dedf;
@@ -186,6 +188,11 @@ flowchart LR
 > この表の最終行が示す通り、ユーザーから提示された情報は**そのまま検知ルール化しない**。
 > CVE番号の形式異常（2026年発行にしては桁数が不自然に多い）や、一次情報源（CVE.org/NVD/ベンダー公式）
 > への不在を根拠に、採用前に必ず裏取りする運用をこのリポジトリでは徹底している。
+
+> 図中の `sqli-lab/` との接続は、ドキュメントだけでなく**ツール自体**にも実装している。
+> `auto_vuln_scanner.py`（sqli・ssrf クラス）と `session_vuln_check.py`（deserialize クラス）は、
+> 該当クラスの脆弱性を検出すると、この実例（R13・R10・R8）への参照を実行結果に併せて出力する
+> （`sqli-lab/README.ja.md` の該当セクション参照）。
 
 ---
 検知・防御の設計に限定。攻撃の実行手順や安全機構の回避方法は含めない。

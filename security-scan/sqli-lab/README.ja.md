@@ -159,6 +159,14 @@ curl -s -G "http://127.0.0.1:5000/login_safe" \
 パラメータ化クエリ(プレースホルダ + バインド)に変えるだけで、同じ入力が
 SQL構文として解釈されなくなり、上記3つの攻撃すべてが無効になる。
 
+> **関連する実世界のインシデント**: wp2shell — WordPress REST APIバッチエンドポイントの
+> ルート混同(CVE-2026-63030)が認可チェックをバイパスし、その先で未認証のSQLi
+> (CVE-2026-60137)が実行可能になっていた脆弱性チェーン。実際にWebシェル設置まで
+> 悪用されたと2026年10月にWizが報告している。本リポジトリではR13として検知ルール化
+> 済み(`../detections/sigma/r13_wp2shell_wordpress_batch_exploitation.yml`、
+> `../detections/README.md`参照)。`auto_vuln_scanner.py --class sqli`を実行すると、
+> 見つかった場合にこの実例への参照を併せて出力する。
+
 ### 4. OSコマンドインジェクション(`/diag`)
 
 ```bash
@@ -277,6 +285,15 @@ JSONはデータの表現方法であり、どんな値を解釈しても「関�
 `pickle`/`yaml.load`(デフォルト設定)/Javaの素の`ObjectInputStream`等、
 「手順まで復元する」形式を避け、JSON等の**データのみ**を表す形式を使うのが鉄則。
 
+> **関連する実世界のインシデント**: このデモの「到達点」(RCE→サーバー側に恒久的な
+> 足場が残る)は、JPCERT/CCの注意喚起(2026-10-08/09)が報告した、公開Webサーバーから
+> 届くWARファイル中のJSPによる簡易Webシェル設置と同じ構図(手段はpickleとJSPで異なるが、
+> 「リモートコード実行→永続的な足場」という結果は同じ)。本リポジトリではR8として
+> 検知ルール化済み(`../detections/sigma/r8_webshell_placement_and_spawn.yml`)。
+> ただし本デモは**特定のCVEの再現ではなく**、同じ脆弱性クラス(安全でないデシリアライズ)
+> の合成教材。`session_vuln_check.py --class deserialize`を実行すると、脆弱と判定された
+> 場合にこの実例への参照を併せて出力する。
+
 ### 9. 格納型XSS(`/review` → `/reviews`)
 
 反射型XSS(③)は「自分のリクエストに攻撃文字列を含める」必要があったが、格納型は違う。
@@ -329,6 +346,14 @@ curl -s "http://127.0.0.1:5000/fetch_url?url=http://127.0.0.1:5001/latest/meta-d
 メタデータAPI)だが、`/fetch_url`がリクエストを代理してしまうため、外部の攻撃者がその
 秘密情報を取得できてしまう。対策版(`/fetch_url_safe`、取得先がloopback/プライベート/
 リンクローカルに解決される場合は拒否)に同じリクエストを送ると、`403`で拒否される。
+
+> **関連する実世界のインシデント**: Double Agents — GCP Vertex AIのデフォルトの
+> サービスアカウント権限が過大で、SSRF経由でクラウドメタデータサービスに到達できると、
+> その権限を使ってLLMjacking(盗んだクラウド認証情報での不正利用)に悪用できるという
+> Unit 42の調査。本リポジトリではR10として検知ルール化済み
+> (`../detections/sigma/r10_metadata_service_credential_access.yml`、
+> `llm-target-attacks.ja.md` §5.1参照)。`auto_vuln_scanner.py --class ssrf`を実行すると、
+> 見つかった場合にこの実例への参照を併せて出力する。
 
 ```bash
 curl -s "http://127.0.0.1:5000/fetch_url_safe?url=http://127.0.0.1:5001/latest/meta-data/secret-key"
