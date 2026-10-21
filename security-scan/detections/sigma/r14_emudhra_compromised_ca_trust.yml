@@ -1,0 +1,59 @@
+title: TLS handshake completed against a revoked eMudhra intermediate CA certificate chain (October 2026 key compromise)
+id: 9a2f7e4c-1d6b-4f83-b5a7-r14emudhra000
+status: experimental
+description: >
+  Detects a TLS client successfully completing a handshake against a
+  certificate chaining to one of the eight eMudhra intermediate CA
+  certificates whose private keys were disclosed as compromised on
+  2026-10-17 (Mozilla Bugzilla bug 2083449). A faulty key-generation
+  script reportedly produced weaker keys that were mistakenly used in
+  production; proof of key control for all eight intermediates was
+  published, meaning any party can derive the private keys from the
+  public certificates alone and impersonate any site issued under them.
+  Firefox (OneCRL) and Chrome (CRLSet) have distrusted the certificates;
+  many non-browser TLS clients (curl, language-runtime bundles, embedded
+  devices, CI/CD pipelines) consult other trust stores on their own
+  update cadence and can remain vulnerable until patched. This rule flags
+  client-side acceptance of the compromised chain (a client that did NOT
+  block it) as a signal of a stale trust store, which an attacker could
+  exploit to perform undetected TLS interception/impersonation against
+  that client.
+references:
+  - https://bugzilla.mozilla.org/show_bug.cgi?id=2083449
+  - https://groups.google.com/a/mozilla.org/g/dev-security-policy/c/0R3XLJL6FuE
+author: ai-agent-attack-defense
+date: 2026-10-21
+logsource:
+  category: tls_handshake
+detection:
+  selection_compromised_issuer_cn:
+    tls_server_cert_issuer|contains:
+      - 'CN=EM DV TLS CA - G3B'
+      - 'CN=EM DV TLS CA - G3C'
+      - 'CN=EM OV TLS CA - G3B'
+      - 'CN=EM OV TLS CA - G3C'
+      - 'CN=EM EV TLS CA - G3B'
+      - 'CN=EM EV TLS CA - G3C'
+  selection_handshake_success:
+    tls_handshake_result: 'success'
+  condition: selection_compromised_issuer_cn and selection_handshake_success
+  # Intended use: run this against your own TLS-terminating proxies/clients'
+  # connection logs, or periodically re-run the vendor's own check (the
+  # certificate chains and curl targets published alongside the disclosure)
+  # from each client population (servers, CI runners, embedded/IoT fleets)
+  # that does not auto-consume OneCRL/CRLSet, and alert on any success.
+fields:
+  - client_host
+  - server_name
+  - tls_server_cert_issuer
+  - tls_server_cert_serial
+  - tls_handshake_result
+falsepositives:
+  - None expected once the client's trust store is patched; a successful handshake against these exact issuer CNs indicates a trust store that has not yet applied the eMudhra revocation, which is itself the condition this rule is meant to surface, not a benign state.
+  - A client deliberately pinned to one of these intermediates for internal testing of the incident itself (lab/CI environment); scope this rule to production/user-facing client populations.
+level: critical
+tags:
+  - attack.initial_access
+  - attack.t1553.004
+  - attack.credential_access
+  - attack.t1552.004
