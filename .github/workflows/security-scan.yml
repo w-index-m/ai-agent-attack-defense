@@ -73,6 +73,15 @@ jobs:
           docker run --rm -v "$PWD/results:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t "${{ vars.STAGING_URL }}" -J zap.json || true
 
+      # --- sqli-lab の自己リグレッション検査(このリポジトリの脆弱性診断ではない) ---
+      # vulnerable_app.py は意図的に脆弱なデモアプリで、このリポジトリ自身のコードでは
+      # ない。ここで検査しているのは「ラボ自身の検出スクリプトが壊れていないか」のみ。
+      # 詳細: security-scan/sqli-lab/README.ja.md の TODO セクション参照。
+      - name: sqli-lab のリグレッションテスト
+        run: |
+          pip install --quiet flask requests markupsafe
+          python3 security-scan/sqli-lab/run_regression.py --out results/sqli_lab.json || true
+
       - name: 集計(要約を表示)
         run: |
           sudo chown -R "$(id -u):$(id -g)" results || true

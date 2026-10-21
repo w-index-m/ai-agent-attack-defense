@@ -67,7 +67,22 @@ def zap(data):
             yield ("zap", m.get(str(a.get("riskcode", "0")), "info"), a.get("name", ""), site.get("@name", ""), False)
 
 
-SOURCES = [("semgrep.json", semgrep), ("trivy.json", trivy), ("gitleaks.json", gitleaks), ("zap.json", zap)]
+def sqli_lab(data):
+    # security-scan/sqli-lab/run_regression.py の出力。ここに現れるのは
+    # 「このリポジトリの脆弱性」ではなく、このラボ自身の検出スクリプトの
+    # リグレッション(本来VULNERABLEのはずがsafe判定になった等)。
+    # 詳細は security-scan/sqli-lab/README.ja.md の TODO セクション参照。
+    for r in data or []:
+        yield ("sqli_lab", r.get("severity", "high"), r.get("title", ""), r.get("location", ""), False)
+
+
+SOURCES = [
+    ("semgrep.json", semgrep),
+    ("trivy.json", trivy),
+    ("gitleaks.json", gitleaks),
+    ("zap.json", zap),
+    ("sqli_lab.json", sqli_lab),
+]
 
 
 def norm_sev(sev):
