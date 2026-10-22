@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import ipaddress
+import re
 import socket
 import sys
 from dataclasses import dataclass, field
@@ -23,6 +24,56 @@ from typing import Callable
 from urllib.parse import urlparse
 
 import requests
+
+# PHP2Shell (CVE-2026-109618, CVE-2026-109619; CVSS 9.2): critical
+# memory-safety vulnerabilities in the PHP runtime itself, not an
+# application-level bug -- affects any app running on a vulnerable PHP
+# version. Disclosed 2026-10 (Wiz Research / OpenAI Codex Security / Calif).
+# This is a version-range check only (no exploit code): first-fixed release
+# per branch, as published at https://www.php2shell.com/ on 2026-10-21.
+PHP2SHELL_FIRST_FIXED = {
+    (8, 2): (8, 2, 35),
+    (8, 3): (8, 3, 36),
+    (8, 4): (8, 4, 27),
+    (8, 5): (8, 5, 12),
+}
+PHP2SHELL_REFERENCE = (
+    "PHP2Shell (CVE-2026-109618/109619, CVSS 9.2): a PHP *runtime* bug, "
+    "not an application bug -- affects any app on a vulnerable PHP version. "
+    "https://www.php2shell.com/"
+)
+
+
+def check_php2shell(powered_by: str) -> str | None:
+    """Compare an 'X-Powered-By: PHP/x.y.z' header against PHP2Shell's
+    first-fixed version per branch. Returns a warning string if the version
+    looks vulnerable, else None. This is a version-range comparison, not an
+    exploit attempt -- it never sends a PHP2Shell payload."""
+    m = re.search(r"PHP/(\d+)\.(\d+)\.(\d+)", powered_by or "")
+    if not m:
+        return None
+    major, minor, patch = (int(x) for x in m.groups())
+    branch = (major, minor)
+    version_str = f"{major}.{minor}.{patch}"
+
+    if branch in PHP2SHELL_FIRST_FIXED:
+        fixed = PHP2SHELL_FIRST_FIXED[branch]
+        if (major, minor, patch) < fixed:
+            fixed_str = ".".join(str(x) for x in fixed)
+            return (
+                f"PHP {version_str} is below the first fixed release {fixed_str} "
+                f"for this branch -- vulnerable to {PHP2SHELL_REFERENCE}"
+            )
+        return None
+
+    if branch < (8, 2):
+        return (
+            f"PHP {version_str} is on a branch (< 8.2) this repo has no confirmed "
+            f"fixed version for -- treat as vulnerable until checked against "
+            f"php.net's own advisory. {PHP2SHELL_REFERENCE}"
+        )
+
+    return None  # branch newer than what this repo has data for (e.g. 8.6+)
 
 # Same allow-list as netcheck/netcheck.py: loopback + RFC1918 private ranges.
 # This scanner actually fires live attack payloads, so by default it refuses
@@ -294,6 +345,9 @@ def print_target_assessment(a: TargetAssessment) -> None:
             f"  warning: baseline request returned {a.status_code} -- findings below may be "
             "unreliable (check --baseline params and --url path)"
         )
+    php2shell_warning = check_php2shell(a.powered_by)
+    if php2shell_warning:
+        print(f"  warning: {php2shell_warning}")
 
 
 def probe(

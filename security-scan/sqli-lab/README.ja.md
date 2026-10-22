@@ -82,9 +82,7 @@ Target assessment:
 ```
 
 - `status`/`size`/`time`/`Content-Type`: ベースライン応答の基本情報。
-- `Server`/`X-Powered-By`: 対象が何で動いているかの手がかり(例えば`X-Powered-By: PHP/8.1.x`の
-  ようなヘッダーが見えれば、それ自体が別の調査の起点になる──PHPのバージョン次第では
-  PHP2Shell(CVE-2026-109618/109619)のような実例と照合できる、という具合)。
+- `Server`/`X-Powered-By`: 対象が何で動いているかの手がかり。
 - ベースラインが`4xx`/`5xx`を返した場合は警告を出す(以降の検出結果は`--baseline`や
   `--url`のパスを疑ってから見ること、という合図)。
 - 対象に**接続すらできない場合**は、ペイロードを1つも撃たずにここで中断する
@@ -93,6 +91,37 @@ Target assessment:
 `session_vuln_check.py`側も同じ考え方で、各クラスのチェック(ログイン→本処理)に入る前に
 `args.url`への到達性だけを確認する(ログイン失敗やセッション状態は各チェック自身の仕事なので、
 ここでは「接続できるかどうか」のみを見る)。
+
+### PHP2Shellバージョン照合(`check_php2shell()`)
+
+`X-Powered-By`ヘッダーが`PHP/x.y.z`の形式なら、PHP2Shell(CVE-2026-109618/109619、
+CVSS 9.2、[php2shell.com](https://www.php2shell.com/)で2026-10-21に公開された、
+PHPランタイム自体のメモリ安全性の脆弱性)の修正済みバージョンと自動的に照合し、
+該当すれば警告を出す。**エクスプロイトコードは一切含まない、バージョン範囲の比較のみ**
+(`os_patch_check_linux.py`/`os_patch_check_windows.py`と同じ思想)。
+
+```
+Target assessment:
+  status=200 size=39B time=2ms content-type='(none)'
+  Server='nginx' X-Powered-By='PHP/8.3.1'
+  warning: PHP 8.3.1 is below the first fixed release 8.3.36 for this branch -- vulnerable to PHP2Shell (CVE-2026-109618/109619, CVSS 9.2): a PHP *runtime* bug, not an application bug -- affects any app on a vulnerable PHP version. https://www.php2shell.com/
+```
+
+対象のアプリケーションコード(SQLi等)とは無関係に、**PHPランタイム自体**が古ければ
+警告が出る点に注意(`vulnerable_app.py`はFlask/Pythonなので`X-Powered-By`は出ず、
+この照合は常にスキップされる。モックのPHP風サーバーでのみ実動作を確認済み)。
+
+| 対象ブランチ | 修正済みバージョン |
+|---|---|
+| 8.2 | 8.2.35 |
+| 8.3 | 8.3.36 |
+| 8.4 | 8.4.27 |
+| 8.5 | 8.5.12 |
+| 8.1以前 | php2shell.comの記載では「公式の修正版なし」とされる旨の警告のみ(php.net自身の
+  アドバイザリでの裏取りは未実施) |
+
+この範囲外(8.6以降など)は、このリポジトリがデータを持っていないため何も表示しない
+(脆弱でない、という意味ではない)。
 
 ## 対象アプリ
 

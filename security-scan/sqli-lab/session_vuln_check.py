@@ -34,7 +34,7 @@ from typing import Callable
 
 import requests
 
-from auto_vuln_scanner import _is_allowed_target
+from auto_vuln_scanner import _is_allowed_target, check_php2shell
 
 
 # --------------------------------------------------------------------------
@@ -165,12 +165,16 @@ def assess_target(url: str) -> tuple[bool, str]:
         resp = requests.get(url, timeout=10)
     except requests.RequestException as exc:
         return False, f"target unreachable: {exc}"
+    powered_by = resp.headers.get("X-Powered-By", "(none)")
     info = "status=%d size=%dB Server=%r X-Powered-By=%r" % (
         resp.status_code,
         len(resp.content),
         resp.headers.get("Server", "(none)"),
-        resp.headers.get("X-Powered-By", "(none)"),
+        powered_by,
     )
+    php2shell_warning = check_php2shell(powered_by)
+    if php2shell_warning:
+        info += f"\n  warning: {php2shell_warning}"
     return True, info
 
 
