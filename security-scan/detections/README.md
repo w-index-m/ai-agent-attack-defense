@@ -56,6 +56,13 @@
 > 成立を「トラストストア未更新」のシグナルとして検知する。該当クライアントのCA束を個別に更新すること
 > でのみ解消し、OneCRL/CRLSetの配信自体はこの検知対象のクライアントには効かない点に注意。
 >
+> **追記(2026-10-21)**: 「ブラウザ以外のTLSクライアントは更新サイクルが別」というR14の想定が、
+> 実際に**Java/JSSE**で確認された。OpenJDK/Oracle Javaのcacertsが侵害された中間CAの連鎖する
+> ルートCAを信頼済みだったため、**CVE-2026-91403**(CVSS 9.1、Oracleが緊急Security Alertとして
+> 公開、IPAも同日注意喚起)としてJSSE側の脆弱性になった。ローカルのJava環境がこの影響を受けて
+> いないかは、`../java-cacerts-emudhra-check-notes.md`(`scripts/java_cacerts_emudhra_check.py`)
+> で確認できる。
+>
 > R16・R17は、Webサーバーソフトウェア本体(Apache httpd / Nginx)に実在する重大CVEの検知。
 > R16はApache httpdのmod_http2(HTTP/2処理)のダブルフリー(CVE-2026-23918、CVSS 8.8、httpd 2.4.67で
 > 修正)、R17はNginxのngx_http_rewrite_moduleのヒープバッファオーバーフロー(CVE-2026-42945、通称

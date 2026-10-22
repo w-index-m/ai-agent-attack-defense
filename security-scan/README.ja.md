@@ -64,6 +64,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | ファイル | 内容 |
 |---|---|
 | [`os-patch-check-notes.md`](os-patch-check-notes.md) | 自分の機器の OS 更新を確認し、SARIF で `vuln_triage` に読み込む。**Linux(RHEL系)用 `scripts/os_patch_check_linux.py`** と **Windows用 `scripts/os_patch_check_windows.py`** に分けている。確認専用。実機では未検証。 |
+| [`java-cacerts-emudhra-check-notes.md`](java-cacerts-emudhra-check-notes.md) | `scripts/java_cacerts_emudhra_check.py`: ローカルJDKのcacertsに、eMudhra侵害(R14)関連のルートCAがあるかを確認し、`java -version`をIPA公表の「脆弱な版」一覧(CVE-2026-91403)と突き合わせる。確認専用。このサンドボックスの実際のJDKに対して実行・検証済み(検証中に実際のバグ――この環境では`java -version`のエラー文言がstderrではなくstdoutに出ることを発見し修正した)。該当ルートCAを実際に信頼しているJDKでは未検証。 |
 | [`patch-suggest-notes.md`](patch-suggest-notes.md) | 診断結果から修正案（diff）を作る `scripts/patch_suggest.py`。自動適用はしない（人の y/N 確認つき）。gitleaks の値は LLM に送らない。小さいモデルの限界を明記。 |
 | [`zgrab2-notes.md`](zgrab2-notes.md) | zgrab2（ZMap のアプリ層スキャナ）の出力を `vuln_triage` に取り込む方法と、対象を許可範囲に絞るガード `scripts/zgrab2_guard.py`。露出の棚卸し用で、脆弱性スキャナではない。日英。 |
 | [`dep-cve-check-notes.md`](dep-cve-check-notes.md) | `scripts/dep_cve_check.py`: `requirements.txt`（pip、`==` 固定行）と npm の `package-lock.json` を、公開の脆弱性データベース OSV.dev に照合する。出力は SARIF で `vuln_triage` にそのまま読み込める。モックで検証済み、実際の OSV API は未確認。日英。 |
