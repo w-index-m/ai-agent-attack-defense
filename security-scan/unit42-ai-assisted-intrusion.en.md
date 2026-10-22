@@ -12,10 +12,18 @@ This case differs: it is a primary report of a **real-world incident where such 
 
 ## 1. Overview
 
+- This happened **during a ransomware attack** (Unit 42's own text: "during a ransomware attack" -- confirmed via a WebSearch excerpt of the primary source; multiple independent secondary sources (piyolog, The Register, ThreatCluster, CyberNetSec) agree).
 - A human attacker told the victim, during negotiations, that they used a **frontier AI model plus an attack-specific agentic framework** to automate the intrusion.
-- Work that would normally take multiple red teams **about two weeks** was completed in **under 10 hours**.
+- Work that would normally take multiple red teams **about two weeks** was completed in **under 10 hours**, using **more than 50 MITRE ATT&CK techniques** (confirmed from Unit 42's own text).
 - The attacker left the entire intrusion to agents, with **humans setting objectives and making key decisions only** (per Unit 42's Figure 1).
 - After the attack, the attacker had the agent produce an **80-page technical security-posture audit** of the victim organization and left it behind.
+
+> **Verification note (added 2026-10-22)**: the "ransomware" and "50+ MITRE ATT&CK techniques" points above were
+> added based on a WebSearch excerpt of the primary source (direct access to Unit 42's site was network-blocked
+> from this session's environment) plus agreement across multiple independent secondary sources (piyolog, The
+> Register, ThreatCluster, CyberNetSec) -- not a full read-through of the primary article. Also checked whether
+> any detection/reproduction tool or GitHub repository has been published alongside this report: **none found**
+> as of 2026-10-22.
 
 ## 2. The 10-Hour Intrusion Chain
 
