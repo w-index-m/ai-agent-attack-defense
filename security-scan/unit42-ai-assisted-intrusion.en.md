@@ -66,12 +66,12 @@ Unit 42's recommended mitigations (summarized from the article):
 | CI/CD pipeline hijack, cloud key exfiltration | New persistence / privilege expansion | **R5** (new jobs/credentials created) · **G5** (tool-privilege expansion requests) |
 | Calling the org's own AI infrastructure with stolen cloud keys | LLM API egress from server/pipeline-zone hosts | **R1/R4** (exactly the top-priority target of this repo's R1) |
 | Terraform backdoor attempt stopped by branch protection | Governance in normal operation | **A real-world case where G5/G6-equivalent defenses worked** (echoes this repo's ARTEX analysis on the value of "built-in governance") |
-| Agent-to-agent handoff via structured Markdown | Agent-specific artifact | **Not yet covered by R1–R8** — a candidate for a future detection rule (§7) |
+| Agent-to-agent handoff via structured Markdown | Agent-specific artifact | **Implemented as R20** (exploratory heuristic — see §7) |
 
 ## 7. Limitations and Open Questions
 
 - This document organizes Unit 42's public article; the victim organization's name, specific tool names, and IOCs are not given in the article and are not covered here.
-- "Agent-to-agent handoff via structured Markdown files" is an artifact this repository's existing detection rules (R1–R8) do not yet explicitly cover; it is a candidate for a future rule, not something implemented here.
+- "Agent-to-agent handoff via structured Markdown files" is now implemented as `detections/` R20 (`r20_agent_markdown_handoff_burst.yml`/`.json`). Unit 42's own article gives no IOCs, filenames, or paths for this tell — there is no published, confirmed signature for it. R20 is this repository's own **exploratory heuristic**, constructed from the article's general description (§3, §5): a single process writing several structured Markdown files across several distinct directories in a short window. It is not a signature Unit 42 verified or published. Thresholds need real-environment baseline tuning, and a hit should be evaluated in correlation with R1/R4/R5/R7 rather than alone — Unit 42's own point is that AI involvement shows up as a *combination* of tells, not any single one.
 - The MITRE ATT&CK/ATLAS ID mapping is transcribed verbatim from Unit 42's table and has not been independently verified; confirm against the official matrices (atlas.mitre.org).
 
 ## 8. References

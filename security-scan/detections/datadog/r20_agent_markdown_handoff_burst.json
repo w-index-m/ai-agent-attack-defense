@@ -1,0 +1,19 @@
+{
+  "name": "[R20] Burst of structured Markdown file writes from a single process across unrelated paths",
+  "type": "log_detection",
+  "message": "Exploratory heuristic for one of the three AI-involvement tells Unit 42 named in \"An AI-Assisted Cyber Attack\" (2026-09-02): structured Markdown files passed between agents/sessions to hand off information. Unit 42 gave no IOCs or filenames for this -- it was a forensic observation, not a published signature. This rule is this repository's own constructed proxy, not a confirmed indicator: a single process writing several distinct .md files across several distinct directories, outside known doc paths, in a short window -- a shape unusual for both normal human editing and most legitimate automation.\n\nTreat every hit as a lead, not a confirmation. Correlate with this repo's other agentic-behavior signals (R1 LLM egress, R4 messaging C2, R5 persistence, R7 rapid multi-tool execution) before escalating -- Unit 42's own point is that AI involvement shows up as a *combination* of tells, not any single one. See unit42-ai-assisted-intrusion.ja.md section 7.\n\nTune: allowlist known doc-generation automation (changelog bots, static-site builders, monorepo doc-sync jobs) by process name/service account for your environment -- this threshold needs real baseline tuning before it's useful.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1074", "tactic:collection"],
+  "queries": [
+    {
+      "name": "md_write_event",
+      "query": "source:file_event @file.extension:md -@file.path:(*\\/docs\\/* OR *\\/wiki\\/* OR *\\/.git\\/* OR *README* OR *CHANGELOG* OR *node_modules\\/* OR *site-packages\\/*)",
+      "aggregation": "cardinality",
+      "aggregationField": "@file.path",
+      "groupByFields": ["@process.guid", "host"]
+    }
+  ],
+  "cases": [
+    { "name": "Scattered Markdown writes from one process (needs SIEM-side distinct-directory + distinct-filename thresholds -- see rule message)", "status": "low", "condition": "md_write_event > 4" }
+  ],
+  "options": { "evaluationWindow": 600, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

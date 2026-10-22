@@ -1,0 +1,62 @@
+title: Burst of structured Markdown file writes from a single process across unrelated paths (possible agent-to-agent handoff artifact)
+id: 2a6f8c14-9d3b-4e71-b5a0-r20mdhandoff00
+status: experimental
+description: >
+  Exploratory heuristic for one of the three AI-involvement tells Unit 42
+  explicitly named in its "An AI-Assisted Cyber Attack" writeup
+  (published 2026-09-02): "structured Markdown files passed between
+  agents/sessions to hand off information." Unit 42 gave no IOCs, file
+  names, or paths for this -- it was observed as a forensic artifact,
+  not documented as a reusable signature. This rule is this repo's own
+  construction of a plausible behavioral proxy, not a confirmed
+  signature: a single process (or short-lived process tree) creating or
+  writing several distinct .md files across several distinct
+  directories, outside known documentation paths, in a short window.
+  That shape is unusual for both normal human editing (one file, one
+  directory, longer intervals) and for most legitimate automation
+  (writes to one fixed output path, not scattered across many).
+  Tracked in this repo as `unit42-ai-assisted-intrusion.ja.md` §7's
+  "today's limitation / future work" item; this rule is the first
+  attempt at it, not a closed-out confirmation.
+references:
+  - https://unit42.paloaltonetworks.com/ai-assisted-cyber-attack/
+  - ../unit42-ai-assisted-intrusion.ja.md
+author: ai-agent-attack-defense
+date: 2026-10-22
+logsource:
+  category: file_event
+detection:
+  selection_md_write:
+    TargetFilename|endswith: '.md'
+  filter_known_doc_paths:
+    TargetFilename|contains:
+      - '/docs/'
+      - '/wiki/'
+      - '/.git/'
+      - 'README'
+      - 'CHANGELOG'
+      - 'node_modules/'
+      - 'site-packages/'
+  condition: selection_md_write and not filter_known_doc_paths
+  # Sigma's base detection block can only express the per-event selection
+  # above; the actual signal is the AGGREGATE shape, which has to be
+  # built in the SIEM (same approach as r12_dns_water_torture.yml):
+  # group by (process_guid or parent_process + host), 5-10 minute window,
+  # alert when BOTH distinct_md_filename_count >= N (e.g. > 4) AND
+  # distinct_parent_directory_count >= M (e.g. > 2) for that process.
+  # A single file in a single directory -- the overwhelmingly common
+  # case -- must not match; this rule is about scatter, not volume.
+fields:
+  - host
+  - process_guid
+  - parent_process
+  - TargetFilename
+  - user
+falsepositives:
+  - This is a constructed heuristic, not a vendor- or researcher-published signature -- treat every hit as a lead to investigate, not a confirmed indicator, and expect to tune the thresholds heavily against your own baseline before trusting it.
+  - Legitimate build/release tooling that generates multiple Markdown docs from one process (changelog generators, static-site builders, monorepo doc-sync jobs, this very repository's own `tools/check_consistency.py`-adjacent scripts) can match the same shape; allowlist known automation accounts/process names per environment.
+  - A developer working across several unrelated Markdown files in one editor session (one process, multiple files, multiple directories) can also match; correlate with R1/R4/R5/R7 (this repo's other agentic-behavior signals) rather than treating this alone as meaningful, per Unit 42's own point that AI involvement is shown by the *combination* of tells, not any single one.
+level: low
+tags:
+  - attack.collection
+  - attack.t1074
