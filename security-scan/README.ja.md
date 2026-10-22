@@ -10,6 +10,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
   攻撃エージェントの俯瞰 → 検知カバレッジ → 予防コントロール → CVP 対応 → 資産リンクを 1 枚で。
 - **[`dashboard-guide.ja.md`](dashboard-guide.ja.md)** — 上記ダッシュボードの、セキュリティ初心者向けガイド（専門知識なしで分かる説明、具体的にできることのチェックリスト）。
 - **[`dashboard-local-llm.html`](dashboard-local-llm.html)** — 上記＋「AIに質問」を**自前の LLM**（ローカルの Ollama/LM Studio、または OpenAI 互換エンドポイント）で動かすローカル版。claude.ai のクオータ不要。接続設定はブラウザに保存、通信は指定した LLM のみ。file:// から叩くため CORS 許可が必要（Ollama: `OLLAMA_ORIGINS=*` 等）。
+- **[`tools-dashboard.html`](tools-dashboard.html)** — 本リポジトリ自身の「自分の環境を確認するツール」（`scripts/*.py`・`netcheck/`）を1か所にまとめた統合索引。何を確認するか・使い方・検証状況に加え、外部の推奨ツールへのリンクも含む。
 - **[`local-vuln-testing-walkthrough.ja.md`](local-vuln-testing-walkthrough.ja.md)** — 自分のPCで
   脆弱性チェックを試したい人向けの入口。netcheckでの棚卸し → DVWA/Juice Shopでの練習 →
   Strix+ローカルLLMでの自動診断、という一連の流れと手順リンクをまとめたもの。
@@ -60,6 +61,8 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`detections/`](detections/) | 検知ルールの実装：Sigma / Falco / Datadog（R1–R8、Gambit系）＋Sigma / Datadog（R9–R11、LLM標的攻撃のパターンC・D・E）＋Sigma / Datadog（R12、DNS水攻め/ランダムサブドメイン攻撃の検知。AIエージェント特有ではない汎用インフラ可用性シグナルだが同じ検知基盤に収録）＋Sigma / Datadog（R13、実在するWordPressの「wp2shell」脆弱性チェーンの検知。CVE-2026-63030のルート混同＋CVE-2026-60137のSQLiでWebシェルが設置される実際に悪用中の脆弱性で、発見自体がAI支援によるソース監査という点でも注目）＋Sigma / Datadog（R14、実在するeMudhra中間CAの秘密鍵侵害インシデント（2026年10月）の検知。失効済み中間CAをまだ信頼しているTLSクライアント＝トラストストア未更新を検知する、汎用PKI信頼性シグナル）＋Sigma / Datadog（R15、PHP2Shell——PHPコア自体に実在する重大なメモリ安全性の脆弱性チェーン(CVE-2026-109618/CVE-2026-109619、各CVSS 9.2、2026-10-21にWiz Research/OpenAI Codex Security/Califが公開)の検知。PHPランタイム自体の問題で特定の request パターンがないため、R16・R17と同じくPHP-FPM workerクラッシュパターンとバージョンバナーの2本立てで検知。`sqli-lab`のスキャナーにも同じバージョン照合を実装済み）＋Sigma / Datadog（R16・R17、代表的な2つのWebサーバーデーモン本体に実在する重大CVE。Apache httpdのmod_http2ダブルフリー(CVE-2026-23918)とNginxのngx_http_rewrite_moduleオーバーフロー(CVE-2026-42945、通称「NGINX Rift」)を、workerクラッシュパターンとバージョンバナーの手がかりの2本立てで検知。どちらも単体では悪用の確証にはならない旨を明記。`sqli-lab`のスキャナーにも同じバージョン範囲照合を実装済み）＋Sigma / Datadog（R18・R19、PHPエコシステムで今も現役の、古典的だが定番のRCEパターン2つ。PHPUnitの`eval-stdin.php`が誤って公開された`/vendor/`配下から到達可能になる悪用(CVE-2017-9841)と、ThinkPHPの`invokefunction`/`call_user_func_array`悪用RCE(CVE-2018-20062/CVE-2019-9082)。どちらもCISA KEV掲載で、R16・R17と違いURI文字列の単純一致だけで検知できる。PHP2Shellとは無関係の、別のPHPエコシステムの脆弱性）＋Sigma / Datadog（R20、Unit 42「An AI-Assisted Cyber Attack」が挙げたAIエージェント関与の痕跡3点の1つ(構造化Markdownでのエージェント間情報受け渡し)を狙った探索的ヒューリスティック。単一プロセスが複数ディレクトリへ構造化Markdownを短時間に散発書き込みするパターンを検知。Unit 42自身はIOC・ファイル名を公開しておらず、本リポジトリ独自に構成した未確証のヒューリスティックである旨を明記。`unit42-ai-assisted-intrusion.ja.md` §7参照）＋Sigma / Datadog（R21、実在する「Infinity Core」——研究者Hyunwoo Kim/V4belが2026-10-16に公開した、公開PoCつきの6件のLinuxカーネルローカル権限昇格(LPE)脆弱性チェーン(主要CVE-2026-98260等)——を狙う探索的ヒューリスティック。カーネルエクスプロイト自体はユーザー空間に決まったログを残さないため、「既知の正規の昇格経路なしに非特権プロセスがroot(UID 0)へ遷移する」という結果側から検知する。ホスト側のカーネルバージョン確認には`scripts/linux_kernel_infinitycore_check.py`を使用）。閾値・allowlist は環境でチューニング。 |
 
 ### 自分の環境を確認するツール
+
+参考: **[`tools-dashboard.html`](tools-dashboard.html)** に、以下すべてをまとめた統合索引があります。
 
 | ファイル | 内容 |
 |---|---|
