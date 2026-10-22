@@ -1,0 +1,25 @@
+{
+  "name": "[R16] Apache httpd worker crash pattern consistent with mod_http2 double-free (CVE-2026-23918)",
+  "type": "log_detection",
+  "message": "Traffic/logs match indicators of CVE-2026-23918, a double-free in Apache HTTP Server's mod_http2 stream-cleanup code (CVSS 8.8, fixed in httpd 2.4.67, released 2026-05-04). Reported trigger: an HTTP/2 HEADERS frame followed quickly by an RST_STREAM with a non-zero error code, pre-auth. Likeliest impact is a worker crash (DoS); RCE is assessed as possible only in some environments.\n\nStandard access logs don't capture HTTP/2 frame types, so this is necessarily indirect: an httpd worker-crash signature near HTTP/2 context, or a Server header still advertising a pre-2.4.67 version. Neither is proof on its own -- confirm against the exact installed httpd version and, if possible, HTTP/2 frame-level (trace) logging.\n\nTune: if you run httpd with ServerTokens Prod (version suffix stripped from the Server header), the version-based case here will never fire -- rely on the crash-pattern case instead.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1190", "technique:T1499", "tactic:initial-access"],
+  "queries": [
+    {
+      "name": "apache_http2_worker_crash",
+      "query": "source:apache (@message:*\"exit signal Segmentation fault\"* OR @message:*\"exit signal Aborted\"* OR @message:*AH00051*) @message:*http2*",
+      "aggregation": "count",
+      "groupByFields": ["host"]
+    },
+    {
+      "name": "apache_pre_2_4_67_server_header",
+      "query": "source:webserver @http.response.headers.server:(*Apache\\/2.4.0* OR *Apache\\/2.4.1* OR *Apache\\/2.4.2* OR *Apache\\/2.4.3* OR *Apache\\/2.4.4* OR *Apache\\/2.4.5* OR *Apache\\/2.4.6*) -@http.response.headers.server:(*Apache\\/2.4.67* OR *Apache\\/2.4.68* OR *Apache\\/2.4.69*)",
+      "aggregation": "count",
+      "groupByFields": ["host"]
+    }
+  ],
+  "cases": [
+    { "name": "Worker crash near HTTP/2 context observed", "status": "high", "condition": "apache_http2_worker_crash > 0" },
+    { "name": "Pre-2.4.67 Apache version header observed (leads-generator only)", "status": "medium", "condition": "apache_pre_2_4_67_server_header > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

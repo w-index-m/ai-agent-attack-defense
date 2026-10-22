@@ -1,0 +1,57 @@
+title: Nginx worker crash pattern consistent with ngx_http_rewrite_module overflow (CVE-2026-42945, "NGINX Rift")
+id: 5e9d2b8a-6c1f-4e73-9a5c-r17nginxrift00
+status: experimental
+description: >
+  Detects indicators of CVE-2026-42945 ("NGINX Rift", CVSS 9.2), an
+  18-year-old heap-based buffer overflow in ngx_http_rewrite_module
+  affecting NGINX Open Source 0.6.27 through 1.30.0 and NGINX Plus R32
+  through R36. A single crafted HTTP request can crash worker processes
+  pre-authentication; where ASLR is disabled, it can lead to remote code
+  execution. Exploitation attempts were reported shortly after public
+  disclosure. Fixed in NGINX Open Source 1.31.0 / 1.30.1, and NGINX Plus
+  R36 P4 / R35 P2 / R32 P6. The trigger is reported to require a specific
+  nginx.conf pattern (an unnamed PCRE capture such as $1/$2 in a rewrite
+  directive, a '?' in the replacement string, followed by another
+  rewrite/if/set directive in the same scope) -- most deployments are not
+  exploitable regardless of version unless they use this pattern.
+references:
+  - https://community.broadcom.com/tanzu/blogs/beltran-rueda-borrego/2026/05/14/critical-nginx-rce-vulnerability-cve-2026-42945
+  - https://qualysec.com/cybersecurity-news/nginx-cve-2026-42945-exploited-in-wild/
+author: ai-agent-attack-defense
+date: 2026-10-22
+logsource:
+  category: application
+  product: nginx
+detection:
+  selection_worker_crash:
+    message|contains:
+      - 'worker process exited on signal 11'
+      - 'worker process exited on signal 6'
+      - 'signal 11 (SIGSEGV)'
+  selection_vulnerable_server_header:
+    sc-server-header|re: 'nginx/(0\.[6-9]|0\.1[0-9]|1\.[0-9]\.|1\.[12][0-9]\.|1\.30\.0)'
+  filter_fixed_or_later:
+    sc-server-header|contains:
+      - 'nginx/1.30.1'
+      - 'nginx/1.31.'
+  condition: selection_worker_crash or (selection_vulnerable_server_header and not filter_fixed_or_later)
+  # As with R16, the version selection is a coarse string match, not a real
+  # version-range comparison -- prefer the equivalent check in
+  # security-scan/sqli-lab/auto_vuln_scanner.py (check_nginx_rewrite), or a
+  # config audit for the specific vulnerable rewrite-directive pattern
+  # described above, for an authoritative answer.
+fields:
+  - host
+  - sc-server-header
+  - message
+  - src_ip
+falsepositives:
+  - A worker-crash signature alone is not proof of this specific CVE; nginx workers can exit on signal 11/6 for unrelated reasons (OOM, unrelated bugs, misconfiguration).
+  - The version-string match is a coarse regex on the Server header, not a semantic version comparison, and many sites disable the version suffix (server_tokens off), which makes this rule blind to the version-based case -- absence of a match is not proof of being patched.
+  - Most nginx configurations do not use the specific vulnerable rewrite-directive pattern at all, so an outdated version alone does not mean the host is actually exploitable; confirm against nginx.conf if assessing exploitability rather than just patch status.
+level: critical
+tags:
+  - attack.initial_access
+  - attack.t1190
+  - attack.impact
+  - attack.t1499

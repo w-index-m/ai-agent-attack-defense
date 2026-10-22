@@ -17,6 +17,8 @@
     "R12": {"kind": "detection", "name": "再帰DNSリゾルバへの、単一ドメイン配下のランダムサブドメイン問い合わせの急増（DNS水攻め/ランダムサブドメイン攻撃の兆候）"},
     "R13": {"kind": "detection", "name": "WordPress REST API バッチエンドポイントの悪用（wp2shell連鎖: CVE-2026-63030のルート混同＋CVE-2026-60137のSQLi、Webシェル設置に悪用）"},
     "R14": {"kind": "detection", "name": "eMudhra侵害中間CA(2026-10失効)の証明書チェーンへの接続成立、または失効済み中間CA配下の新規証明書発行（CAトラストストア更新遅延/悪用の兆候）"},
+    "R16": {"kind": "detection", "name": "Apache HTTP Server mod_http2のダブルフリー(CVE-2026-23918)を狙うHTTP/2フレームパターン、またはworkerプロセスの異常クラッシュ"},
+    "R17": {"kind": "detection", "name": "Nginx ngx_http_rewrite_moduleのヒープバッファオーバーフロー(CVE-2026-42945, 通称NGINX Rift)を狙う単発クラフトHTTPリクエスト、またはworkerプロセスの異常クラッシュ"},
     "③": {"kind": "control", "name": "攻撃面最小化（ネット直結の露出を断つ）"},
     "③CSP": {"kind": "control", "name": "CSP による読み込み制御"}
   },
@@ -64,7 +66,9 @@
       "R11": {"sigma": false, "datadog": true,  "elastic": false, "falco": false},
       "R12": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R13": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R14": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
+      "R14": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
+      "R16": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
+      "R17": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
     }
   }
 }

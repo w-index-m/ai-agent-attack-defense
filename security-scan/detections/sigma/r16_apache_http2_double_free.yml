@@ -1,0 +1,73 @@
+title: Apache httpd worker crash pattern consistent with mod_http2 double-free (CVE-2026-23918)
+id: 3c7a1e5d-9b4f-4a62-8d1a-r16apachehttp2
+status: experimental
+description: >
+  Detects indicators of CVE-2026-23918, a double-free in Apache HTTP
+  Server's mod_http2 stream-cleanup code (CVSS 8.8), fixed in httpd
+  2.4.67 (released 2026-05-04). The reported trigger is an HTTP/2
+  HEADERS frame followed quickly by an RST_STREAM carrying a non-zero
+  error code, exploitable pre-authentication; the most likely outcome
+  is a worker crash (denial of service), with remote code execution
+  assessed as possible only in some environments.
+  Standard Apache access logs do not capture HTTP/2 frame types, so
+  this rule is necessarily indirect: it looks for the httpd worker
+  crash signature in error_log (a strong but generic signal -- any
+  segfault looks the same here) and, separately, for the vulnerable
+  version string still being exposed in the Server response header
+  (a leads-generator, not proof of exploitation). Confirming an actual
+  exploitation attempt requires HTTP/2 frame-level logging (mod_http2
+  trace-level logging, not enabled by default) or a network capture.
+references:
+  - https://thehackernews.com/2026/05/critical-apache-http2-flaw-cve-2026.html
+  - https://socprime.com/blog/cve-2026-23918-analysis/
+author: ai-agent-attack-defense
+date: 2026-10-22
+logsource:
+  category: application
+  product: apache
+detection:
+  selection_worker_crash:
+    message|contains:
+      - 'exit signal Segmentation fault'
+      - 'exit signal Aborted'
+      - 'AH00051'
+  selection_http2_context:
+    message|contains: 'http2'
+  # Only the 2.4.x branch is in scope: mod_http2 (where this bug lives)
+  # didn't exist before Apache httpd 2.4.17, so an old 2.2.x/2.0.x server
+  # is a different problem, not this CVE -- deliberately not matched here.
+  selection_vulnerable_server_header:
+    sc-server-header|contains:
+      - 'Apache/2.4.6'
+      - 'Apache/2.4.5'
+      - 'Apache/2.4.4'
+      - 'Apache/2.4.3'
+      - 'Apache/2.4.2'
+      - 'Apache/2.4.1'
+      - 'Apache/2.4.0'
+  filter_fixed_or_later:
+    sc-server-header|contains:
+      - 'Apache/2.4.67'
+      - 'Apache/2.4.68'
+      - 'Apache/2.4.69'
+  condition: (selection_worker_crash and selection_http2_context) or (selection_vulnerable_server_header and not filter_fixed_or_later)
+  # The version-string selection above is a coarse "looks old" prefix match,
+  # not an exact semantic version comparison; a Sigma rule can't do real
+  # version-range arithmetic. Prefer the equivalent version check in
+  # security-scan/sqli-lab/auto_vuln_scanner.py (check_apache_http2) or a
+  # dedicated inventory/CMDB query for an authoritative per-host answer.
+fields:
+  - host
+  - sc-server-header
+  - message
+  - src_ip
+falsepositives:
+  - A worker-crash signature with "http2" in the surrounding log context is not proof of this specific CVE; any HTTP/2-related crash (including unrelated bugs, OOM kills, or admin-triggered restarts) matches the same generic pattern.
+  - The version-string match is a prefix/contains check on the Server header, not a real version comparison, and many sites disable the Server header's version suffix (ServerTokens Prod) entirely, which would make this rule blind -- absence of a match is not proof of being patched.
+  - Confirm any hit against the official Apache Software Foundation security advisory and the exact installed httpd version before treating it as exploitation.
+level: high
+tags:
+  - attack.initial_access
+  - attack.t1190
+  - attack.impact
+  - attack.t1499
