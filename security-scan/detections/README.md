@@ -31,6 +31,7 @@
 | R20 | 単一プロセスから複数ディレクトリへの構造化Markdown散発書き込み(Unit 42報告のエージェント間情報受け渡し痕跡を模した探索的ヒューリスティック、未確証) | ✅ | — | ✅ | — |
 | R21 | 既知の昇格経路なしに非特権プロセスがroot(UID 0)へ遷移(Infinity Core、6件のLinuxカーネルLPE脆弱性、CVE-2026-98260等を狙う探索的ヒューリスティック) | ✅ | — | ✅ | — |
 | R22 | GSS-TSIG/TKEY文脈でのnamedのassertion failureクラッシュ、またはCHAOS版数バナーでの修正前BIND検出(2026-10-21のBIND 9セキュリティリリース、CVE-2026-94300等4件) | ✅ | — | ✅ | — |
+| R23 | F5 BIG-IP APMのOAuth UserInfo要求失敗の反復、または異常に長いAuthorizationヘッダー(CVE-2026-94127、ヒープオーバーフローによる事前認証RCE、悪用確認済み・CISA KEV) | ✅ | — | ✅ | — |
 
 > R9–R11 は、本連鎖（Strix/Cairn/Hermes 型の攻撃エージェント）ではなく、**LLM システム自体が標的になる側**
 > （`../llm-target-attacks.ja.md`）の検知。R9/R10 は標準的なプロキシ/ネットワークログで検知できるが、
@@ -143,6 +144,20 @@
 > バージョンを検知するリードも持つが、バナーは無効化・偽装されうるため単体では確証にならない。
 > ホスト側のバージョン確認には`scripts/bind_version_check.py`(確認専用。ローカルの`named -v`、
 > または許可範囲内のリゾルバへのCHAOS TXT問い合わせの2モード)を使うこと。
+>
+> R23は、実在するF5 BIG-IP APMのCVE-2026-94127(CVSS 9.8、ヒープベースのバッファオーバーフロー
+> による事前認証不要RCE、F5自身が悪用を確認、CISA KEV掲載・連邦機関対応期限あり)の検知。
+> APMがOAuth Authorization Serverとして構成され、仮想サーバーにAPM access policyとOAuth
+> profileが設定されている場合のみ対象(Client/Resource Serverのみの構成は対象外)。本ルールは
+> 独自の研究ではなく、**F5自身(K000162605)とJPCERT/CC(JPCERT-AT-2026-0028)が公式に挙げている
+> 侵害検出方法をそのまま検知ルール化**したもの: 単一送信元からのOAuth UserInfo要求失敗(ログID
+> `01990004`)の反復(目安10回以上)と、`/f5-oauth2/v1/userinfo`への異常に長いAuthorizationヘッダー
+> の2本立て。どちらもF5自身の表現でも「調査が必要な兆候」であって確証ではない。BIG-IPはApache/
+> Nginx/BINDと違いバージョンバナーを出す設計ではないため、ログパターンのみの1本足の性質が強い
+> 点に注意。ホスト側の確認には`scripts/f5_bigip_apm_check.py`(確認専用。**BIG-IP実機のbash
+> シェル上で動かすことが前提**。`tmsh`でのバージョン確認、apmログの集計、TMMコアファイルの有無、
+> `tmm.finish`のハッシュ算出をJPCERTの手順どおりに自動化しただけで、独自の判定ロジックは
+> 追加していない)を使うこと。
 
 ## 使い方・注意
 

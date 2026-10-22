@@ -1,0 +1,73 @@
+title: Repeated OAuth UserInfo failures or oversized Authorization header consistent with F5 BIG-IP APM CVE-2026-94127
+id: 9a3e7c5d-2f1b-4e8a-b6d4-r23f5bigipapm0
+status: experimental
+description: >
+  Detects indicators of CVE-2026-94127, a heap-based buffer overflow
+  (CWE-122) in F5 BIG-IP APM's OAuth UserInfo handler, CVSS 9.8, publicly
+  disclosed and patched by F5 on 2026-09-22. Pre-authentication RCE:
+  the handler allocates a fixed buffer but copies an attacker-controlled
+  Authorization header into it without enforcing the size limit. Applies
+  only when BIG-IP APM is configured as an OAuth Authorization Server
+  with an APM access policy and OAuth profile on the virtual server;
+  OAuth Client/Resource Server-only deployments are not affected. F5
+  confirmed active exploitation; CISA added it to KEV on 2026-09-22
+  with a 2026-09-25 federal remediation deadline. JPCERT/CC issued
+  JPCERT-AT-2026-0028 the same week, citing watchTowr Labs' exploitation
+  write-up.
+  This rule is built directly from F5's and JPCERT/CC's own published
+  compromise-detection guidance (K000162605, JPCERT-AT-2026-0028), not
+  from independent research: repeated OAuth UserInfo request failures
+  (apm log ID 01990004) from a single source, especially in a short
+  window, correlate with brute-force-style heap-grooming attempts before
+  the overflow is triggered; an oversized Authorization header against
+  the UserInfo endpoint is the proximate exploitation vector itself.
+  Neither is proof alone -- F5's own guidance treats the log-ID pattern
+  as a lead requiring further investigation (tmctl OAuth failure
+  statistics, /var/log/audit correlation, and a TMM core-file check),
+  not as confirmed compromise on its own.
+references:
+  - https://my.f5.com/manage/s/article/K000162605
+  - https://www.jpcert.or.jp/at/2026/at260028.html
+  - https://labs.watchtowr.com/is-this-a-joke-in-the-auth-header-f5-big-ip-unauth-heap-overflow-to-rce-cve-2026-94127/
+author: ai-agent-attack-defense
+date: 2026-10-23
+logsource:
+  category: application
+  product: f5-bigip
+detection:
+  selection_oauth_userinfo_failure:
+    log_id: '01990004'
+  selection_userinfo_endpoint:
+    cs-uri-stem|contains: '/f5-oauth2/v1/userinfo'
+  selection_oversized_auth_header:
+    cs-uri-stem|contains: '/f5-oauth2/v1/userinfo'
+    cs-authorization-header-length|gt: 4096
+    # 0x4100 (16640 bytes) is the allocation size F5/third-party writeups
+    # describe as overflowed; 4096 here is a deliberately conservative
+    # "unusually long for a bearer token" tripwire, not the exact
+    # overflow threshold -- tune to your own environment's normal
+    # Authorization header sizes before trusting this as a sole signal.
+  condition: selection_oauth_userinfo_failure or (selection_userinfo_endpoint and selection_oversized_auth_header)
+  # Per F5's own guidance, a single OAuth UserInfo failure (log ID
+  # 01990004) is not the signal -- it's "10 or more, especially from one
+  # source IP, in a short window" that matters. Sigma's base detection
+  # block can't express that distinct-count/threshold condition (same
+  # limitation as R12/R20/R21); implement the aggregation
+  # (count by src_ip, window per your own baseline) on the SIEM side.
+fields:
+  - host
+  - src_ip
+  - log_id
+  - cs-uri-stem
+  - cs-authorization-header-length
+falsepositives:
+  - A single OAuth UserInfo failure is routine (expired tokens, client misconfiguration, normal auth flow errors) and is not itself a signal -- only a repeated burst from one source, per F5's own guidance, is worth investigating.
+  - An oversized Authorization header is not proof of this specific exploit chain; some legitimate OAuth clients embed large claims or chained tokens in bearer headers.
+  - This only applies when APM is configured as an OAuth Authorization Server with an access policy and OAuth profile on the virtual server -- most BIG-IP deployments (APM as Client/Resource Server only, or APM not used as an OAuth server at all) are not exposed to this CVE regardless of what this rule observes.
+  - Confirm any hit against the exact installed BIG-IP APM version (vulnerable: 21.1.0; 17.5.0-17.5.1; 17.1.0-17.1.3) via scripts/f5_bigip_apm_check.py or F5's own K000162605, and check for a TMM core file / /etc/bigstart/scripts/tmm.finish tampering before treating this as confirmed exploitation.
+level: critical
+tags:
+  - attack.initial_access
+  - attack.t1190
+  - attack.credential_access
+  - attack.t1212
