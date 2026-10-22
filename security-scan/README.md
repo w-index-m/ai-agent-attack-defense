@@ -14,7 +14,10 @@ techniques. Use only against assets you own or are authorized to test.
   preventive controls → CVP tiers → asset links.
 - **[`tools-dashboard.html`](tools-dashboard.html)** — integrated index of this repo's own
   host/dependency self-check tools (`scripts/*.py`, `netcheck/`): what each checks, usage,
-  verification status, plus a section for recommended external tools not vendored here.
+  verification status (including whether the tool itself calls an LLM internally — only
+  `patch_suggest.py` does, and only for Semgrep findings), plus a section for recommended
+  external tools not vendored here. Includes an optional "ask your own LLM" box (same
+  pattern as `dashboard-local-llm.html`) to query this tool list in natural language.
 - **[`local-vuln-testing-walkthrough.ja.md`](local-vuln-testing-walkthrough.ja.md)** (JA) — entry
   point for trying vulnerability checks on your own PC: inventory with netcheck → a self-hosted
   practice target (DVWA/Juice Shop) → automated scanning with Strix + a local LLM, with links to
