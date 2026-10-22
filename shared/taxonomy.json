@@ -22,6 +22,7 @@
     "R17": {"kind": "detection", "name": "Nginx ngx_http_rewrite_moduleのヒープバッファオーバーフロー(CVE-2026-42945, 通称NGINX Rift)を狙う単発クラフトHTTPリクエスト、またはworkerプロセスの異常クラッシュ"},
     "R18": {"kind": "detection", "name": "PHPUnitのeval-stdin.php(CVE-2017-9841)への到達、公開されたvendorディレクトリを狙う定番スキャン/RCE試行"},
     "R19": {"kind": "detection", "name": "ThinkPHPのinvokefunction経由call_user_func_array RCE(CVE-2018-20062/CVE-2019-9082)を狙うリクエスト"},
+    "R20": {"kind": "detection", "name": "単一プロセスから複数ディレクトリにまたがる構造化Markdownファイルの短時間での散発的な書き込み（Unit 42報告のエージェント間情報受け渡し痕跡を模した探索的ヒューリスティック、未確証）"},
     "③": {"kind": "control", "name": "攻撃面最小化（ネット直結の露出を断つ）"},
     "③CSP": {"kind": "control", "name": "CSP による読み込み制御"}
   },
@@ -74,7 +75,8 @@
       "R16": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R17": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R18": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R19": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
+      "R19": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
+      "R20": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
     }
   }
 }
