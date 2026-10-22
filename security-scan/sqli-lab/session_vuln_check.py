@@ -155,6 +155,25 @@ CLASSES: dict[str, SessionVulnClass] = {
 }
 
 
+def assess_target(url: str) -> tuple[bool, str]:
+    """Baseline probe before running any session/payload-shaped check.
+    Separates "target is down/misconfigured" from "ran the check fine,
+    it's just not vulnerable" -- a connection error here means every class
+    below would otherwise fail with a raw traceback instead of a clear
+    reason."""
+    try:
+        resp = requests.get(url, timeout=10)
+    except requests.RequestException as exc:
+        return False, f"target unreachable: {exc}"
+    info = "status=%d size=%dB Server=%r X-Powered-By=%r" % (
+        resp.status_code,
+        len(resp.content),
+        resp.headers.get("Server", "(none)"),
+        resp.headers.get("X-Powered-By", "(none)"),
+    )
+    return True, info
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--class", dest="vuln_class_name", required=True, choices=sorted(CLASSES))
@@ -189,6 +208,13 @@ def main() -> int:
     vuln_class = CLASSES[args.vuln_class_name]
     print(f"Target: {args.url}")
     print(f"Class: {args.vuln_class_name}")
+    print("-" * 60)
+
+    reachable, assessment_info = assess_target(args.url)
+    print(f"Target assessment: {assessment_info}")
+    if not reachable:
+        print("Refusing to proceed: target assessment failed", file=sys.stderr)
+        return 2
     print("-" * 60)
 
     vulnerable, detail = vuln_class.check(args)

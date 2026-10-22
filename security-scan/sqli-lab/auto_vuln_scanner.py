@@ -258,6 +258,44 @@ class Finding:
     response_snippet: str = field(repr=False)
 
 
+@dataclass
+class TargetAssessment:
+    status_code: int
+    elapsed_ms: float
+    content_length: int
+    server: str
+    powered_by: str
+    content_type: str
+
+
+def assess_target(url: str, base_params: dict[str, str]) -> TargetAssessment:
+    """Baseline probe before firing any attack payload. Separates "target is
+    down/misconfigured" (this raises) from "scanned fine, found nothing"
+    (the actual scan below), and surfaces enough about the target (status,
+    size, Server/X-Powered-By) to sanity-check --baseline/--url before
+    trusting a "no indicators found" result."""
+    resp = requests.get(url, params=base_params, timeout=10)
+    return TargetAssessment(
+        status_code=resp.status_code,
+        elapsed_ms=resp.elapsed.total_seconds() * 1000,
+        content_length=len(resp.content),
+        server=resp.headers.get("Server", "(none)"),
+        powered_by=resp.headers.get("X-Powered-By", "(none)"),
+        content_type=resp.headers.get("Content-Type", "(none)"),
+    )
+
+
+def print_target_assessment(a: TargetAssessment) -> None:
+    print("Target assessment:")
+    print(f"  status={a.status_code} size={a.content_length}B time={a.elapsed_ms:.0f}ms content-type={a.content_type!r}")
+    print(f"  Server={a.server!r} X-Powered-By={a.powered_by!r}")
+    if a.status_code >= 400:
+        print(
+            f"  warning: baseline request returned {a.status_code} -- findings below may be "
+            "unreliable (check --baseline params and --url path)"
+        )
+
+
 def probe(
     url: str, base_params: dict[str, str], param: str, payload: str
 ) -> requests.Response:
@@ -327,6 +365,14 @@ def main() -> int:
     print(f"Baseline params: {base_params}")
     print(f"Fuzzing params: {args.fuzz}")
     print(f"Payload count: {len(vuln_class.payloads)}")
+    print("-" * 60)
+
+    try:
+        assessment = assess_target(args.url, base_params)
+    except requests.RequestException as exc:
+        print(f"Target assessment failed -- aborting before firing any payload: {exc}", file=sys.stderr)
+        return 2
+    print_target_assessment(assessment)
     print("-" * 60)
 
     findings = scan(args.url, base_params, args.fuzz, vuln_class)
