@@ -98,7 +98,8 @@ Target assessment:
 CVSS 9.2、[php2shell.com](https://www.php2shell.com/)で2026-10-21に公開された、
 PHPランタイム自体のメモリ安全性の脆弱性)の修正済みバージョンと自動的に照合し、
 該当すれば警告を出す。**エクスプロイトコードは一切含まない、バージョン範囲の比較のみ**
-(`os_patch_check_linux.py`/`os_patch_check_windows.py`と同じ思想)。
+(`os_patch_check_linux.py`/`os_patch_check_windows.py`と同じ思想)。SIEM向けの検知ルール
+(PHP-FPM workerクラッシュパターン+バージョンバナー)は`detections/`のR15として別途実装済み。
 
 ```
 Target assessment:

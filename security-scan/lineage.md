@@ -183,7 +183,7 @@ flowchart LR
 | R12 | DNS水攻め/ランダムサブドメイン攻撃の一般調査 | 攻撃手法として広く確立（AIエージェント特有ではない） | `detections/`（r12） |
 | R13 | ユーザー質問「php 2shell」 | WebSearchで実例特定 → 実際は wp2shell（Wiz, 2026-10 実悪用報告） | `detections/`（r13） |
 | R14 | ユーザー提示のeMudhra CA侵害スクリーンショット | Mozilla Bugzilla `#2083449` 等、一次情報で確認 | `detections/`（r14） |
-| (当初不採用 → 後日訂正) | ユーザー提示の「php2shell」CVEペア（CVE-2026-109618/109619、PHP Core RCE） | 公開直後で検索に未反映のタイミングで調査し「捏造の疑い」と誤判定。翌日、ユーザーが提示した一次情報(php2shell.com)＋WebSearchでの独立した複数情報源(Wikipedia/SecurityWeek/Wiz公式ブログ等)により実在を確認、訂正した | `sqli-lab/`のバージョン照合(`check_php2shell()`、R番号なし・ツール組み込みのみ) |
+| R15(当初不採用 → 後日訂正) | ユーザー提示の「php2shell」CVEペア（CVE-2026-109618/109619、PHP Core RCE） | 公開直後で検索に未反映のタイミングで調査し「捏造の疑い」と誤判定。翌日、ユーザーが提示した一次情報(php2shell.com)＋WebSearchでの独立した複数情報源(Wikipedia/SecurityWeek/Wiz公式ブログ等)により実在を確認、訂正した | `detections/`（r15）、`sqli-lab/`のバージョン照合(`check_php2shell()`) |
 | R16 | WebSearchでの一般調査(「Apache脆弱性・Nginx脆弱性も取り込んでいるか」というユーザー質問への回答として調査) | TheHackerNews/SOCPrime等、複数情報源で確認(CVE-2026-23918) | `detections/`（r16）、`sqli-lab/`の`check_apache_http2()` |
 | R17 | 同上の調査 | 複数情報源で確認、実悪用の報告あり(CVE-2026-42945, 通称NGINX Rift) | `detections/`（r17）、`sqli-lab/`の`check_nginx_rewrite()` |
 

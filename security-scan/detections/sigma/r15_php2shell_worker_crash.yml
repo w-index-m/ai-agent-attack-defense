@@ -1,0 +1,69 @@
+title: PHP worker crash pattern consistent with PHP2Shell (CVE-2026-109618/109619)
+id: 1d8b5e2f-6c3a-4f91-8d2e-r15php2shell00
+status: experimental
+description: >
+  Detects indicators of PHP2Shell: critical memory-safety vulnerabilities
+  in core PHP itself (not application code), tracked as two related CVEs
+  and disclosed 2026-10-21 by Wiz Research, OpenAI Codex Security and
+  Calif (CVSS 9.2 each):
+    - CVE-2026-109618: out-of-memory (OOM) corruption, enabling
+      pre-authentication code execution as the PHP web worker.
+    - CVE-2026-109619: stale global state surviving across requests,
+      triggering a use-after-free that can disclose worker memory or
+      execute code.
+  Affects any PHP SAPI that serves web requests (PHP-FPM, mod_php,
+  FrankenPHP), independent of the application running on top -- the
+  researchers demonstrated pre-auth RCE against WordPress, Drupal and
+  Joomla, and application-agnostic memory disclosure, using only the
+  latest container images at the time of testing (i.e. not specific
+  bugs in those applications). Fixed in PHP 8.2.35 / 8.3.36 / 8.4.27 /
+  8.5.12; branches before 8.2 reportedly have no official fix per the
+  disclosure site (unverified beyond that source -- confirm against
+  php.net's own advisory).
+  Because the bug is in the PHP runtime, not a request pattern, this
+  rule is necessarily indirect, like R16/R17 for Apache/Nginx: a PHP
+  worker crash/restart signature, and separately a pre-fixed-version
+  string still present in the X-Powered-By header. Neither is proof of
+  exploitation alone.
+references:
+  - https://www.php2shell.com/
+  - https://www.wiz.io/blog/php2shell-php-rce
+author: ai-agent-attack-defense
+date: 2026-10-22
+logsource:
+  category: application
+  product: php
+detection:
+  selection_worker_crash:
+    message|contains:
+      - 'exited on signal 11'
+      - 'exited on signal 6'
+      - 'SIGSEGV'
+      - 'child exited with code'
+  selection_fpm_context:
+    message|contains:
+      - 'php-fpm'
+      - 'pool www'
+  selection_vulnerable_php_header:
+    x-powered-by|re: 'PHP/(5\.|6\.|7\.|8\.0\.|8\.1\.|8\.2\.(?!3[5-9]|[4-9][0-9])|8\.3\.(?!3[6-9]|[4-9][0-9])|8\.4\.(?!2[7-9]|[3-9][0-9])|8\.5\.(?!1[2-9]|[2-9][0-9]))'
+  condition: (selection_worker_crash and selection_fpm_context) or selection_vulnerable_php_header
+  # The version-regex selection above is a best-effort approximation of
+  # "below the first-fixed release per branch" using Sigma's regex
+  # modifier; it cannot do real semantic version comparison. Prefer the
+  # equivalent check in security-scan/sqli-lab/auto_vuln_scanner.py
+  # (check_php2shell) for an authoritative per-host answer.
+fields:
+  - host
+  - x-powered-by
+  - message
+  - src_ip
+falsepositives:
+  - A PHP-FPM worker-crash signature is not proof of this specific CVE pair; any PHP-level crash (unrelated bugs, OOM kills from unrelated causes, admin-triggered restarts) matches the same generic pattern.
+  - The version-header match is a regex approximation, not a real version comparison, and many sites strip version info from X-Powered-By entirely (expose_php = Off), which would make this rule blind to the version-based case -- absence of a match is not proof of being patched.
+  - Confirm any hit against php.net's own security advisory and the exact installed PHP version before treating it as exploitation. Branches before 8.2 are flagged per php2shell.com's claim of "no official fix" but this has not been independently verified against a php.net advisory.
+level: critical
+tags:
+  - attack.initial_access
+  - attack.t1190
+  - attack.impact
+  - attack.t1499
