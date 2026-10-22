@@ -64,7 +64,11 @@
 > ルートCAを信頼済みだったため、**CVE-2026-91403**(CVSS 9.1、Oracleが緊急Security Alertとして
 > 公開、IPAも同日注意喚起)としてJSSE側の脆弱性になった。ローカルのJava環境がこの影響を受けて
 > いないかは、`../java-cacerts-emudhra-check-notes.md`(`scripts/java_cacerts_emudhra_check.py`)
-> で確認できる。
+> で確認できる。Java/JSSEに限らず、一般論として**言語のパッケージマネージャ/ランタイムが同梱・
+> 管理するCAバンドル**(pipの`certifi`、npmの各種TLSライブラリ等)も、ブラウザのOneCRL/CRLSetとは
+> 別の更新経路を持つ点では同じ構図にある。ただし2026-10-22時点で、eMudhra侵害に関連してpip/
+> certifi側が公式にCAバンドル更新やアドバイザリを出したという一次情報は確認できていない(SNS上で
+> それを示唆する未検証の投稿を確認したのみ)。該当の公式アドバイザリが出た場合は、ここに追記する。
 >
 > R15は、実在するPHPコア自体の脆弱性チェーン「PHP2Shell」(CVE-2026-109618のOOM破壊、
 > CVE-2026-109619の古いグローバル状態に起因するUAF、各CVSS 9.2、2026-10-21にWiz Research/
