@@ -1,0 +1,40 @@
+title: ThinkPHP invokefunction/call_user_func_array RCE request pattern (CVE-2018-20062, CVE-2019-9082)
+id: 9a1e6c3b-4d7f-4a92-8e1b-r19thinkphprce
+status: stable
+description: >
+  Detects the URL pattern used to exploit CVE-2018-20062 (and the
+  related CVE-2019-9082) in ThinkPHP 5.0.x/5.1.x: improper validation
+  of the controller name lets an attacker reach the invokefunction
+  method with an arbitrary function name and arguments, most commonly
+  chained through call_user_func_array to run PHP functions such as
+  eval, assert, or shell execution helpers with attacker-controlled
+  input (CVSS 9.8, CISA KEV-listed). Heavily used in the wild to
+  deploy botnet malware against internet-facing hosts, largely
+  independent of any single disclosure -- common background-noise
+  scanning for any PHP-looking target.
+references:
+  - https://nvd.nist.gov/vuln/detail/CVE-2018-20062
+  - https://fortiguard.com/threat-signal-report/5142
+author: ai-agent-attack-defense
+date: 2026-10-22
+logsource:
+  category: webserver
+detection:
+  selection_invokefunction:
+    cs-uri-query|contains: 'think\app/invokefunction'
+  selection_invoke_func:
+    cs-uri-query|contains: 'call_user_func_array'
+  condition: selection_invokefunction and selection_invoke_func
+fields:
+  - src_ip
+  - cs-uri-stem
+  - cs-uri-query
+  - cs-method
+  - sc-status
+falsepositives:
+  - A single hit is not proof of successful exploitation -- it means a vulnerable-looking request pattern was sent, regardless of whether this host actually runs ThinkPHP or an affected version. Confirm against the installed ThinkPHP version (fixed in 5.0.23+) and the response (a reflected md5 hash of the probe payload, where present, confirms code execution).
+  - Legitimate ThinkPHP applications do not normally call invokefunction with attacker-supplied function names from a URL; this pattern has no known benign use.
+level: high
+tags:
+  - attack.initial_access
+  - attack.t1190

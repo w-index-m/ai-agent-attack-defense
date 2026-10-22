@@ -1,0 +1,39 @@
+title: Request to PHPUnit's eval-stdin.php (CVE-2017-9841), a known RCE in exposed vendor directories
+id: 7f2c4a9e-1b3d-4e8a-9c5f-r18phpunitrce0
+status: stable
+description: >
+  Detects requests to PHPUnit's Util/PHP/eval-stdin.php helper script,
+  the entry point for CVE-2017-9841 (CVSS 9.8, CISA KEV-listed). The
+  bug itself is in PHPUnit (not an application), but it becomes
+  reachable and pre-auth RCE when a project's /vendor/ directory is
+  mistakenly served publicly by the webroot. A public exploit (e.g.
+  Exploit-DB 50702) probes many common vendor-directory prefixes
+  (/, /api/, /admin/, /cms/, /blog/, ...) with GET first, then POSTs
+  PHP code to the same path to execute it. This is one of the most
+  common pieces of internet "background radiation" scanning for any
+  PHP-looking target and is not specific to any single disclosure
+  (including, notably, unrelated to PHP2Shell/CVE-2026-109618/109619
+  -- different bug, different layer).
+references:
+  - https://nvd.nist.gov/vuln/detail/CVE-2017-9841
+  - https://www.exploit-db.com/exploits/50702
+author: ai-agent-attack-defense
+date: 2026-10-22
+logsource:
+  category: webserver
+detection:
+  selection:
+    cs-uri-stem|contains: 'vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php'
+  condition: selection
+fields:
+  - src_ip
+  - cs-uri-stem
+  - cs-method
+  - sc-status
+falsepositives:
+  - A GET to this path alone is reconnaissance/scanning, not confirmed exploitation -- it is common mass-scan noise and does not by itself mean this host is vulnerable (vulnerable only if PHPUnit's vendor directory is actually web-reachable here, which the response status/size can help confirm).
+  - A POST to the same path with a 2xx response and unexpected output in the body is a much stronger signal than a GET; correlate method and response where your log source allows it.
+level: medium
+tags:
+  - attack.initial_access
+  - attack.t1190

@@ -25,6 +25,8 @@
 | R14 | eMudhra侵害中間CA(2026-10失効)の証明書チェーンへのTLS接続成立（CAトラストストア更新遅延/なりすましの兆候） | ✅ | — | ✅ | — |
 | R16 | Apache httpd mod_http2のダブルフリー(CVE-2026-23918)を狙うHTTP/2パターン、またはworkerクラッシュ | ✅ | — | ✅ | — |
 | R17 | Nginx ngx_http_rewrite_moduleのヒープオーバーフロー(CVE-2026-42945、通称NGINX Rift)を狙う単発リクエスト、またはworkerクラッシュ | ✅ | — | ✅ | — |
+| R18 | PHPUnitのeval-stdin.php(CVE-2017-9841、CISA KEV)への到達。公開されたvendorディレクトリを狙う定番スキャン/RCE | ✅ | — | ✅ | — |
+| R19 | ThinkPHPのinvokefunction経由call_user_func_array RCE(CVE-2018-20062/CVE-2019-9082、CISA KEV) | ✅ | — | ✅ | — |
 
 > R9–R11 は、本連鎖（Strix/Cairn/Hermes 型の攻撃エージェント）ではなく、**LLM システム自体が標的になる側**
 > （`../llm-target-attacks.ja.md`）の検知。R9/R10 は標準的なプロキシ/ネットワークログで検知できるが、
@@ -63,6 +65,17 @@
 > 文字列**という2本立てで、どちらも「手がかり」であって単体では悪用の確証にはならない旨を明記して
 > いる。バージョン判定をより正確に行いたい場合は、`security-scan/sqli-lab/auto_vuln_scanner.py`の
 > `check_apache_http2()`/`check_nginx_rewrite()`(実際のセマンティックバージョン比較)を使うこと。
+>
+> R18・R19は、R16・R17とは対照的に**標準的なWebアクセスログだけで確実に検知できる**、
+> 古典的だが今も現役の定番RCEパターン。R18(CVE-2017-9841、CISA KEV)はPHPUnitの
+> `eval-stdin.php`が誤って公開された`/vendor/`配下から到達可能になっている場合のRCE、
+> R19(CVE-2018-20062/CVE-2019-9082、CISA KEV)はThinkPHPの`invokefunction`経由での
+> `call_user_func_array`悪用RCE。どちらもURIパターンへの単純な文字列一致で検知でき、
+> HTTP/2フレーム解析やworkerクラッシュといった特殊なログ基盤を必要としない。インター
+> ネット全体への「背景放射」のような定番スキャンの一部として非常に高頻度で観測され、
+> 単発のヒットは「この特定のCVEが成立した証拠」ではなく「この手のスキャンを受けている」
+> という意味合いが強い(対象が実際に該当製品を使っているか・該当バージョンかは別途確認が
+> 必要)。PHP2Shell(CVE-2026-109618/109619)とは無関係の、別のPHPエコシステムの脆弱性。
 
 ## 使い方・注意
 

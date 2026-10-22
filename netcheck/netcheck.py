@@ -62,6 +62,26 @@ SENSITIVE_FILES = [
     ("/server-status", "medium", "Apache のサーバー状態(/server-status)が公開されている", rb"(?i)Apache Server Status"),
 ]
 
+# 既知の製品を、特定のパス+応答の特徴(署名)で見分ける(SENSITIVE_FILES と同じ考え方)。
+# バージョンは外部からは分からない前提で、**露出の有無だけ**を報告する
+# (ESXi/vCenter 管理面の既存チェックと同じ方針)。
+# (path, sev, 題名, body の署名(bytes, 任意), cookie名の署名(正規表現文字列, 任意), 説明, 直し方, rule)
+PRODUCT_SIGNATURES = [
+    (
+        "/+CSCOE+/logon.html", "high",
+        "Cisco ASA/FTD の SSL VPN ポータル(WebVPN)が外部に公開されている",
+        rb"(?i)SSL VPN Service|AnyConnect",
+        r"(?i)^webvpn=",
+        "CVE-2026-20349: Cisco ASA/FTD の Remote Access SSL VPN サービスに、未認証のリモートからの"
+        "単発の細工された HTTP リクエストでの再起動(DoS)が存在する(CVSS 8.6、Cisco が2026-08-11に公開、"
+        "実悪用が報告されている)。netcheck はポータルの露出だけを確認し、このリクエストや他の攻撃は送らない。"
+        "パッチ適用状況は外部からは分からないため、Cisco の公式アドバイザリと機器のソフトウェアバージョンで確認すること。"
+        "※この署名(パス・応答の特徴)は実機で未検証。誤検知・見逃しの可能性がある。",
+        "インターネットから直接ではなく、許可した送信元だけに限定する。Cisco のアドバイザリに従って最新のホットフィックスを適用する。",
+        "③",
+    ),
+]
+
 # ポートごとの注意(sev, 題名, 説明, 直し方)
 RISKY = {
     21: ("medium", "FTP が開いている", "FTP は通信が暗号化されません。", "SFTP/FTPS に切り替えるか、不要なら閉じる。"),
@@ -371,6 +391,16 @@ def check_host(name, ip, ports, cfg, admin_check, progress):
                     add(f, sev, "%s: %s(ポート %d)" % (title, path, p),
                         "応答の特徴が一致しました。中身は保存も表示もしていません。",
                         "Web から取得できない場所に移すか削除する。含まれていた認証情報は、漏れた前提で作り直す。", p, "③")
+            for path, sev, title, body_sig, cookie_sig, detail, fix, rule in PRODUCT_SIGNATURES:
+                time.sleep(delay)
+                st, _, cookies, body = http_get(ip, p, name, path, tls, timeout=3.0, want_body=True)
+                if st != 200:
+                    continue
+                body_hit = bool(body_sig) and re.search(body_sig, body)
+                cookie_hit = bool(cookie_sig) and any(re.search(cookie_sig, c) for c in cookies)
+                if body_hit or cookie_hit:
+                    res["admin"].append({"port": p, "path": path, "status": st, "kind": "product_signature"})
+                    add(f, sev, "%s: %s(ポート %d)" % (title, path, p), detail, fix, p, rule)
     res["findings"].sort(key=lambda x: ["critical", "high", "medium", "low", "info"].index(x["sev"]))
     return res
 

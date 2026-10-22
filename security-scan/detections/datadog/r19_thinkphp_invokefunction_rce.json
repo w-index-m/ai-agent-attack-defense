@@ -1,0 +1,18 @@
+{
+  "name": "[R19] ThinkPHP invokefunction/call_user_func_array RCE request pattern (CVE-2018-20062, CVE-2019-9082)",
+  "type": "log_detection",
+  "message": "A request matched the exploitation pattern for CVE-2018-20062 (and related CVE-2019-9082) in ThinkPHP 5.0.x/5.1.x: improper controller-name validation lets an attacker reach invokefunction with an arbitrary function name, usually chained through call_user_func_array to run eval/assert/shell-exec-style functions with attacker input (CVSS 9.8, CISA KEV). Heavily used in the wild to deploy botnet malware -- common internet background-noise scanning for any PHP-looking target.\n\nA single hit is a lead, not proof: confirm whether this host actually runs ThinkPHP and which version (fixed in 5.0.23+), and check the response body for a reflected hash (from probes like vars[0]=md5) as a stronger signal of actual code execution.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1190", "tactic:initial-access"],
+  "queries": [
+    {
+      "name": "thinkphp_invokefunction_hit",
+      "query": "source:webserver @http.url_details.queryString:*think\\\\app\\/invokefunction* @http.url_details.queryString:*call_user_func_array*",
+      "aggregation": "count",
+      "groupByFields": ["@network.client.ip"]
+    }
+  ],
+  "cases": [
+    { "name": "ThinkPHP invokefunction RCE pattern observed", "status": "high", "condition": "thinkphp_invokefunction_hit > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}
