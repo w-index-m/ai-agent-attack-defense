@@ -24,6 +24,7 @@
     "R19": {"kind": "detection", "name": "ThinkPHPのinvokefunction経由call_user_func_array RCE(CVE-2018-20062/CVE-2019-9082)を狙うリクエスト"},
     "R20": {"kind": "detection", "name": "単一プロセスから複数ディレクトリにまたがる構造化Markdownファイルの短時間での散発的な書き込み（Unit 42報告のエージェント間情報受け渡し痕跡を模した探索的ヒューリスティック、未確証）"},
     "R21": {"kind": "detection", "name": "既知の昇格経路なしに非特権プロセスがroot(UID 0)へ遷移（Infinity Core、6件のLinuxカーネルLPE脆弱性、CVE-2026-98260等を狙う探索的ヒューリスティック）"},
+    "R22": {"kind": "detection", "name": "GSS-TSIG/TKEY文脈でのnamedのassertion failureクラッシュ、またはCHAOS版数バナーでの修正前BIND検出（2026-10-21のBIND 9セキュリティリリース、CVE-2026-94300等4件）"},
     "③": {"kind": "control", "name": "攻撃面最小化（ネット直結の露出を断つ）"},
     "③CSP": {"kind": "control", "name": "CSP による読み込み制御"}
   },
@@ -78,7 +79,8 @@
       "R18": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R19": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R20": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R21": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
+      "R21": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
+      "R22": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
     }
   }
 }

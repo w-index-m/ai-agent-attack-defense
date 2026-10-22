@@ -1,0 +1,78 @@
+title: named crash/assertion pattern near GSS-TSIG or TKEY context, consistent with BIND 9 2026-10-21 security release (CVE-2026-94300 et al.)
+id: 7f2c9e4a-1d6b-4f8e-9a3c-r22bindgsstsig
+status: experimental
+description: >
+  Detects indicators of ISC's 2026-10-21 BIND 9 security release, which
+  fixed four CVEs in 9.20.30 / 9.21.27 / 9.20.30-S1:
+    - CVE-2026-94300 (CVSS 8.1, the headline one): replaying GSS-TSIG-signed
+      UDP messages can corrupt memory in named; ISC's own wording is that
+      an attacker may "potentially" achieve remote code execution when
+      combined with crafted queries to a zone they control -- a hedged,
+      conditional claim, not a confirmed RCE. Reported by Dave Aitel
+      (OpenAI). No workaround; not known to be exploited in the wild.
+    - CVE-2026-96888: a resolver with both a redirect zone and
+      qname-minimization strict can abort (assertion failure, DoS).
+    - CVE-2026-19630: crafted messages with heavy name compression cause
+      amplified CPU/memory consumption (resource exhaustion).
+    - CVE-2026-97313: a recursive server with two RPZ zones whose
+      recursive-only settings conflict can exit on a specific RD=1-then-
+      RD=0 query sequence (assertion failure, DoS).
+  Affects BIND 9.11.0-9.18.50 (9.18 is EOL, no fix will ship for it),
+  9.20.0-9.20.29, and 9.21.0-9.21.26 (plus Supported Preview Edition
+  builds).
+  named crashes leave a fairly distinctive assertion-failure log line
+  (unlike a plain segfault), so this rule pairs that signature -- when it
+  appears alongside GSS-TSIG/TKEY context -- with a separate, generic
+  lead from the CHAOS-class version.bind banner (widely queried for BIND
+  fleet inventory; also how scripts/bind_version_check.py's --query mode
+  confirms a host). Neither alone is proof of exploitation of this
+  specific CVE batch.
+references:
+  - https://kb.isc.org/docs/cve-2026-94300
+  - https://kb.isc.org/docs/cve-2026-97313
+  - https://www.cyber.gc.ca/en/alerts-advisories/isc-bind-security-advisory-av26-1072
+  - ../../scripts/bind_version_check.py
+author: ai-agent-attack-defense
+date: 2026-10-23
+logsource:
+  category: application
+  product: bind
+detection:
+  selection_named_crash:
+    message|contains:
+      - 'INSIST('
+      - 'REQUIRE('
+      - 'exiting (due to fatal error)'
+      - 'reached assertion'
+  selection_gss_tsig_context:
+    message|contains:
+      - 'GSS-TSIG'
+      - 'tkey'
+      - 'TKEY'
+  # CHAOS-class version.bind banner, approximating the affected ranges
+  # (9.11.0-9.18.50 entirely, since 9.18 is EOL and won't be patched;
+  # 9.20.0-9.20.29; 9.21.0-9.21.26). Sigma can't do real semantic version
+  # range arithmetic, so this is a best-effort prefix/lookahead
+  # approximation, same limitation as R15/R16/R17's version-regex
+  # selections. For an authoritative per-host answer, use
+  # scripts/bind_version_check.py instead (handles both a local `named -v`
+  # check and, opt-in, the same CHAOS TXT query against hosts you own).
+  selection_vulnerable_version_banner:
+    chaos-version-txt|re: '(^|BIND\s)9\.(1[1-8]\.\d+|20\.(?!3[0-9]|[4-9]\d)\d+|21\.(?!2[7-9]|[3-9]\d)\d+)(-S1)?$'
+  condition: (selection_named_crash and selection_gss_tsig_context) or selection_vulnerable_version_banner
+fields:
+  - host
+  - message
+  - chaos-version-txt
+  - src_ip
+falsepositives:
+  - An assertion-failure crash near GSS-TSIG/TKEY context is not proof of CVE-2026-94300 specifically; any named crash in that code path (including unrelated bugs or an admin-triggered restart) matches the same generic pattern.
+  - The version.bind CHAOS banner is frequently disabled or randomized by operators for exactly this reason (hardening guidance predates this CVE batch); absence of a match is not proof of being patched, and the banner itself can be spoofed by anyone who controls the queried resolver's response.
+  - The version-regex selection is a best-effort approximation (see comment above), not a real version comparison -- vendor-backported BIND builds (RHEL, Ubuntu, etc.) often carry distro-specific version suffixes this regex won't recognize correctly either way. Confirm any hit with scripts/bind_version_check.py or the exact installed package version before treating it as exploitation.
+  - "ISC's own wording for CVE-2026-94300 is conditional (\"may potentially achieve RCE\"), not a confirmed code-execution primitive -- do not escalate a hit to this rule as confirmed RCE without further evidence."
+level: high
+tags:
+  - attack.initial_access
+  - attack.t1190
+  - attack.impact
+  - attack.t1499
