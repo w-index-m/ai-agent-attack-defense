@@ -1,0 +1,18 @@
+{
+  "name": "[R18] Request to PHPUnit's eval-stdin.php (CVE-2017-9841, CISA KEV)",
+  "type": "log_detection",
+  "message": "A request hit PHPUnit's Util/PHP/eval-stdin.php helper -- the entry point for CVE-2017-9841 (CVSS 9.8, CISA Known Exploited Vulnerabilities catalog). The bug is in PHPUnit itself, not application code, and becomes pre-auth RCE when a project's /vendor/ directory is mistakenly web-reachable. A public exploit (Exploit-DB 50702) probes many common vendor-directory prefixes with GET, then POSTs PHP code to the same path to run it.\n\nThis is one of the most common pieces of internet background-noise scanning for PHP-looking targets -- a single GET hit is not proof of exploitation or even that this host is vulnerable (only relevant if /vendor/ is actually served publicly here). Not related to PHP2Shell (CVE-2026-109618/109619) despite both being PHP-related -- different bug entirely.\n\nConfirm: is /vendor/ web-reachable on this host at all? If so, block it at the webserver/reverse-proxy level regardless of PHPUnit version, and check for a POST to the same path with an unexpected 2xx response as a stronger signal of actual exploitation.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1190", "tactic:initial-access"],
+  "queries": [
+    {
+      "name": "phpunit_eval_stdin_hit",
+      "query": "source:webserver @http.url_details.path:*vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php*",
+      "aggregation": "count",
+      "groupByFields": ["@network.client.ip"]
+    }
+  ],
+  "cases": [
+    { "name": "eval-stdin.php probed or exploited", "status": "medium", "condition": "phpunit_eval_stdin_hit > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}
