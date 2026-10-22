@@ -1,0 +1,25 @@
+{
+  "name": "[R22] named crash/assertion near GSS-TSIG context, consistent with BIND 9 2026-10-21 security release (CVE-2026-94300 et al.)",
+  "type": "log_detection",
+  "message": "Indicators of ISC's 2026-10-21 BIND 9 security release, which fixed four CVEs in 9.20.30 / 9.21.27 / 9.20.30-S1:\n- CVE-2026-94300 (CVSS 8.1, headline): replaying GSS-TSIG-signed UDP messages can corrupt memory in named; ISC's own wording says an attacker may \"potentially\" achieve RCE when combined with crafted queries to a zone they control -- a hedged, conditional claim, not confirmed RCE. Reported by Dave Aitel (OpenAI). No workaround; not known to be exploited in the wild.\n- CVE-2026-96888: redirect zone + qname-minimization strict can cause an assertion-failure abort (DoS).\n- CVE-2026-19630: crafted messages with heavy name compression cause amplified CPU/memory consumption.\n- CVE-2026-97313: a recursive server with two RPZ zones whose recursive-only settings conflict can exit on a specific RD=1-then-RD=0 query sequence (DoS).\nAffects BIND 9.11.0-9.18.50 (9.18 is EOL, no fix will ship for it), 9.20.0-9.20.29, and 9.21.0-9.21.26 (plus Supported Preview Edition builds).\n\nnamed crashes leave a fairly distinctive assertion-failure log line, so this pairs that signature (when near GSS-TSIG/TKEY context) with a separate, generic lead from the CHAOS-class version.bind banner. Neither alone is proof of exploitation of this specific CVE batch -- confirm with scripts/bind_version_check.py (local `named -v` check, or an opt-in CHAOS TXT query against hosts you own) before treating a hit as more than a lead.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1190", "technique:T1499", "tactic:initial-access"],
+  "queries": [
+    {
+      "name": "named_assertion_crash_gsstsig_context",
+      "query": "source:bind (@message:*INSIST(* OR @message:*REQUIRE(* OR @message:*\"exiting (due to fatal error)\"* OR @message:*\"reached assertion\"*) (@message:*GSS-TSIG* OR @message:*tkey* OR @message:*TKEY*)",
+      "aggregation": "count",
+      "groupByFields": ["host"]
+    },
+    {
+      "name": "bind_vulnerable_version_banner",
+      "query": "source:dns (@chaos.version_txt:(*9.11.* OR *9.12.* OR *9.13.* OR *9.14.* OR *9.15.* OR *9.16.* OR *9.17.* OR *9.18.*) OR (@chaos.version_txt:9.20.* -@chaos.version_txt:*9.20.3* -@chaos.version_txt:*9.20.4*) OR (@chaos.version_txt:9.21.* -@chaos.version_txt:*9.21.2[7-9]* -@chaos.version_txt:*9.21.3*))",
+      "aggregation": "count",
+      "groupByFields": ["host"]
+    }
+  ],
+  "cases": [
+    { "name": "named assertion crash near GSS-TSIG/TKEY context observed", "status": "high", "condition": "named_assertion_crash_gsstsig_context > 0" },
+    { "name": "Pre-fix BIND version banner observed (leads-generator only)", "status": "medium", "condition": "bind_vulnerable_version_banner > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}
