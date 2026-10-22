@@ -63,6 +63,37 @@ python3 auto_vuln_scanner.py --url http://8.8.8.8/login --class sqli --baseline 
 自分が所有する、プライベート範囲外のホスト(社内ネットワークの外のステージング環境等)を
 明示的にテストしたい場合のみ、`--i-own-this-target`で上書きできる。
 
+## 対象の事前評価(ペイロードを撃つ前に)
+
+`auto_vuln_scanner.py`/`session_vuln_check.py`は、実際の攻撃ペイロードを撃つ前に
+対象へベースラインのGETを1回送り、**「対象が生きているか」「何を相手にしているか」**を
+先に確認するようになっている(`assess_target()`)。これが無いと、「検出ゼロ」という結果が
+「本当に脆弱ではない」のか「対象が落ちていて何も試せていない」のか区別できない。
+
+```bash
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/login --class sqli \
+  --baseline username=zzz --baseline password=zzz --fuzz username
+```
+
+```
+Target assessment:
+  status=401 size=109B time=5ms content-type='text/html; charset=utf-8'
+  Server='Werkzeug/3.1.9 Python/3.13.16' X-Powered-By='(none)'
+```
+
+- `status`/`size`/`time`/`Content-Type`: ベースライン応答の基本情報。
+- `Server`/`X-Powered-By`: 対象が何で動いているかの手がかり(例えば`X-Powered-By: PHP/8.1.x`の
+  ようなヘッダーが見えれば、それ自体が別の調査の起点になる──PHPのバージョン次第では
+  PHP2Shell(CVE-2026-109618/109619)のような実例と照合できる、という具合)。
+- ベースラインが`4xx`/`5xx`を返した場合は警告を出す(以降の検出結果は`--baseline`や
+  `--url`のパスを疑ってから見ること、という合図)。
+- 対象に**接続すらできない場合**は、ペイロードを1つも撃たずにここで中断する
+  (`exit code 2`)。接続エラーのスタックトレースではなく、理由を1行で示す。
+
+`session_vuln_check.py`側も同じ考え方で、各クラスのチェック(ログイン→本処理)に入る前に
+`args.url`への到達性だけを確認する(ログイン失敗やセッション状態は各チェック自身の仕事なので、
+ここでは「接続できるかどうか」のみを見る)。
+
 ## 対象アプリ
 
 [`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。11種類の脆弱性クラスを含む。
