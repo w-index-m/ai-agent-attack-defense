@@ -28,6 +28,9 @@ timer・signal・メモリ管理・futex・scheduler・SLUB/SLABの6箇所のカ
 - CloudLinux CL9の場合のみ、CloudLinux公式ブログで判明している正確な修正済みビルド
   (`5.14.0-687.59.1.el9_8`)との一致を確認。
 - SARIF 2.1.0 での出力にも対応(`--out`)。`vuln_triage.html` に読み込める。
+- **ログ確認(任意、`--dmesg` / `--log-path` / `--journalctl-kernel`)**: カーネルログから、
+  Infinity Coreの対象6サブシステムに関連しそうなクラッシュの痕跡(panic/oops/BUG等)を探す。
+  **本ツールの中で最も弱い、参考程度のヒューリスティック**(詳細は下記「できないこと」参照)。
 
 ## できないこと・正直な限界
 
@@ -39,12 +42,18 @@ timer・signal・メモリ管理・futex・scheduler・SLUB/SLABの6箇所のカ
 - CloudLinux CL9の比較も、「このビルド文字列と完全一致するか」だけの判定。ディストリビューション
   側がビルド番号を更に更新した場合は、このツールのハードコードされた文字列が古くなる可能性がある。
 - カーネルのバグそのものを検査するわけではない(動的なエクスプロイト再現は行わない)。
+- **ログ確認は特に弱い**: (1) 成功したカーネルエクスプロイトは、むしろカーネルをクラッシュ
+  させない(クラッシュが起きた=攻撃が失敗した、または無関係の別のバグの可能性の方が高い)。
+  (2) `futex`・`timer`・`scheduler`等は非常に一般的なサブシステム名のため、無関係なカーネル
+  バグでも同じキーワードにヒットしうる。ヒットの有無、いずれも「確証」にはならない。
 
 ## 使い方
 
 ```bash
 python3 scripts/linux_kernel_infinitycore_check.py
 python3 scripts/linux_kernel_infinitycore_check.py --out infinitycore.sarif
+python3 scripts/linux_kernel_infinitycore_check.py --dmesg
+python3 scripts/linux_kernel_infinitycore_check.py --journalctl-kernel
 ```
 
 ## 検証
@@ -56,5 +65,10 @@ python3 scripts/linux_kernel_infinitycore_check.py --out infinitycore.sarif
   一致する場合・一致しない場合の両方を直接呼び出してユニットテストし、いずれも意図した
   分岐(`info`/`high`)になることを確認した(このサンドボックス自体はCloudLinuxではないため、
   実機でのCloudLinux CL9環境での動作は未検証)。
+- ログ確認は、合成したdmesg行(futex関連のクラッシュ痕跡、無関係なVFSクラッシュ)で
+  ユニットテストし、前者だけ検知・後者は検知しないことを確認した。`--dmesg`はこの
+  サンドボックスで実際に実行し(374行、該当なしで正常終了)、`--journalctl-kernel`も
+  同様に正常終了することを確認した。実際のInfinity Core攻撃によるクラッシュログでの
+  検証は未実施(公開PoCを実行していないため)。
 
 > 確認・検知の設計に限定。攻撃の実行手順やエクスプロイトコードは含めない。
