@@ -1,0 +1,72 @@
+title: Unprivileged process suddenly transitions to root without a known escalation path (Infinity Core kernel LPE pattern)
+id: 4e7d1a9c-8b2f-4c63-9e5a-r21infcore0000
+status: experimental
+description: >
+  Exploratory heuristic for exploitation of "Infinity Core" -- six Linux
+  kernel local privilege-escalation (LPE) bugs across the timer, signal,
+  memory-management, futex, scheduler and SLUB/SLAB subsystems, disclosed
+  2026-10-16 by researcher Hyunwoo Kim (V4bel) after the distro embargo
+  ended, with public exploit code (github.com/V4bel/InfinityCore). Five
+  of the six grant root to an unprivileged local user with no special
+  capabilities or namespaces; CVE-2026-98260 (a timer use-after-free in
+  exec(), CVSS 7.8) is the primary one. No workaround exists -- a
+  patched kernel plus reboot is the only fix.
+  A kernel exploit itself leaves no reliable userspace log line (the
+  bug is in the kernel, not a traced syscall with a fixed signature),
+  so this rule is necessarily indirect: it looks for the *outcome* --
+  a process tree where a child's effective UID becomes 0 (root) while
+  its parent process and the user's own session show no legitimate
+  path to that (no sudo, no setuid binary exec, no su, no
+  authentication event in between). That shape is consistent with
+  (but not proof of) a successful local kernel exploit of any kind,
+  Infinity Core included.
+references:
+  - https://github.com/V4bel/InfinityCore
+  - https://tuxcare.com/blog/infinity-core-linux-kernel-root/
+  - ../../scripts/linux_kernel_infinitycore_check.py
+author: ai-agent-attack-defense
+date: 2026-10-23
+logsource:
+  category: process_creation
+  product: linux
+detection:
+  selection_uid_root:
+    NewUid: 0
+  filter_legitimate_root_paths:
+    Image|endswith:
+      - '/sudo'
+      - '/su'
+      - '/sshd'
+      - '/login'
+      - '/systemd'
+      - '/cron'
+      - '/crond'
+      - '/containerd-shim'
+      - '/runc'
+  filter_parent_already_root:
+    ParentUser: 'root'
+  condition: selection_uid_root and not 1 of filter_*
+  # Like R12/R20, the real signal here is contextual, not a single-event
+  # match: correlate this with (a) the parent process's own UID/session
+  # being a genuinely unprivileged, interactive or service account, and
+  # (b) no corresponding authentication/sudo event in the same session
+  # in the preceding seconds. A bare "NewUid=0 and not a known binary"
+  # match will have real false positives (custom setuid tooling,
+  # container runtimes not in the filter list above, su/sudo wrapped by
+  # uncommon paths) -- tune the filter list to your own environment's
+  # inventory of legitimate root-granting binaries before trusting this.
+fields:
+  - host
+  - ParentImage
+  - Image
+  - ParentUser
+  - User
+  - CommandLine
+falsepositives:
+  - Any legitimate privileged service or setuid binary not in the filter allowlist above (environment-specific; this list is a starting point, not exhaustive).
+  - Container/VM orchestration tooling that legitimately spawns root processes outside the listed binaries (nested container runtimes, custom orchestrators).
+  - This is a generic "unexplained root" heuristic, not specific to Infinity Core -- a hit means *some* privilege-escalation path occurred (kernel exploit, misconfiguration, or a legitimate path this rule's allowlist doesn't yet know about), not confirmation of these specific CVEs. Confirm the host's kernel version against scripts/linux_kernel_infinitycore_check.py and the distro's own advisory before attributing a hit to Infinity Core specifically.
+level: high
+tags:
+  - attack.privilege_escalation
+  - attack.t1068

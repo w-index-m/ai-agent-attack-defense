@@ -1,0 +1,18 @@
+{
+  "name": "[R21] Unprivileged process suddenly transitions to root without a known escalation path (Infinity Core kernel LPE pattern)",
+  "type": "log_detection",
+  "message": "Exploratory heuristic for \"Infinity Core\": six Linux kernel local privilege-escalation bugs (timer, signal, memory management, futex, scheduler, SLUB/SLAB) disclosed 2026-10-16 by researcher Hyunwoo Kim (V4bel), with public exploit code (github.com/V4bel/InfinityCore). Five of six grant root to an unprivileged local user; CVE-2026-98260 (timer use-after-free in exec(), CVSS 7.8) is the primary one. No workaround exists -- kernel update + reboot only.\n\nA kernel exploit leaves no reliable userspace log signature, so this is indirect: a process whose effective UID becomes 0 with no legitimate path (no sudo/su/sshd/login/systemd/cron/container-runtime binary, and the parent isn't already root). This shape is consistent with any local kernel exploit, not proof of Infinity Core specifically.\n\nConfirm: check the host's kernel version with scripts/linux_kernel_infinitycore_check.py and the distro's own advisory before attributing a hit to these CVEs. Tune the allowlist of legitimate root-granting binaries to your own environment before trusting this rule -- the default list is a starting point, not exhaustive.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1068", "tactic:privilege-escalation"],
+  "queries": [
+    {
+      "name": "unexplained_root_transition",
+      "query": "source:process_creation @process.new_uid:0 -@process.parent.user:root -@process.executable.path:(*\\/sudo OR *\\/su OR *\\/sshd OR *\\/login OR *\\/systemd OR *\\/cron OR *\\/crond OR *\\/containerd-shim OR *\\/runc)",
+      "aggregation": "count",
+      "groupByFields": ["host", "@process.parent.executable.path"]
+    }
+  ],
+  "cases": [
+    { "name": "Unexplained UID-0 transition observed", "status": "high", "condition": "unexplained_root_transition > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

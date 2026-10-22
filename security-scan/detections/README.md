@@ -29,6 +29,7 @@
 | R18 | PHPUnitのeval-stdin.php(CVE-2017-9841、CISA KEV)への到達。公開されたvendorディレクトリを狙う定番スキャン/RCE | ✅ | — | ✅ | — |
 | R19 | ThinkPHPのinvokefunction経由call_user_func_array RCE(CVE-2018-20062/CVE-2019-9082、CISA KEV) | ✅ | — | ✅ | — |
 | R20 | 単一プロセスから複数ディレクトリへの構造化Markdown散発書き込み(Unit 42報告のエージェント間情報受け渡し痕跡を模した探索的ヒューリスティック、未確証) | ✅ | — | ✅ | — |
+| R21 | 既知の昇格経路なしに非特権プロセスがroot(UID 0)へ遷移(Infinity Core、6件のLinuxカーネルLPE脆弱性、CVE-2026-98260等を狙う探索的ヒューリスティック) | ✅ | — | ✅ | — |
 
 > R9–R11 は、本連鎖（Strix/Cairn/Hermes 型の攻撃エージェント）ではなく、**LLM システム自体が標的になる側**
 > （`../llm-target-attacks.ja.md`）の検知。R9/R10 は標準的なプロキシ/ネットワークログで検知できるが、
@@ -110,6 +111,18 @@
 > R5(永続化)/R7(多ツール連続実行)との相関で評価すること。R12のDNS水攻めと同じく、Sigmaの
 > 単純な条件式では「同一プロセスからの分散書き込み」という集計的な性質を表現しきれないため、
 > SIEM側での実装(group by + distinct count)が前提。
+>
+> R21は、実在する「Infinity Core」(研究者Hyunwoo Kim/V4bel、2026-10-16公開、ディストリ向け
+> エンバーゴ終了後)——Linuxカーネルのtimer・signal・メモリ管理・futex・scheduler・SLUB/SLABに
+> またがる6件のローカル権限昇格(LPE)脆弱性チェーンの検知。主要なCVE-2026-98260(exec()内の
+> timer use-after-free、CVSS 7.8)をはじめ5件がroot到達の公開PoCあり(GitHub `V4bel/InfinityCore`)。
+> カーネルのバグ自体はユーザー空間のログに決まった痕跡を残さないため、**「非特権プロセスが、
+> 既知の昇格経路(sudo/su/sshd/login/systemd/cron/コンテナランタイム等)を通らずにroot(UID 0)へ
+> 遷移する」という結果側**から検知する探索的ヒューリスティック。単体のヒットは「何らかの権限
+> 昇格が起きた」ことを示すだけで、Infinity Core固有の確証ではない点に注意(誤設定や、許可リスト
+> に無い正規の昇格経路でも同じ形になりうる)。カーネルバージョンの確認には
+> `scripts/linux_kernel_infinitycore_check.py`(確認専用、ディストリビューションごとのバック
+> ポート差異のため単純なバージョン比較では断定しない設計)を使うこと。
 
 ## 使い方・注意
 
