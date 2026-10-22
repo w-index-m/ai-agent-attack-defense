@@ -62,6 +62,23 @@ h2 .en{font-size:12px;color:var(--muted);font-weight:500;margin-left:6px}
 .chip.ext{border-color:var(--muted);color:var(--muted)}
 .badge{font-size:11px;font-weight:700;border-radius:5px;padding:1px 6px;color:#fff}
 .b-verified{background:var(--good)} .b-partial{background:var(--warn)} .b-untested{background:var(--muted)} .b-external{background:var(--c5)}
+.chip.llm-yes{border-color:var(--c5);color:var(--c5)}
+.chip.llm-no{border-color:var(--muted);color:var(--muted)}
+.btn.pr{background:var(--c3);color:#fff;border-color:var(--c3);font-weight:600}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+textarea,input.f{width:100%;font:inherit;font-size:14px;background:var(--bg);color:var(--ink);
+  border:1px solid var(--line);border-radius:8px;padding:9px}
+textarea{min-height:68px;resize:vertical}
+.ans{white-space:pre-wrap;background:var(--surface2);border:1px solid var(--line);border-radius:8px;
+  padding:12px;margin-top:10px;font-size:14px;min-height:20px}
+.seeds{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.seed{font-size:12.5px;cursor:pointer;background:var(--chipbg);border:1px solid var(--line);border-radius:999px;padding:4px 10px;color:var(--ink)}
+.askrow{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.cfg{display:grid;gap:8px;margin:4px 0 10px}
+@media(min-width:720px){.cfg{grid-template-columns:2fr 1fr 1fr}}
+.cfg label{font-size:12px;color:var(--ink2);display:flex;flex-direction:column;gap:3px}
+details.cfgwrap{border:1px dashed var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px}
+details.cfgwrap summary{cursor:pointer;font-size:13px;color:var(--ink2)}
 pre{background:var(--chipbg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;
   font-size:12px;overflow-x:auto;margin:6px 0}
 code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:var(--chipbg);padding:1px 5px;border-radius:4px}
@@ -76,12 +93,13 @@ a.src{color:var(--c1)}
 <header>
   <div>
     <h1>自分の環境を確認するツール 一覧</h1>
-    <p class="sub">Host/dependency self-check tools index — すべて確認専用(read-only)。攻撃・悪用・自動適用は行わない。オフライン・ローカル完結。</p>
+    <p class="sub">Host/dependency self-check tools index — すべて確認専用(read-only)。攻撃・悪用・自動適用は行わない。基本はオフライン・ローカル完結(「💬 AIに質問」を使う場合のみ、設定した自前LLMエンドポイントへ送信)。</p>
   </div>
   <button class="btn" id="theme">🌓 テーマ切替</button>
 </header>
 
 <nav>
+  <a href="#ask">💬 AIに質問（自前LLM）</a>
   <a href="#dep">① 依存関係・アドバイザリ</a>
   <a href="#os">② OS/カーネル確認</a>
   <a href="#incident">③ 個別インシデント対応</a>
@@ -97,6 +115,10 @@ a.src{color:var(--c1)}
     1か所にまとめた索引。各カードの「詳細」リンク先は、そのツールの背景・できること・できないこと・
     検証状況を日本語でまとめたノートファイル。個別ツールの実行結果を集めて横断表示する機能はない
     (各ツールはそれぞれ単独で、自分が管理するホスト上で実行するもの)。
+    各カードの<span class="chip llm-yes">LLM: あり</span> / <span class="chip llm-no">LLM: なし</span>は、
+    そのツール自身の内部処理がLLM呼び出しを含むかどうかを示す(ツールが確認する対象がAIエージェントかどうかではない)。
+    本リポジトリでLLMを使うのは<code>patch_suggest.py</code>のSemgrep指摘の修正案生成のみで、他はすべて
+    標準ライブラリ/決め打ちロジックのみで動く。詳しくは下の「💬 AIに質問」でも聞ける。
   </p>
 </div>
 
@@ -106,7 +128,7 @@ a.src{color:var(--c1)}
   <p class="note">パッケージの既知脆弱性照合と、アドバイザリの正確な転記。ネットワークアクセスは読み取り専用のAPI呼び出しのみ。</p>
   <div class="grid c2">
     <div class="card g1">
-      <h3>dep_cve_check.py <span class="badge b-partial">モックで検証済み</span></h3>
+      <h3>dep_cve_check.py <span class="badge b-partial">モックで検証済み</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>scripts/dep_cve_check.py</code></p>
       <p class="cap"><code>requirements.txt</code>(pip、<code>==</code>固定行)と npm の
         <code>package-lock.json</code> を読み、公開の脆弱性データベース
@@ -118,7 +140,7 @@ python3 scripts/dep_cve_check.py --npm-lock package-lock.json --out dep_cve.sari
       <p class="cap" style="margin-bottom:0"><a class="src" href="dep-cve-check-notes.md">→ 詳細ノート</a></p>
     </div>
     <div class="card g1">
-      <h3>ghsa_lookup.py <span class="badge b-partial">モックで検証済み</span></h3>
+      <h3>ghsa_lookup.py <span class="badge b-partial">モックで検証済み</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>scripts/ghsa_lookup.py</code></p>
       <p class="cap">GitHub Security Advisory(GHSA)の構造化データ(影響版・修正版・CWE・CVSS)を
         GHSA ID または CVE 番号から取得し、<b>要約せず転記するだけ</b>で Markdown 出力する。
@@ -137,7 +159,7 @@ python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --out report.md</code></pre>
   <p class="note">管理している機器の更新状況・カーネルバージョンを読み取るだけ。更新の適用や設定変更は一切しない。</p>
   <div class="grid c2">
     <div class="card g2">
-      <h3>os_patch_check_linux.py / _windows.py <span class="badge b-untested">実機では未検証</span></h3>
+      <h3>os_patch_check_linux.py / _windows.py <span class="badge b-untested">実機では未検証</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>scripts/os_patch_check_linux.py</code> / <code>scripts/os_patch_check_windows.py</code></p>
       <p class="cap">Linux(RHEL系、<code>dnf updateinfo list security</code>)と Windows
         (<code>Get-HotFix</code>、<code>--windows-pending</code>でWindows Update APIも)の
@@ -148,7 +170,7 @@ python scripts/os_patch_check_windows.py --windows-pending --out os_patch.sarif<
       <p class="cap" style="margin-bottom:0"><a class="src" href="os-patch-check-notes.md">→ 詳細ノート</a></p>
     </div>
     <div class="card g2">
-      <h3>linux_kernel_infinitycore_check.py <span class="badge b-verified">サンドボックスで実行確認済み</span> <span class="chip r">R21</span></h3>
+      <h3>linux_kernel_infinitycore_check.py <span class="badge b-verified">サンドボックスで実行確認済み</span> <span class="chip r">R21</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>scripts/linux_kernel_infinitycore_check.py</code></p>
       <p class="cap">実行中のカーネル(<code>uname -r</code>)と<code>/etc/os-release</code>を、
         「Infinity Core」(6件のLinuxカーネルLPE脆弱性チェーン、CVE-2026-98260等)と照合。
@@ -167,7 +189,7 @@ python scripts/os_patch_check_windows.py --windows-pending --out os_patch.sarif<
   <p class="note">実在する特定のインシデントに対応した、ピンポイントのホスト確認ツール。</p>
   <div class="grid c2">
     <div class="card g3">
-      <h3>java_cacerts_emudhra_check.py <span class="badge b-verified">実JDKで実行確認済み</span> <span class="chip r">R14</span></h3>
+      <h3>java_cacerts_emudhra_check.py <span class="badge b-verified">実JDKで実行確認済み</span> <span class="chip r">R14</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>scripts/java_cacerts_emudhra_check.py</code></p>
       <p class="cap">ローカルJDKの cacerts(信頼ストア)に、eMudhra侵害CA(2026-10、8件の中間CA
         秘密鍵侵害)に連なるルートCAがあるかを確認し、<code>java -version</code>をIPA公表の
@@ -184,13 +206,46 @@ python scripts/os_patch_check_windows.py --windows-pending --out os_patch.sarif<
   </div>
 </section>
 
+<!-- ASK (自前LLM) -->
+<section id="ask">
+  <h2>💬 AIに質問（自前LLM） <span class="en">Your own LLM</span></h2>
+  <p class="note">このページのツール一覧（何をするか・LLM使用の有無・検証状況）を文脈に、<b>あなたの LLM</b> が回答します。claude.ai のクオータは使いません。OpenAI 互換エンドポイント（ローカルの Ollama / LM Studio / vLLM、または OpenRouter 等）に対応。</p>
+  <details class="cfgwrap">
+    <summary>⚙️ 接続設定（初回だけ入力。ブラウザに保存されます）</summary>
+    <div class="cfg">
+      <label>エンドポイント（OpenAI互換 base URL）
+        <input class="f" id="cfg-url" placeholder="http://localhost:11434/v1">
+      </label>
+      <label>モデル名
+        <input class="f" id="cfg-model" placeholder="llama3.1 など">
+      </label>
+      <label>API キー（ローカルは空でOK）
+        <input class="f" id="cfg-key" type="password" placeholder="sk-... （任意）">
+      </label>
+    </div>
+    <p class="foot" style="margin:0">
+      例：Ollama → URL <code>http://localhost:11434/v1</code>・モデル <code>llama3.1</code>／
+      LM Studio → <code>http://localhost:1234/v1</code>。
+      ブラウザ(file://)から叩くため <b>CORS 許可</b>が必要（Ollama: <code>OLLAMA_ORIGINS=*</code>、LM Studio: CORS を ON）。
+      キーはこの端末の localStorage に保存され、外部には送りません（指定した LLM 以外へは送信しません）。
+    </p>
+  </details>
+  <div class="seeds" id="seeds"></div>
+  <textarea id="q" placeholder="例: どのツールがLLMを使う？ / zgrab2_guardは何を防ぐ？ / R21を確認するにはどれを使えばいい？"></textarea>
+  <div class="askrow">
+    <button class="btn pr" id="askbtn">質問する</button>
+    <span class="foot" id="askstatus" style="margin:0"></span>
+  </div>
+  <div class="ans" id="ans" hidden></div>
+</section>
+
 <!-- ④ NETWORK / EXPOSURE -->
 <section id="net">
   <h2>④ 露出・ネットワーク棚卸し <span class="en">Exposure / network inventory</span></h2>
   <p class="note">自社が管理するIP範囲だけに対象を限定する、棚卸し用ツール群。脆弱性スキャナではない。</p>
   <div class="grid c2">
     <div class="card g4">
-      <h3>netcheck.py <span class="badge b-partial">ブラウザUIあり</span></h3>
+      <h3>netcheck.py <span class="badge b-partial">ブラウザUIあり</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>netcheck/netcheck.py</code></p>
       <p class="cap">自社IP・ホストへの「確認だけ」のチェック(開いているポート、バナー、HTTPSヘッダ/証明書状態、
         管理画面らしきURLの応答有無)。127.0.0.1限定でブラウザ画面を提供し、起動ごとのトークンが必要。
@@ -199,7 +254,7 @@ python scripts/os_patch_check_windows.py --windows-pending --out os_patch.sarif<
       <p class="cap" style="margin-bottom:0"><a class="src" href="local-vuln-testing-walkthrough.ja.md">→ 利用の流れ(ウォークスルー)</a></p>
     </div>
     <div class="card g4">
-      <h3>zgrab2_guard.py <span class="badge b-untested">実機では未検証</span></h3>
+      <h3>zgrab2_guard.py <span class="badge b-untested">実機では未検証</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>scripts/zgrab2_guard.py</code></p>
       <p class="cap">能動スキャナ zgrab2 自体には許可範囲を制限する機能が無いため、標準入力の対象を
         netcheck と同じ許可範囲判定で検査し、範囲内のものだけを zgrab2 の入力形式で出力するガード。
@@ -217,7 +272,7 @@ python scripts/os_patch_check_windows.py --windows-pending --out os_patch.sarif<
   <p class="note">他のスキャナ(Semgrep/Trivy/gitleaks/ZAP等)の結果を受け取る側のツール。単体では何も検査しない。</p>
   <div class="grid c2">
     <div class="card g5">
-      <h3>summarize.py</h3>
+      <h3>summarize.py <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>scripts/summarize.py</code></p>
       <p class="cap">Semgrep/Trivy/gitleaks/ZAPのJSON結果を集計。出力形式はMarkdown(CIサマリ用、既定)/
         Elastic(ECS NDJSON)/Datadog(Logs JSON、検知ルールR1–R21が載るSIEM側へ流す用)。</p>
@@ -226,7 +281,7 @@ python3 scripts/summarize.py results --fail-on high</code></pre>
       <p class="cap" style="margin-bottom:0">CIワークフロー(<code>.github/workflows/security-scan.yml</code>)で使用。</p>
     </div>
     <div class="card g5">
-      <h3>patch_suggest.py <span class="badge b-partial">自動適用なし</span></h3>
+      <h3>patch_suggest.py <span class="badge b-partial">自動適用なし</span> <span class="chip llm-yes">LLM: あり(Semgrep指摘のみ)</span></h3>
       <p class="path"><code>scripts/patch_suggest.py</code></p>
       <p class="cap">診断結果(Semgrep/SARIF/Trivy)から修正案をdiffとして作る。<b>自動適用はしない</b>
         (1件ずつ人がy/N確認)。Semgrep指摘は自前LLMに最小限のdiffを作らせ、Trivyの脆弱性(FixedVersionあり)
@@ -243,7 +298,7 @@ python3 scripts/summarize.py results --fail-on high</code></pre>
   <p class="note">本リポジトリでは実装せず、既に公開・保守されている第三者ツールへのリンクに留めるもの。</p>
   <div class="grid c2">
     <div class="card ext">
-      <h3>php2shell-scanner <span class="badge b-external">外部・第三者</span> <span class="chip r">R15</span></h3>
+      <h3>php2shell-scanner <span class="badge b-external">外部・第三者</span> <span class="chip r">R15</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><a class="src" href="https://github.com/aancw/php2shell-scanner" target="_blank" rel="noopener">github.com/aancw/php2shell-scanner</a></p>
       <p class="cap">PHP2Shell(CVE-2026-109618/CVE-2026-109619)の確認専用スキャナ(Go製、静的バイナリ)。
         url(ブラックボックス)/local(このホスト)/ssh(リモートホスト)の3モードで、バージョンだけでなく
@@ -271,6 +326,56 @@ python3 scripts/summarize.py results --fail-on high</code></pre>
     root.setAttribute("data-theme",next);
     try{localStorage.setItem(key,next);}catch(e){}
   });
+})();
+// AIに質問（自前LLM / OpenAI互換エンドポイント）
+(function(){
+  var KB = [
+    "あなたは、このリポジトリの『自分の環境を確認するツール』一覧について答える、防御目的のアシスタント。日本語で簡潔に回答する。",
+    "攻撃の実行手順・エクスプロイト・安全機構の回避方法は提供しない（確認・検知の観点のみ）。",
+    "すべてのツールは確認専用(read-only)。更新の適用・設定変更・ネットワークへの能動的な攻撃は行わない。",
+    "【LLMを使うツール】patch_suggest.py のみ。Semgrepの指摘に対してのみ、自前LLM(OpenAI互換エンドポイント)に最小限の修正diffを作らせる。Trivyの脆弱性はLLMを使わずマニフェストのバージョン表記を書き換えるだけの決め打ちパッチ。gitleaks(秘密情報)は対象外で手動ローテーションを案内するのみ。秘密情報の値はLLMに送らない。自動適用はせず、1件ずつ人がy/N確認する。",
+    "【LLMを使わないツール(標準ライブラリ/決め打ちロジックのみ)】dep_cve_check.py(requirements.txt/package-lock.jsonをOSV.devに照合)、ghsa_lookup.py(GHSA/CVEの構造化データを要約せず転記)、os_patch_check_linux.py(dnf updateinfo)、os_patch_check_windows.py(Get-HotFix/Windows Update API)、java_cacerts_emudhra_check.py(JDK cacertsの確認、R14 eMudhra関連)、linux_kernel_infinitycore_check.py(uname -r/os-releaseの確認、R21 Infinity Core関連)、netcheck.py(自社IP・ホストへの確認専用スキャン、ブラウザUIあり)、zgrab2_guard.py(zgrab2への入力を許可範囲内に限定するガード)、summarize.py(Semgrep/Trivy/gitleaks/ZAP結果の集計のみ)。",
+    "【外部の推奨ツール】php2shell-scanner(github.com/aancw/php2shell-scanner)はGo製の第三者ツールで、本リポジトリでは未実装・LLM不使用。PHP2Shell(CVE-2026-109618/109619, R15)の host/url/ssh確認に推奨。",
+    "質問が『どのツールがLLMを使うか』であれば、上記のLLM使用ツール(patch_suggest.pyのみ)とその範囲(Semgrep指摘のみ)を明記して答える。",
+    "個別ツールの使い方・出力形式・検証状況を聞かれたら、このページの各カードの内容に基づいて答える。未検証/モック検証のみの点は、できる/できないを誇張せず正直に伝える。"
+  ].join("\n");
+  var SEEDS=["どのツールがLLMを使う？","R21を確認するにはどれを使えばいい？","zgrab2_guardは何を防ぐ？","patch_suggest.pyはどこまで自動化する？","このページにないツールの確認は何を使えばいい？"];
+  var $=function(i){return document.getElementById(i);};
+  var LS={url:"aad-tools-llm-url",model:"aad-tools-llm-model",key:"aad-tools-llm-key"};
+  function load(id,k,def){try{var v=localStorage.getItem(k);$(id).value=(v!=null?v:def||"");}catch(e){$(id).value=def||"";}}
+  function save(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+  load("cfg-url",LS.url,"http://localhost:11434/v1");
+  load("cfg-model",LS.model,"");
+  load("cfg-key",LS.key,"");
+  ["cfg-url","cfg-model","cfg-key"].forEach(function(id){var k=id==="cfg-url"?LS.url:id==="cfg-model"?LS.model:LS.key;
+    $(id).addEventListener("change",function(){save(k,$(id).value.trim());});});
+  var seeds=$("seeds");
+  SEEDS.forEach(function(s){var b=document.createElement("span");b.className="seed";b.textContent=s;
+    b.addEventListener("click",function(){$("q").value=s;$("q").focus();});seeds.appendChild(b);});
+  async function ask(){
+    var text=($("q").value||"").trim(); if(!text) return;
+    var base=($("cfg-url").value||"").trim().replace(/\/+$/,"");
+    var model=($("cfg-model").value||"").trim();
+    var key=($("cfg-key").value||"").trim();
+    if(!base||!model){$("ans").hidden=false;$("ans").textContent="接続設定（エンドポイントURL とモデル名）を入力してください。⚙️ の欄を開いて設定できます。";return;}
+    $("askbtn").disabled=true;$("askstatus").textContent="考え中…";$("ans").hidden=false;$("ans").textContent="";
+    try{
+      var headers={"Content-Type":"application/json"};
+      if(key) headers["Authorization"]="Bearer "+key;
+      var r=await fetch(base+"/chat/completions",{method:"POST",headers:headers,
+        body:JSON.stringify({model:model,messages:[{role:"system",content:KB},{role:"user",content:text}],stream:false,temperature:0.2})});
+      if(!r.ok){var t=await r.text();throw new Error("HTTP "+r.status+" "+t.slice(0,200));}
+      var j=await r.json();
+      var out=(j.choices&&j.choices[0]&&(j.choices[0].message&&j.choices[0].message.content))||j.content||"(空の応答)";
+      $("ans").textContent=out;$("askstatus").textContent="";
+    }catch(err){
+      $("ans").textContent="エラー: "+(err&&err.message?err.message:err)+
+        "\n\n確認：①エンドポイントURL/モデル名 ②ローカルLLMが起動しているか ③CORS許可（Ollama: OLLAMA_ORIGINS=*、LM Studio: CORS ON）。file:// から叩くと CORS でブロックされることがあります。";
+      $("askstatus").textContent="";
+    }finally{$("askbtn").disabled=false;}
+  }
+  $("askbtn").addEventListener("click",ask);
+  $("q").addEventListener("keydown",function(e){if((e.metaKey||e.ctrlKey)&&e.key==="Enter")ask();});
 })();
 </script>
 </body>

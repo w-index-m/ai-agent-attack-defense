@@ -10,7 +10,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
   攻撃エージェントの俯瞰 → 検知カバレッジ → 予防コントロール → CVP 対応 → 資産リンクを 1 枚で。
 - **[`dashboard-guide.ja.md`](dashboard-guide.ja.md)** — 上記ダッシュボードの、セキュリティ初心者向けガイド（専門知識なしで分かる説明、具体的にできることのチェックリスト）。
 - **[`dashboard-local-llm.html`](dashboard-local-llm.html)** — 上記＋「AIに質問」を**自前の LLM**（ローカルの Ollama/LM Studio、または OpenAI 互換エンドポイント）で動かすローカル版。claude.ai のクオータ不要。接続設定はブラウザに保存、通信は指定した LLM のみ。file:// から叩くため CORS 許可が必要（Ollama: `OLLAMA_ORIGINS=*` 等）。
-- **[`tools-dashboard.html`](tools-dashboard.html)** — 本リポジトリ自身の「自分の環境を確認するツール」（`scripts/*.py`・`netcheck/`）を1か所にまとめた統合索引。何を確認するか・使い方・検証状況に加え、外部の推奨ツールへのリンクも含む。
+- **[`tools-dashboard.html`](tools-dashboard.html)** — 本リポジトリ自身の「自分の環境を確認するツール」（`scripts/*.py`・`netcheck/`）を1か所にまとめた統合索引。何を確認するか・使い方・検証状況（そのツール自身がLLMを内部で呼ぶかどうか = `patch_suggest.py`のSemgrep指摘のみ、も明記）に加え、外部の推奨ツールへのリンクも含む。`dashboard-local-llm.html`と同じ方式の「自前LLMに質問」欄つき（任意、使わなければ完全オフライン）。
 - **[`local-vuln-testing-walkthrough.ja.md`](local-vuln-testing-walkthrough.ja.md)** — 自分のPCで
   脆弱性チェックを試したい人向けの入口。netcheckでの棚卸し → DVWA/Juice Shopでの練習 →
   Strix+ローカルLLMでの自動診断、という一連の流れと手順リンクをまとめたもの。
