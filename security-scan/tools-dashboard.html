@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自分の環境を確認するツール 一覧</title>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f4f6f6; --surface:#ffffff; --surface2:#eef2f2; --line:#d6dedf;
+  --ink:#0b0b0b; --ink2:#52514e; --muted:#7c8a8c;
+  --c1:#2a78d6; --c2:#eb6834; --c3:#1baf7a; --c4:#eda100; --c5:#7a5cc9; --c6:#2aa0a0;
+  --good:#1a8f4c; --warn:#b26a00; --crit:#c23934;
+  --chipbg:#eef2f2;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  color-scheme: dark;
+  --bg:#10191c; --surface:#172326; --surface2:#1f2f33; --line:#2c4045;
+  --ink:#ffffff; --ink2:#c3c2b7; --muted:#92a7ab;
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#9a7de0; --c6:#3fc0c0;
+  --good:#4fc38a; --warn:#e8b55a; --crit:#ff8f8f;
+  --chipbg:#1f2f33;
+}}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#10191c; --surface:#172326; --surface2:#1f2f33; --line:#2c4045;
+  --ink:#ffffff; --ink2:#c3c2b7; --muted:#92a7ab;
+  --c1:#3987e5; --c2:#d95926; --c3:#199e70; --c4:#c98500; --c5:#9a7de0; --c6:#3fc0c0;
+  --good:#4fc38a; --warn:#e8b55a; --crit:#ff8f8f;
+  --chipbg:#1f2f33;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.65 system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 64px;}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:6px}
+h1{font-size:22px;margin:0}
+.sub{color:var(--ink2);font-size:13px;margin:2px 0 0}
+.btn{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:8px;padding:7px 12px;cursor:pointer}
+nav{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0}
+nav a{font-size:13px;text-decoration:none;color:var(--ink2);border:1px solid var(--line);
+  border-radius:999px;padding:5px 12px;background:var(--surface)}
+nav a:hover{color:var(--ink);border-color:var(--muted)}
+section{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;margin:16px 0}
+h2{font-size:17px;margin:0 0 4px}
+h2 .en{font-size:12px;color:var(--muted);font-weight:500;margin-left:6px}
+.note{color:var(--ink2);font-size:13px;margin:2px 0 14px}
+.grid{display:grid;gap:12px}
+@media(min-width:720px){.grid.c2{grid-template-columns:1fr 1fr}}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px;background:var(--surface2)}
+.card.g1{border-top:4px solid var(--c1)} .card.g2{border-top:4px solid var(--c2)}
+.card.g3{border-top:4px solid var(--c3)} .card.g4{border-top:4px solid var(--c4)}
+.card.g5{border-top:4px solid var(--c5)} .card.g6{border-top:4px solid var(--c6)}
+.card.ext{border-top:4px dashed var(--muted)}
+.card h3{margin:0 0 4px;font-size:15px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.card .path{font-size:12px;color:var(--muted);font-weight:400}
+.card .cap{font-size:13px;color:var(--ink2);line-height:1.6;margin:6px 0}
+.tagrow{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 4px}
+.chip{font-size:11.5px;background:var(--chipbg);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
+.chip.r{border-color:var(--c1);color:var(--c1)}
+.chip.ext{border-color:var(--muted);color:var(--muted)}
+.badge{font-size:11px;font-weight:700;border-radius:5px;padding:1px 6px;color:#fff}
+.b-verified{background:var(--good)} .b-partial{background:var(--warn)} .b-untested{background:var(--muted)} .b-external{background:var(--c5)}
+pre{background:var(--chipbg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+  font-size:12px;overflow-x:auto;margin:6px 0}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:var(--chipbg);padding:1px 5px;border-radius:4px}
+pre code{background:none;padding:0}
+a.src{color:var(--c1)}
+.foot{color:var(--muted);font-size:12px;margin-top:10px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--ink2);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>自分の環境を確認するツール 一覧</h1>
+    <p class="sub">Host/dependency self-check tools index — すべて確認専用(read-only)。攻撃・悪用・自動適用は行わない。オフライン・ローカル完結。</p>
+  </div>
+  <button class="btn" id="theme">🌓 テーマ切替</button>
+</header>
+
+<nav>
+  <a href="#dep">① 依存関係・アドバイザリ</a>
+  <a href="#os">② OS/カーネル確認</a>
+  <a href="#incident">③ 個別インシデント対応</a>
+  <a href="#net">④ 露出・ネットワーク棚卸し</a>
+  <a href="#report">⑤ 集計・修正提案</a>
+  <a href="#ext">⑥ 外部の推奨ツール</a>
+</nav>
+
+<div class="card" style="margin-bottom:14px">
+  <h3 style="margin:0 0 6px;font-size:14px">このページについて</h3>
+  <p class="cap" style="margin:0">
+    本リポジトリの <code>scripts/*.py</code>・<code>netcheck/</code> に点在する「自分の環境を確認する」ツールを
+    1か所にまとめた索引。各カードの「詳細」リンク先は、そのツールの背景・できること・できないこと・
+    検証状況を日本語でまとめたノートファイル。個別ツールの実行結果を集めて横断表示する機能はない
+    (各ツールはそれぞれ単独で、自分が管理するホスト上で実行するもの)。
+  </p>
+</div>
+
+<!-- ① DEPENDENCY -->
+<section id="dep">
+  <h2>① 依存関係・アドバイザリ確認 <span class="en">Dependency / advisory lookup</span></h2>
+  <p class="note">パッケージの既知脆弱性照合と、アドバイザリの正確な転記。ネットワークアクセスは読み取り専用のAPI呼び出しのみ。</p>
+  <div class="grid c2">
+    <div class="card g1">
+      <h3>dep_cve_check.py <span class="badge b-partial">モックで検証済み</span></h3>
+      <p class="path"><code>scripts/dep_cve_check.py</code></p>
+      <p class="cap"><code>requirements.txt</code>(pip、<code>==</code>固定行)と npm の
+        <code>package-lock.json</code> を読み、公開の脆弱性データベース
+        <a class="src" href="https://osv.dev" target="_blank" rel="noopener">OSV.dev</a> に照合する。
+        出力は SARIF 2.1.0(<code>vuln_triage.html</code>にそのまま読み込める)。</p>
+      <pre><code>python3 scripts/dep_cve_check.py --requirements requirements.txt --out dep_cve.sarif
+python3 scripts/dep_cve_check.py --npm-lock package-lock.json --out dep_cve.sarif</code></pre>
+      <div class="tagrow"><span class="chip">標準ライブラリのみ</span><span class="chip">モックAPIで検証/実APIは未検証</span></div>
+      <p class="cap" style="margin-bottom:0"><a class="src" href="dep-cve-check-notes.md">→ 詳細ノート</a></p>
+    </div>
+    <div class="card g1">
+      <h3>ghsa_lookup.py <span class="badge b-partial">モックで検証済み</span></h3>
+      <p class="path"><code>scripts/ghsa_lookup.py</code></p>
+      <p class="cap">GitHub Security Advisory(GHSA)の構造化データ(影響版・修正版・CWE・CVSS)を
+        GHSA ID または CVE 番号から取得し、<b>要約せず転記するだけ</b>で Markdown 出力する。
+        過去にLLM要約で2件のCVEを取り違えた誤りを防ぐ目的で作成。</p>
+      <pre><code>python3 scripts/ghsa_lookup.py --ghsa GHSA-xjw9-4gw8-4rqx --out report.md
+python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --out report.md</code></pre>
+      <div class="tagrow"><span class="chip">標準ライブラリのみ</span><span class="chip">このセッションのGitHubスコープ制限で実API未到達</span></div>
+      <p class="cap" style="margin-bottom:0"><a class="src" href="ghsa-lookup-notes.md">→ 詳細ノート</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- ② OS / KERNEL -->
+<section id="os">
+  <h2>② OS・カーネル確認 <span class="en">OS patch / kernel version checks</span></h2>
+  <p class="note">管理している機器の更新状況・カーネルバージョンを読み取るだけ。更新の適用や設定変更は一切しない。</p>
+  <div class="grid c2">
+    <div class="card g2">
+      <h3>os_patch_check_linux.py / _windows.py <span class="badge b-untested">実機では未検証</span></h3>
+      <p class="path"><code>scripts/os_patch_check_linux.py</code> / <code>scripts/os_patch_check_windows.py</code></p>
+      <p class="cap">Linux(RHEL系、<code>dnf updateinfo list security</code>)と Windows
+        (<code>Get-HotFix</code>、<code>--windows-pending</code>でWindows Update APIも)の
+        未適用/適用済み更新を確認。出力は SARIF 2.1.0。</p>
+      <pre><code>python3 scripts/os_patch_check_linux.py --out os_patch.sarif
+python scripts/os_patch_check_windows.py --windows-pending --out os_patch.sarif</code></pre>
+      <div class="tagrow"><span class="chip">標準ライブラリのみ</span></div>
+      <p class="cap" style="margin-bottom:0"><a class="src" href="os-patch-check-notes.md">→ 詳細ノート</a></p>
+    </div>
+    <div class="card g2">
+      <h3>linux_kernel_infinitycore_check.py <span class="badge b-verified">サンドボックスで実行確認済み</span> <span class="chip r">R21</span></h3>
+      <p class="path"><code>scripts/linux_kernel_infinitycore_check.py</code></p>
+      <p class="cap">実行中のカーネル(<code>uname -r</code>)と<code>/etc/os-release</code>を、
+        「Infinity Core」(6件のLinuxカーネルLPE脆弱性チェーン、CVE-2026-98260等)と照合。
+        ディストリビューションごとのバックポート差異のため、単純な数値比較による断定はしない
+        (例外: CloudLinux CL9のみ、正確な修正済みビルドが判明)。</p>
+      <pre><code>python3 scripts/linux_kernel_infinitycore_check.py --out infinitycore.sarif</code></pre>
+      <div class="tagrow"><span class="chip">標準ライブラリのみ</span></div>
+      <p class="cap" style="margin-bottom:0"><a class="src" href="linux-kernel-infinitycore-check-notes.md">→ 詳細ノート</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- ③ INCIDENT-SPECIFIC -->
+<section id="incident">
+  <h2>③ 個別インシデント対応の確認 <span class="en">Specific incident / CVE host checks</span></h2>
+  <p class="note">実在する特定のインシデントに対応した、ピンポイントのホスト確認ツール。</p>
+  <div class="grid c2">
+    <div class="card g3">
+      <h3>java_cacerts_emudhra_check.py <span class="badge b-verified">実JDKで実行確認済み</span> <span class="chip r">R14</span></h3>
+      <p class="path"><code>scripts/java_cacerts_emudhra_check.py</code></p>
+      <p class="cap">ローカルJDKの cacerts(信頼ストア)に、eMudhra侵害CA(2026-10、8件の中間CA
+        秘密鍵侵害)に連なるルートCAがあるかを確認し、<code>java -version</code>をIPA公表の
+        「脆弱な版」一覧(CVE-2026-91403)と突き合わせる。</p>
+      <pre><code>python3 scripts/java_cacerts_emudhra_check.py --out java_cacerts.sarif</code></pre>
+      <div class="tagrow"><span class="chip">標準ライブラリのみ</span><span class="chip">実運用のemSign信頼環境では未検証</span></div>
+      <p class="cap" style="margin-bottom:0"><a class="src" href="java-cacerts-emudhra-check-notes.md">→ 詳細ノート</a></p>
+    </div>
+    <div class="card ext">
+      <h3>(参考) この区分は他に未実装</h3>
+      <p class="cap">個別インシデント対応ツールは、該当する実在インシデントが見つかるたびに追加する方針
+        (直近はR14→eMudhra、R21→Infinity Core)。新しい実在の脆弱性情報を確認した場合は、ここに追加を検討する。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ④ NETWORK / EXPOSURE -->
+<section id="net">
+  <h2>④ 露出・ネットワーク棚卸し <span class="en">Exposure / network inventory</span></h2>
+  <p class="note">自社が管理するIP範囲だけに対象を限定する、棚卸し用ツール群。脆弱性スキャナではない。</p>
+  <div class="grid c2">
+    <div class="card g4">
+      <h3>netcheck.py <span class="badge b-partial">ブラウザUIあり</span></h3>
+      <p class="path"><code>netcheck/netcheck.py</code></p>
+      <p class="cap">自社IP・ホストへの「確認だけ」のチェック(開いているポート、バナー、HTTPSヘッダ/証明書状態、
+        管理画面らしきURLの応答有無)。127.0.0.1限定でブラウザ画面を提供し、起動ごとのトークンが必要。
+        対象は既定で社内プライベートIP範囲のみ。脆弱性を突く動作は一切行わない。</p>
+      <div class="tagrow"><span class="chip">ブラウザUI</span><span class="chip">許可範囲外は拒否</span></div>
+      <p class="cap" style="margin-bottom:0"><a class="src" href="local-vuln-testing-walkthrough.ja.md">→ 利用の流れ(ウォークスルー)</a></p>
+    </div>
+    <div class="card g4">
+      <h3>zgrab2_guard.py <span class="badge b-untested">実機では未検証</span></h3>
+      <p class="path"><code>scripts/zgrab2_guard.py</code></p>
+      <p class="cap">能動スキャナ zgrab2 自体には許可範囲を制限する機能が無いため、標準入力の対象を
+        netcheck と同じ許可範囲判定で検査し、範囲内のものだけを zgrab2 の入力形式で出力するガード。
+        1件でも範囲外が混ざると、全体を出力せず終了コード2で止まる。</p>
+      <pre><code>cat targets.txt | python3 scripts/zgrab2_guard.py | zgrab2 http</code></pre>
+      <div class="tagrow"><span class="chip">何にも接続しない</span><span class="chip">netcheck/config.jsonのallowed_rangesを使用</span></div>
+      <p class="cap" style="margin-bottom:0"><a class="src" href="zgrab2-notes.md">→ 詳細ノート</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- ⑤ REPORTING -->
+<section id="report">
+  <h2>⑤ 診断結果の集計・修正提案 <span class="en">Summarize & suggest (never auto-applies)</span></h2>
+  <p class="note">他のスキャナ(Semgrep/Trivy/gitleaks/ZAP等)の結果を受け取る側のツール。単体では何も検査しない。</p>
+  <div class="grid c2">
+    <div class="card g5">
+      <h3>summarize.py</h3>
+      <p class="path"><code>scripts/summarize.py</code></p>
+      <p class="cap">Semgrep/Trivy/gitleaks/ZAPのJSON結果を集計。出力形式はMarkdown(CIサマリ用、既定)/
+        Elastic(ECS NDJSON)/Datadog(Logs JSON、検知ルールR1–R21が載るSIEM側へ流す用)。</p>
+      <pre><code>python3 scripts/summarize.py results
+python3 scripts/summarize.py results --fail-on high</code></pre>
+      <p class="cap" style="margin-bottom:0">CIワークフロー(<code>.github/workflows/security-scan.yml</code>)で使用。</p>
+    </div>
+    <div class="card g5">
+      <h3>patch_suggest.py <span class="badge b-partial">自動適用なし</span></h3>
+      <p class="path"><code>scripts/patch_suggest.py</code></p>
+      <p class="cap">診断結果(Semgrep/SARIF/Trivy)から修正案をdiffとして作る。<b>自動適用はしない</b>
+        (1件ずつ人がy/N確認)。Semgrep指摘は自前LLMに最小限のdiffを作らせ、Trivyの脆弱性(FixedVersionあり)
+        はLLMを使わずマニフェストのバージョン表記を書き換えるだけ。gitleaks(秘密情報)は対象外、
+        手動ローテーションを案内するのみ。秘密情報の値はLLMに送らない。</p>
+      <p class="cap" style="margin-bottom:0"><a class="src" href="patch-suggest-notes.md">→ 詳細ノート</a></p>
+    </div>
+  </div>
+</section>
+
+<!-- ⑥ EXTERNAL -->
+<section id="ext">
+  <h2>⑥ 外部の推奨ツール <span class="en">Recommended external tools (not vendored in this repo)</span></h2>
+  <p class="note">本リポジトリでは実装せず、既に公開・保守されている第三者ツールへのリンクに留めるもの。</p>
+  <div class="grid c2">
+    <div class="card ext">
+      <h3>php2shell-scanner <span class="badge b-external">外部・第三者</span> <span class="chip r">R15</span></h3>
+      <p class="path"><a class="src" href="https://github.com/aancw/php2shell-scanner" target="_blank" rel="noopener">github.com/aancw/php2shell-scanner</a></p>
+      <p class="cap">PHP2Shell(CVE-2026-109618/CVE-2026-109619)の確認専用スキャナ(Go製、静的バイナリ)。
+        url(ブラックボックス)/local(このホスト)/ssh(リモートホスト)の3モードで、バージョンだけでなく
+        実際の悪用可否を左右する設定(<code>session.upload_progress</code>・SAPI・<code>memory_limit</code>等)
+        まで確認する。本リポジトリの<code>sqli-lab/auto_vuln_scanner.py</code>の
+        <code>check_php2shell()</code>(バージョン比較のみ)より詳細な確認が必要な場合に推奨。
+        本リポジトリ側では未実行・未検証 — 利用前に公式リリースのSHA256SUMSを確認すること。</p>
+    </div>
+  </div>
+</section>
+
+<p class="foot">確認・検知の設計に限定。攻撃の実行手順や安全機構の回避方法は含めない。各ツールの詳細・検証状況は
+  個別ノートファイル、または <a class="src" href="README.md">README.md</a> / <a class="src" href="README.ja.md">README.ja.md</a>
+  「自分の環境を確認するツール」節を参照。</p>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement, key="aad-theme";
+  try{var s=localStorage.getItem(key); if(s) root.setAttribute("data-theme",s);}catch(e){}
+  document.getElementById("theme").addEventListener("click",function(){
+    var cur=root.getAttribute("data-theme");
+    var next = cur==="dark" ? "light" : (cur==="light" ? "dark" :
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark"));
+    root.setAttribute("data-theme",next);
+    try{localStorage.setItem(key,next);}catch(e){}
+  });
+})();
+</script>
+</body>
+</html>

@@ -28,6 +28,7 @@ description: >
 references:
   - https://www.php2shell.com/
   - https://www.wiz.io/blog/php2shell-php-rce
+  - https://github.com/aancw/php2shell-scanner
 author: ai-agent-attack-defense
 date: 2026-10-22
 logsource:
@@ -49,9 +50,13 @@ detection:
   condition: (selection_worker_crash and selection_fpm_context) or selection_vulnerable_php_header
   # The version-regex selection above is a best-effort approximation of
   # "below the first-fixed release per branch" using Sigma's regex
-  # modifier; it cannot do real semantic version comparison. Prefer the
-  # equivalent check in security-scan/sqli-lab/auto_vuln_scanner.py
-  # (check_php2shell) for an authoritative per-host answer.
+  # modifier; it cannot do real semantic version comparison. For a real
+  # per-host answer (version check plus the actual exploitability
+  # conditions -- session.upload_progress, SAPI, memory_limit, etc. --
+  # read from the live interpreter/ini/FPM-pool config, blackbox URL
+  # probing, or SSH to a remote host), use the dedicated third-party
+  # tool github.com/aancw/php2shell-scanner instead of this repo's own
+  # minimal check_php2shell() in security-scan/sqli-lab/auto_vuln_scanner.py.
 fields:
   - host
   - x-powered-by
