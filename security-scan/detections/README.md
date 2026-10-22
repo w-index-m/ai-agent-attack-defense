@@ -23,6 +23,7 @@
 | R12 | 再帰DNSリゾルバへの、単一ドメイン配下のランダムサブドメイン問い合わせの急増（DNS水攻め/ランダムサブドメイン攻撃の兆候） | ✅ | — | ✅ | — |
 | R13 | WordPress REST API バッチエンドポイントの悪用（wp2shell連鎖: CVE-2026-63030のルート混同＋CVE-2026-60137のSQLi、Webシェル設置に悪用） | ✅ | — | ✅ | — |
 | R14 | eMudhra侵害中間CA(2026-10失効)の証明書チェーンへのTLS接続成立（CAトラストストア更新遅延/なりすましの兆候） | ✅ | — | ✅ | — |
+| R15 | PHP2Shell(CVE-2026-109618のOOM破壊/CVE-2026-109619の古いグローバル状態UAF)を狙うPHP-FPM workerの異常クラッシュ、または修正前バージョンの露出 | ✅ | — | ✅ | — |
 | R16 | Apache httpd mod_http2のダブルフリー(CVE-2026-23918)を狙うHTTP/2パターン、またはworkerクラッシュ | ✅ | — | ✅ | — |
 | R17 | Nginx ngx_http_rewrite_moduleのヒープオーバーフロー(CVE-2026-42945、通称NGINX Rift)を狙う単発リクエスト、またはworkerクラッシュ | ✅ | — | ✅ | — |
 | R18 | PHPUnitのeval-stdin.php(CVE-2017-9841、CISA KEV)への到達。公開されたvendorディレクトリを狙う定番スキャン/RCE | ✅ | — | ✅ | — |
@@ -62,6 +63,19 @@
 > 公開、IPAも同日注意喚起)としてJSSE側の脆弱性になった。ローカルのJava環境がこの影響を受けて
 > いないかは、`../java-cacerts-emudhra-check-notes.md`(`scripts/java_cacerts_emudhra_check.py`)
 > で確認できる。
+>
+> R15は、実在するPHPコア自体の脆弱性チェーン「PHP2Shell」(CVE-2026-109618のOOM破壊、
+> CVE-2026-109619の古いグローバル状態に起因するUAF、各CVSS 9.2、2026-10-21にWiz Research/
+> OpenAI Codex Security/Califが公開)の検知。アプリケーションの不備ではなく**PHPランタイム
+> そのもの**の脆弱性のため、WordPress・Drupal・Joomlaへの事前認証RCEとして実演されたのは
+> あくまで「最新のコンテナイメージを使っただけ」であり、各アプリ固有の不備ではない点に注意。
+> R16・R17と同じ理由で、標準的なアクセスログだけでは現れにくい(メモリ破壊そのものはログに
+> 残らない)ため、**PHP-FPM workerの異常クラッシュパターン**と、**X-Powered-Byヘッダーに残る
+> 修正前バージョン文字列**の2本立てで検知する。どちらも単体では悪用の確証にはならない。
+> バージョン判定をより正確に行いたい場合は、`security-scan/sqli-lab/auto_vuln_scanner.py`の
+> `check_php2shell()`(実際のセマンティックバージョン比較)を使うこと。8.2未満のブランチに
+> 「公式の修正版が無い」という主張はphp2shell.com自身の記載に基づくもので、php.net自身の
+> アドバイザリでの裏取りはしていない。
 >
 > R16・R17は、Webサーバーソフトウェア本体(Apache httpd / Nginx)に実在する重大CVEの検知。
 > R16はApache httpdのmod_http2(HTTP/2処理)のダブルフリー(CVE-2026-23918、CVSS 8.8、httpd 2.4.67で
