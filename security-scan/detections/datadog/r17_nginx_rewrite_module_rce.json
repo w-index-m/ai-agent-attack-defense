@@ -1,0 +1,25 @@
+{
+  "name": "[R17] Nginx worker crash pattern consistent with ngx_http_rewrite_module overflow (CVE-2026-42945, \"NGINX Rift\")",
+  "type": "log_detection",
+  "message": "Traffic/logs match indicators of CVE-2026-42945 (\"NGINX Rift\", CVSS 9.2): an 18-year-old heap-based buffer overflow in ngx_http_rewrite_module affecting NGINX Open Source 0.6.27-1.30.0 and NGINX Plus R32-R36. A single crafted HTTP request can crash worker processes pre-auth; with ASLR disabled, RCE is possible. Exploitation attempts were reported shortly after public disclosure (2026-05).\n\nEither a worker-crash signature (signal 11/SIGSEGV or signal 6) or a Server header still advertising a pre-1.30.1 version is a lead, not proof -- confirm against the exact installed nginx version and, for exploitability (not just patch status), whether nginx.conf uses the specific vulnerable rewrite-directive pattern (unnamed PCRE capture + '?' in the replacement + a following rewrite/if/set in the same scope).\n\nTune: sites running with server_tokens off will never match the version-based case -- rely on the crash-pattern case instead. Fixed versions: NGINX OSS 1.31.0 / 1.30.1, NGINX Plus R36 P4 / R35 P2 / R32 P6.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1190", "technique:T1499", "tactic:initial-access"],
+  "queries": [
+    {
+      "name": "nginx_worker_crash",
+      "query": "source:nginx (@message:*\"worker process exited on signal 11\"* OR @message:*\"worker process exited on signal 6\"* OR @message:*SIGSEGV*)",
+      "aggregation": "count",
+      "groupByFields": ["host"]
+    },
+    {
+      "name": "nginx_pre_1_30_1_server_header",
+      "query": "source:webserver @http.response.headers.server:nginx\\/* -@http.response.headers.server:(*nginx\\/1.30.1* OR *nginx\\/1.31.*)",
+      "aggregation": "count",
+      "groupByFields": ["host"]
+    }
+  ],
+  "cases": [
+    { "name": "Worker crash signature observed", "status": "critical", "condition": "nginx_worker_crash > 0" },
+    { "name": "Pre-1.30.1 nginx version header observed (leads-generator only)", "status": "medium", "condition": "nginx_pre_1_30_1_server_header > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

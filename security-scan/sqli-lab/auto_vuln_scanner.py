@@ -75,6 +75,72 @@ def check_php2shell(powered_by: str) -> str | None:
 
     return None  # branch newer than what this repo has data for (e.g. 8.6+)
 
+
+# CVE-2026-23918: double-free in Apache httpd's mod_http2 stream-cleanup code
+# (CVSS 8.8), fixed in httpd 2.4.67 (released 2026-05-04). Version-range
+# check only -- this never sends the HTTP/2 HEADERS+RST_STREAM trigger.
+APACHE_HTTP2_FIRST_FIXED = (2, 4, 67)
+APACHE_HTTP2_REFERENCE = (
+    "CVE-2026-23918 (Apache httpd mod_http2 double-free, CVSS 8.8): "
+    "https://thehackernews.com/2026/05/critical-apache-http2-flaw-cve-2026.html"
+)
+
+
+def check_apache_http2(server_header: str) -> str | None:
+    """Compare a 'Server: Apache/x.y.z' header against CVE-2026-23918's
+    first-fixed version. Returns a warning string if the version looks
+    vulnerable, else None. Only the 2.4.x branch is in scope: mod_http2
+    (where the bug lives) didn't exist before Apache httpd 2.4.17, so an
+    old 2.2.x/2.0.x server is a different problem, not this CVE."""
+    m = re.search(r"Apache/(\d+)\.(\d+)\.(\d+)", server_header or "")
+    if not m:
+        return None
+    version = tuple(int(x) for x in m.groups())
+    if version[:2] != APACHE_HTTP2_FIRST_FIXED[:2]:
+        return None  # not the 2.4.x branch this CVE applies to
+    if version < APACHE_HTTP2_FIRST_FIXED:
+        version_str = ".".join(str(x) for x in version)
+        fixed_str = ".".join(str(x) for x in APACHE_HTTP2_FIRST_FIXED)
+        return (
+            f"Apache {version_str} is below the first fixed release {fixed_str} "
+            f"-- vulnerable to {APACHE_HTTP2_REFERENCE}"
+        )
+    return None
+
+
+# CVE-2026-42945 ("NGINX Rift"): heap-based buffer overflow in
+# ngx_http_rewrite_module (CVSS 9.2), affecting NGINX Open Source 0.6.27
+# through 1.30.0, fixed in 1.30.1 (backport) / 1.31.0 (mainline) --
+# equivalently: fixed if version >= 1.30.1. Version-range check only --
+# this never sends the crafted rewrite-triggering request.
+NGINX_REWRITE_FIRST_FIXED = (1, 30, 1)
+NGINX_REWRITE_REFERENCE = (
+    "CVE-2026-42945 (Nginx ngx_http_rewrite_module overflow, 'NGINX Rift', CVSS 9.2): "
+    "https://qualysec.com/cybersecurity-news/nginx-cve-2026-42945-exploited-in-wild/"
+)
+
+
+def check_nginx_rewrite(server_header: str) -> str | None:
+    """Compare a 'Server: nginx/x.y.z' header against CVE-2026-42945's
+    first-fixed version. Returns a warning string if the version looks
+    vulnerable, else None. Note: exploitability also requires a specific
+    rewrite-directive pattern in nginx.conf this check cannot see -- an
+    old version alone doesn't prove the host is actually exploitable."""
+    m = re.search(r"nginx/(\d+)\.(\d+)\.(\d+)", server_header or "")
+    if not m:
+        return None
+    version = tuple(int(x) for x in m.groups())
+    if version < NGINX_REWRITE_FIRST_FIXED:
+        version_str = ".".join(str(x) for x in version)
+        fixed_str = ".".join(str(x) for x in NGINX_REWRITE_FIRST_FIXED)
+        return (
+            f"nginx {version_str} is below the first fixed release {fixed_str} "
+            f"-- vulnerable to {NGINX_REWRITE_REFERENCE} (if nginx.conf uses the "
+            f"specific vulnerable rewrite-directive pattern; version alone isn't proof)"
+        )
+    return None
+
+
 # Same allow-list as netcheck/netcheck.py: loopback + RFC1918 private ranges.
 # This scanner actually fires live attack payloads, so by default it refuses
 # to touch anything that isn't a target you plausibly run yourself.
@@ -345,9 +411,13 @@ def print_target_assessment(a: TargetAssessment) -> None:
             f"  warning: baseline request returned {a.status_code} -- findings below may be "
             "unreliable (check --baseline params and --url path)"
         )
-    php2shell_warning = check_php2shell(a.powered_by)
-    if php2shell_warning:
-        print(f"  warning: {php2shell_warning}")
+    for warning in (
+        check_php2shell(a.powered_by),
+        check_apache_http2(a.server),
+        check_nginx_rewrite(a.server),
+    ):
+        if warning:
+            print(f"  warning: {warning}")
 
 
 def probe(

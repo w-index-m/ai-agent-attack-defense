@@ -123,6 +123,33 @@ Target assessment:
 この範囲外(8.6以降など)は、このリポジトリがデータを持っていないため何も表示しない
 (脆弱でない、という意味ではない)。
 
+### Apache / Nginx のバージョン照合(`check_apache_http2()` / `check_nginx_rewrite()`)
+
+同じ考え方で、`Server`ヘッダーから検出したApache httpd / Nginxのバージョンを、実在する
+重大CVEの修正済みバージョンと照合する(detections/のR16・R17に対応)。
+
+- **Apache**: `Server: Apache/x.y.z` が **2.4.x系かつ 2.4.67未満**なら、CVE-2026-23918
+  (mod_http2のダブルフリー、CVSS 8.8、httpd 2.4.67で修正)の警告を出す。**2.4.x系以外
+  (2.2系等)は対象外**——このCVEの舞台であるmod_http2自体が2.4.17より前には存在しない
+  ため、古いバージョンだからといって無条件に「このCVEに」脆弱とは判定しない(他の問題は
+  別途あり得るが、このチェックの対象外)。
+- **Nginx**: `Server: nginx/x.y.z` が **1.30.1未満**なら、CVE-2026-42945(通称
+  「NGINX Rift」、ngx_http_rewrite_moduleのヒープオーバーフロー、18年来のバグ、
+  CVSS 9.2、公開後に実悪用が報告された)の警告を出す。ただし実際の悪用には
+  `nginx.conf`側の特定のrewriteディレクティブパターンが必要なため、**バージョンが
+  古いだけでは悪用可能とは限らない**旨を警告メッセージ自体に明記している。
+
+```
+Target assessment:
+  status=200 size=5B time=3ms content-type='(none)'
+  Server='Apache/2.4.66' X-Powered-By='(none)'
+  warning: Apache 2.4.66 is below the first fixed release 2.4.67 -- vulnerable to CVE-2026-23918 (Apache httpd mod_http2 double-free, CVSS 8.8): https://thehackernews.com/2026/05/critical-apache-http2-flaw-cve-2026.html
+```
+
+`vulnerable_app.py`はFlask/Pythonなので`Server`は`Werkzeug/...`になり、この照合は常に
+スキップされる。モックのApache/nginx風サーバー(`Server`ヘッダーのみ偽装)でのみ
+実動作を確認済み。
+
 ## 対象アプリ
 
 [`vulnerable_app.py`](vulnerable_app.py): Flask + SQLite の最小アプリ。11種類の脆弱性クラスを含む。
