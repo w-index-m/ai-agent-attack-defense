@@ -82,8 +82,10 @@
 > R16・R17と同じ理由で、標準的なアクセスログだけでは現れにくい(メモリ破壊そのものはログに
 > 残らない)ため、**PHP-FPM workerの異常クラッシュパターン**と、**X-Powered-Byヘッダーに残る
 > 修正前バージョン文字列**の2本立てで検知する。どちらも単体では悪用の確証にはならない。
-> バージョン判定だけなら`security-scan/sqli-lab/auto_vuln_scanner.py`の`check_php2shell()`
-> (実際のセマンティックバージョン比較)でも足りるが、実際の悪用可否を左右する設定
+> ホスト単位のバージョン確認・workerクラッシュログの確認には`../php-version-check-notes.md`
+> (`scripts/php_version_check.py`)を使うこと。より簡易なバージョン判定だけなら
+> `security-scan/sqli-lab/auto_vuln_scanner.py`の`check_php2shell()`(実際のセマンティック
+> バージョン比較)でも足りるが、実際の悪用可否を左右する設定
 > (`session.upload_progress`・SAPI・`memory_limit`等)まで含めてホスト単位で確認したい
 > 場合は、第三者の専用ツール[`aancw/php2shell-scanner`](https://github.com/aancw/php2shell-scanner)
 > (url/local/sshの3モード、Go製の確認専用ツール)の利用を推奨する。インストール・SHA256検証・
