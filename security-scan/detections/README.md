@@ -6,6 +6,8 @@
 **検知コンテンツのみ**で、攻撃手順や安全機構の回避方法は含まない。
 
 > 下の網羅表は [`../../shared/taxonomy.json`](../../shared/taxonomy.json) の `detections_coverage` を人間向けに表したもの。両者のズレ（ルールファイルの過不足）は CI の整合性チェック（`tools/check_consistency.py`）が検出する。タグの追加手順は [`../../shared/README.md`](../../shared/README.md) を参照。
+>
+> 「R」は検知ルール（Rule）番号の頭文字（`taxonomy.json`では`detection_tags`に属し、各ファイルも`r{番号}_*.yml`等の命名）。対になる「G」（G1–G6）はガバナンスイベント（Governance、`taxonomy.json`の`governance_events`）の頭文字。
 
 | ルール | 意味 | Sigma | Falco | Datadog | Elastic |
 |---|---|---|---|---|---|
