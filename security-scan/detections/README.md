@@ -84,9 +84,10 @@
 > (実際のセマンティックバージョン比較)でも足りるが、実際の悪用可否を左右する設定
 > (`session.upload_progress`・SAPI・`memory_limit`等)まで含めてホスト単位で確認したい
 > 場合は、第三者の専用ツール[`aancw/php2shell-scanner`](https://github.com/aancw/php2shell-scanner)
-> (url/local/sshの3モード、Go製の確認専用ツール)の利用を推奨する。8.2未満のブランチに
-> 「公式の修正版が無い」という主張はphp2shell.com自身の記載に基づくもので、php.net自身の
-> アドバイザリでの裏取りはしていない。
+> (url/local/sshの3モード、Go製の確認専用ツール)の利用を推奨する。インストール・SHA256検証・
+> 各モードの使い方は`../php2shell-scanner-notes.md`参照。8.2未満のブランチに「公式の修正版が
+> 無い」という主張はphp2shell.com自身の記載に基づくもので、php.net自身のアドバイザリでの
+> 裏取りはしていない。
 >
 > R16・R17は、Webサーバーソフトウェア本体(Apache httpd / Nginx)に実在する重大CVEの検知。
 > R16はApache httpdのmod_http2(HTTP/2処理)のダブルフリー(CVE-2026-23918、CVSS 8.8、httpd 2.4.67で
