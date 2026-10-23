@@ -31,6 +31,11 @@ R22(`detections/sigma/r22_bind_gsstsig_memcorrupt.yml` 等)は、namedのクラ�
   対象は`netcheck`と同じ許可範囲判定(既定: 社内のプライベートIP)に限定し、`scripts/
   zgrab2_guard.py`と同じく`netcheck/netcheck.py`の判定ロジックを再利用する。
 - SARIF 2.1.0 での出力にも対応(`--out`)。`vuln_triage.html` に読み込める。
+- **ログ確認(任意、`--log-path` または `--journalctl-unit`)**: namedのメッセージログ
+  (syslog/journal)から、R22のSigmaルールと同じパターン——assertion failure特有の行
+  (`INSIST(`・`REQUIRE(`・`exiting (due to fatal error)`等)が、GSS-TSIG/TKEY文脈の近く
+  (前後3行以内)に現れていないかを確認する。これは「クラッシュが起きたこと」の確認であり、
+  CVE-2026-94300固有の確証ではない(他のnamedクラッシュでも同じ形になりうる)。
 
 ## できないこと・正直な限界
 
@@ -50,6 +55,8 @@ R22(`detections/sigma/r22_bind_gsstsig_memcorrupt.yml` 等)は、namedのクラ�
 python3 scripts/bind_version_check.py
 python3 scripts/bind_version_check.py --out bind_check.sarif
 python3 scripts/bind_version_check.py --query 127.0.0.1 --i-own-these
+python3 scripts/bind_version_check.py --log-path /var/log/syslog
+python3 scripts/bind_version_check.py --journalctl-unit named
 ```
 
 ## 検証
@@ -66,5 +73,10 @@ python3 scripts/bind_version_check.py --query 127.0.0.1 --i-own-these
   許可範囲外(拒否・終了コード2)・`--i-own-these`なし(拒否・終了コード2)の3パターンを
   このサンドボックスで実行確認した。実際にBINDが稼働しているリゾルバに対する応答の解析は
   未検証(稼働中のBINDがこのサンドボックスに無いため)。
+- ログ確認は、合成したsyslog行(assertion failure行をGSS-TSIG/TKEY文脈の近くに置いたもの、
+  離して置いたもの)でユニットテストし、意図どおり前者だけ検知することを確認した。
+  `--journalctl-unit named`はこのサンドボックスで実行し(named自体は存在しないため該当ログは
+  0件)、エラーにならず正常終了することを確認した。実際のnamedクラッシュログでの検証は
+  未実施(実機のBINDが無いため)。
 
 > 確認・検知の設計に限定。攻撃の実行手順やエクスプロイトコードは含めない。

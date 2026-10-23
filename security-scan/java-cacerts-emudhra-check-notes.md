@@ -25,6 +25,10 @@ CVE-2026-91403(CVSS 9.1、Oracle Security Alert、IPAも同日注意喚起)は�
 - `java -version` の出力を、IPAが「脆弱な版」として列挙したバージョン文字列
   (`27`, `26.0.2`, `25.0.4.1`, `21.0.12.1`, `17.0.20.1`, `11.0.32.1`, `8u503`)と突き合わせる。
 - SARIF 2.1.0 での出力にも対応(`--out`)。`vuln_triage.html` に読み込める。
+- **ログ確認(任意、`--log-path`)**: アプリのログファイルから、TLSハンドシェイク失敗
+  (`PKIX path validation failed`等)の行のうち、疑わしいルートCA名(`emSign`/`AAA Certificate
+  Services`)への言及があるものを探す。**`javax.net.debug=ssl`等のJSSEデバッグログが有効な
+  場合のみ意味のある情報を持つ**(通常運用では証明書チェーンの詳細はログに出ないことが多い)。
 
 ## できないこと・正直な限界
 
@@ -35,6 +39,8 @@ CVE-2026-91403(CVSS 9.1、Oracle Security Alert、IPAも同日注意喚起)は�
 - IPAの「脆弱な版」一覧は固定のバージョン文字列のみ。一覧外(より古い版、より新しい未確認の版)が
   安全という意味ではない。
 - cacerts のパスワードは既定で `changeit`(JDK標準)。変更している場合は `--storepass` で指定。
+- ログ確認は見つからない場合でも「安全」の確証にはならない(デバッグログが無効なら
+  そもそも何も出力されていないだけの可能性が高い)。
 
 ## 使い方
 
@@ -42,6 +48,7 @@ CVE-2026-91403(CVSS 9.1、Oracle Security Alert、IPAも同日注意喚起)は�
 python3 scripts/java_cacerts_emudhra_check.py
 python3 scripts/java_cacerts_emudhra_check.py --out java_cacerts_emudhra.sarif
 python3 scripts/java_cacerts_emudhra_check.py --storepass <custom>
+python3 scripts/java_cacerts_emudhra_check.py --log-path /var/log/myapp/application.log
 ```
 
 ## 検証
@@ -62,5 +69,8 @@ python3 scripts/java_cacerts_emudhra_check.py --storepass <custom>
   実際に含む環境がこのサンドボックスには無いため、該当エントリが見つかった場合の出力は
   コード上の確認のみ(`find_suspect_roots()` のロジック自体は、既知のDigiCertエントリへの
   マッチで間接的に検証済み)。
+- ログ確認(`--log-path`)は、疑わしいルートCA名を伴うTLS失敗行、伴わないTLS失敗行の両方を
+  含む合成ログファイルで実行確認し、それぞれ正しく区別して報告することを確認した
+  (`specific`/`generic`の分類、SARIF出力への反映を含む)。
 
 > 確認・検知の設計に限定。攻撃の実行手順や安全機構の回避方法は含めない。

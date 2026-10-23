@@ -25,6 +25,12 @@ BIND 9.20.30 / 9.21.27で修正)の対象になりうるかを確認する(確�
     のTXTレコード(version.bind)を1回だけ問い合わせ、応答のバージョン文字列を照合する。
     これはBIND運用で広く使われる標準的な確認手法そのもの(悪用ではない)。対象は
     netcheck と同じ許可範囲判定(既定: 社内のプライベートIP)に限定する。
+  - ログ確認(任意、--log-path または --journalctl-unit): named のメッセージログ
+    (syslog/journal)から、R22のSigmaルールが検知するのと同じパターン——assertion
+    failure特有の行(`INSIST(`・`REQUIRE(`・`exiting (due to fatal error)`等)が、
+    GSS-TSIG/TKEY文脈の近く(前後数行以内)に現れていないかを確認する。これは「クラッシュが
+    起きたこと」の確認であり、CVE-2026-94300固有の確証ではない点に注意(他のnamedクラッシュ
+    でも同じ形になりうる)。
 
 安全のための制限:
   - **確認だけ**。named の設定変更、ゾーンデータの書き換え、ネットワークへの送信は
@@ -39,6 +45,8 @@ BIND 9.20.30 / 9.21.27で修正)の対象になりうるかを確認する(確�
     python3 scripts/bind_version_check.py
     python3 scripts/bind_version_check.py --out bind_check.sarif
     python3 scripts/bind_version_check.py --query 127.0.0.1 --i-own-these
+    python3 scripts/bind_version_check.py --log-path /var/log/syslog
+    python3 scripts/bind_version_check.py --journalctl-unit named
 
 標準ライブラリだけで動く(Python 3.8 以上)。
 """
@@ -67,6 +75,12 @@ CVES = [
     ("CVE-2026-19630", "名前圧縮の多用によるリソース枯渇", "DoS"),
     ("CVE-2026-97313", "RPZゾーンのrecursive-only不一致でassertion failure", "DoS"),
 ]
+
+# R22のSigmaルール(r22_bind_gsstsig_memcorrupt.yml)のselection_named_crash /
+# selection_gss_tsig_context と同じパターン。
+ASSERTION_MARKERS = ["INSIST(", "REQUIRE(", "exiting (due to fatal error)", "reached assertion"]
+GSS_TSIG_MARKERS = ["GSS-TSIG", "tkey", "TKEY"]
+LOG_CONTEXT_WINDOW = 3  # 前後何行まで文脈とみなすか
 
 REFERENCE = (
     "ISC BIND 9セキュリティリリース(2026-10-21、9.20.30/9.21.27で修正): "
@@ -216,7 +230,45 @@ def check_query(target: str, timeout: float = 3.0) -> tuple[str, str, str | None
     return severity, "%s: %s" % (target, message), txt
 
 
-def to_sarif(severity: str, message: str, version_text: str | None) -> dict:
+def read_log_lines(log_path: str, journalctl_unit: str) -> tuple[list[str], str | None]:
+    if journalctl_unit:
+        try:
+            out = subprocess.run(
+                ["journalctl", "-u", journalctl_unit, "-n", "5000", "--no-pager"],
+                capture_output=True, text=True, timeout=30,
+            )
+        except FileNotFoundError:
+            return [], "journalctl コマンドが見つかりません。"
+        except Exception as e:
+            return [], "journalctl の実行に失敗しました: %s" % e
+        if out.returncode != 0 and not out.stdout:
+            return [], "journalctl -u %s の実行に失敗しました: %s" % (journalctl_unit, (out.stderr or "").strip()[:200])
+        return out.stdout.splitlines(), None
+
+    try:
+        with open(log_path, encoding="utf-8", errors="replace") as f:
+            return f.readlines(), None
+    except OSError as e:
+        return [], "%s の読み取りに失敗しました: %s" % (log_path, e)
+
+
+def scan_named_log_for_crash(lines: list[str]) -> list[tuple[int, str]]:
+    """R22のSigmaルールと同じパターン(assertion failure + GSS-TSIG/TKEY文脈)をログから探す。
+    行単位の単純な文字列一致・前後数行の文脈確認のみ(構文解析はしない)。"""
+    hits = []
+    n = len(lines)
+    for i, ln in enumerate(lines):
+        if not any(marker in ln for marker in ASSERTION_MARKERS):
+            continue
+        lo, hi = max(0, i - LOG_CONTEXT_WINDOW), min(n, i + LOG_CONTEXT_WINDOW + 1)
+        window = "".join(lines[lo:hi])
+        if any(marker in window for marker in GSS_TSIG_MARKERS):
+            hits.append((i + 1, ln.rstrip()))
+    return hits
+
+
+def to_sarif(severity: str, message: str, version_text: str | None,
+             log_hits: list[tuple[int, str]] | None = None) -> dict:
     level = {"high": "error", "medium": "warning", "info": "note"}.get(severity, "warning")
     results = [{
         "ruleId": "bind-version-check",
@@ -225,6 +277,15 @@ def to_sarif(severity: str, message: str, version_text: str | None) -> dict:
         "locations": [{"physicalLocation": {"artifactLocation": {"uri": "bind:version"}}}],
         "properties": {"severityLabel": severity, "versionText": version_text or ""},
     }]
+    for lineno, text in (log_hits or []):
+        results.append({
+            "ruleId": "bind-log-assertion-near-gsstsig",
+            "level": "error",
+            "message": {"text": "ログ%d行目: assertion failure行がGSS-TSIG/TKEY文脈の近くに見つかりました: %s %s"
+                                 % (lineno, text, REFERENCE)},
+            "locations": [{"physicalLocation": {"artifactLocation": {"uri": "bind:log"}, "region": {"startLine": lineno}}}],
+            "properties": {"severityLabel": "high"},
+        })
     return {
         "version": "2.1.0",
         "$schema": SARIF_SCHEMA,
@@ -244,6 +305,8 @@ def main() -> int:
     ap.add_argument("--query", default="", help="このホストのnamedではなく、指定したリゾルバにCHAOS TXT問い合わせで確認する(要 --i-own-these)")
     ap.add_argument("--i-own-these", action="store_true", dest="consent",
                     help="--query の対象は、自社が管理している(または書面で許可を得た)ものである")
+    ap.add_argument("--log-path", default="", help="任意: namedのログファイル(syslog等)からassertion failureを探す")
+    ap.add_argument("--journalctl-unit", default="", help="任意: --log-path の代わりに、指定したsystemdユニットのjournalctlから探す(例: named, bind9)")
     args = ap.parse_args()
 
     if args.query:
@@ -274,9 +337,28 @@ def main() -> int:
     for cve, subsystem, note in CVES:
         print("  %s (%s): %s" % (cve, subsystem, note))
 
+    log_hits: list[tuple[int, str]] = []
+    if args.log_path or args.journalctl_unit:
+        lines, log_err = read_log_lines(args.log_path, args.journalctl_unit)
+        print()
+        if log_err:
+            print("ログ確認エラー: " + log_err, file=sys.stderr)
+        else:
+            source = ("journalctl -u %s" % args.journalctl_unit) if args.journalctl_unit else args.log_path
+            log_hits = scan_named_log_for_crash(lines)
+            print("ログ確認(%s、%d行):" % (source, len(lines)))
+            if log_hits:
+                print("  assertion failure行がGSS-TSIG/TKEY文脈の近くに%d件見つかりました:" % len(log_hits))
+                for lineno, text in log_hits[:10]:
+                    print("    行%d: %s" % (lineno, text))
+                print("  これはnamedのクラッシュを示すものであり、CVE-2026-94300固有の確証ではない点に注意"
+                      "(他の原因のクラッシュでも同じ形になりうる)。")
+            else:
+                print("  assertion failure行は見つからない、またはGSS-TSIG/TKEY文脈の近くにはありませんでした。")
+
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:
-            json.dump(to_sarif(severity, message, version_text), f, ensure_ascii=False, indent=2)
+            json.dump(to_sarif(severity, message, version_text, log_hits), f, ensure_ascii=False, indent=2)
         print()
         print("%s を書き出しました。" % args.out)
 
