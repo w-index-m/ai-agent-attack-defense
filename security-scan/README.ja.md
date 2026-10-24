@@ -26,7 +26,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`security-summary.ja.md`](security-summary.ja.md) / [`.en.md`](security-summary.en.md) | **セキュリティ問題のまとめ**。攻撃の7段と対応、既知の脆弱性、企業が取るべき対応、作ったもの、検証の状態（正直に）、次にやること。まずここから読む。 |
 | [`defense-playbook.ja.md`](defense-playbook.ja.md) / [`.en.md`](defense-playbook.en.md) | **AI エージェント攻撃 防御プレイブック**。Strix / Cairn / Hermes / ARTEX の見える動きを前提に、攻撃連鎖の7段ごとの予防・検知・応答・確認、インシデント対応、罠（ハニートークン）の設計メモ、最初の1週間、**未実装の一覧**。 |
 | [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md) | 防御の4層（予防・検知・応答・復旧）と、外部ロードマップ案の対応づけ・評価・不足分の補い方。R1–R8 と ③ の区別、カーネルFIM 解説つき。 |
-| [`glossary.ja.md`](glossary.ja.md) | 用語集（やさしい日本語）。FIM / CSP / WORM / egress / C2 / RCE / IAM などを1行ずつ。新語が出たら追記する。 |
+| [`glossary.ja.md`](glossary.ja.md) / [`.en.md`](glossary.en.md) (EN) | 用語集（やさしい日本語）。FIM / CSP / WORM / egress / C2 / RCE / IAM などを1行ずつ。新語が出たら追記する。 |
 
 ### AIエージェントが攻撃する側（Gambit系：Strix / Cairn / Hermes / ARTEX）
 

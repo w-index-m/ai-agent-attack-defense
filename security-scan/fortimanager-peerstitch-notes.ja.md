@@ -2,6 +2,10 @@
 
 English: [`fortimanager-peerstitch-notes.en.md`](fortimanager-peerstitch-notes.en.md)
 
+> **原典の公開日: 2026-10-14**（Unit 42, "Unit 42 Uncovers PEERSTITCH, a Stealthy FortiGate
+> Implant"）。侵入自体の発生時期は2024年9月（本書 §1参照）で、原典の公開とは別の日付なので
+> 混同しないこと。
+
 Unit 42 の実インシデント報告 **"Unit 42 Uncovers PEERSTITCH, a Stealthy FortiGate Implant"**
 （2026-10-14公開）の分析。**本件にAIエージェントの関与は一切記載されていない**（伝統的なAPT型の侵入）。
 このリポジトリが主軸とする「AIが攻撃する側」「LLMシステムが標的になる側」のどちらでもないが、

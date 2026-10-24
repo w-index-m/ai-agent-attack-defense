@@ -2,6 +2,10 @@
 
 日本語: [`fortimanager-peerstitch-notes.ja.md`](fortimanager-peerstitch-notes.ja.md)
 
+> **Original publication date: 2026-10-14** (Unit 42, "Unit 42 Uncovers PEERSTITCH, a Stealthy
+> FortiGate Implant"). The intrusion itself took place in September 2024 (see §1 below) — a
+> different date from the article's publication; don't conflate the two.
+
 Analysis of Unit 42's real-incident report **"Unit 42 Uncovers PEERSTITCH, a Stealthy FortiGate
 Implant"** (published 2026-10-14). **This incident involves no AI-agent participation whatsoever** —
 it is a traditional APT-style intrusion. It fits neither of this repository's two main axes ("AI as
