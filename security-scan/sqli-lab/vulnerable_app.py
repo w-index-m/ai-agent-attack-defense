@@ -440,4 +440,9 @@ if __name__ == "__main__":
             f.write("This is a public document. Nothing sensitive here.\n")
 
     init_db()
-    app.run(host="127.0.0.1", port=5000)
+
+    # VULN_APP_HOST: bind address for the main app only (defaults to loopback).
+    # The internal-only service above always stays on 127.0.0.1 -- that is the
+    # SSRF demo's whole premise (unreachable except from this process itself).
+    bind_host = os.environ.get("VULN_APP_HOST", "127.0.0.1")
+    app.run(host=bind_host, port=5000)
