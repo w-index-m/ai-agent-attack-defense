@@ -35,7 +35,7 @@ tags (R1–R11, G1–G6), see [`../shared/taxonomy.json`](../shared/taxonomy.jso
 | [`security-summary.en.md`](security-summary.en.md) (EN) / [`.ja.md`](security-summary.ja.md) (JA) | **Security summary**: the seven attack steps and their defenses, known vulnerabilities, what a company should do, what was built, verification status (honestly), and next steps. Start here. |
 | [`defense-playbook.en.md`](defense-playbook.en.md) (EN) / [`.ja.md`](defense-playbook.ja.md) (JA) | **Defense playbook for AI-agent attacks**: what Strix / Cairn / Hermes / ARTEX look like, then prevent / detect / respond / verify for each of the seven chain steps, incident flow, a honeytoken design memo, a first-week plan, and an explicit **not-implemented list**. |
 | [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md) (JA) | The four defense layers (prevent / detect / respond / recover) and how an external rollout-roadmap proposal maps onto them: assessment, cautions, and the gaps this repo fills. Clarifies R1–R8 vs ③, with a kernel-FIM primer. |
-| [`glossary.ja.md`](glossary.ja.md) (JA) | Plain-language glossary: FIM / CSP / WORM / egress / C2 / RCE / IAM and more, one line each. Grows as new terms come up. |
+| [`glossary.en.md`](glossary.en.md) / [`.ja.md`](glossary.ja.md) (JA) | Plain-language glossary: FIM / CSP / WORM / egress / C2 / RCE / IAM and more, one line each. Grows as new terms come up. |
 
 ### AI agents as the attacker (the Gambit lineage: Strix / Cairn / Hermes / ARTEX)
 
