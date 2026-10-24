@@ -13,6 +13,9 @@ English: [`glossary.en.md`](glossary.en.md)
 
 この4つを重ねて使う考え方を「多層防御（defense in depth）」と呼ぶ。1つの対策に頼らない、というのがポイント。
 
+各層で検討に値するOSS/定番ツールの具体例は [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md)
+「6. 外部からの攻撃に対する防御① ～ ④」にまとめてある。
+
 | # | 層 | やさしい説明 |
 |---|---|---|
 | ① | 予防（prevent） | そもそも攻撃を成立させないこと。攻撃できる入口（攻撃面）を減らす・塞ぐ。本リポの記号は **③**。 |

@@ -81,6 +81,59 @@ R1–R8（＝検知の中身）の早見は [`README.ja.md`](README.ja.md) を�
 
 ---
 
+## 6. 外部からの攻撃に対する防御① ～ ④（Claudeによる提案・2026-10時点）
+
+ここまでの外部資料・本リポの既存ノートを踏まえ、**4層それぞれで検討に値するOSS/定番ツール**を
+Claude自身の見解としてまとめる。**既存セクション(1〜5)への追記であり、独自の調査結果ではなく
+一般的に広く使われているツールの紹介に留める**。実際の選定は自分の環境・予算・運用体制に
+合わせて検証すること(ここに挙げたことが「導入すべき」という断定にはならない)。
+
+### ① 予防（攻撃面を減らす・塞ぐ）
+
+| 分野 | OSS/定番ツール例 | 役割 |
+|---|---|---|
+| WAF | [ModSecurity](https://github.com/owasp-modsecurity/ModSecurity) + [OWASP CRS](https://github.com/coreruleset/coreruleset)、[Coraza](https://github.com/corazawaf/coraza)(Go製、ModSecurity互換) | リクエストの悪性パターンをエッジでブロック |
+| コンテナ/Kubernetes Admission制御 | [Kyverno](https://github.com/kyverno/kyverno)、[OPA/Gatekeeper](https://github.com/open-policy-agent/gatekeeper) | 特権コンテナ・host network等の起動そのものをポリシーで拒否(R2の手前) |
+| サプライチェーン署名・検証 | [Sigstore/cosign](https://github.com/sigstore/cosign)、[SLSA](https://slsa.dev/) フレームワーク | コンテナイメージ・成果物の改ざん検知、出所の検証 |
+| 依存関係の自動更新 | [Renovate](https://github.com/renovatebot/renovate)（本リポはDependabot相当の考え方。`dep-cve-check-notes.md`参照） | 既知脆弱性を抱えた古い依存の放置を防ぐ |
+| 構成の堅牢化チェック | [Lynis](https://github.com/CISOfy/lynis)、[OpenSCAP](https://github.com/OpenSCAP/openscap)、CIS Benchmarks | OS/ミドルウェアの不要設定・弱い既定値を棚卸し |
+| 秘密情報管理 | [HashiCorp Vault](https://github.com/hashicorp/vault)、[Infisical](https://github.com/Infisical/infisical) | 平文保存・ハードコードされた認証情報の排除(連鎖②⑤対策) |
+| ゼロトラスト/踏み台の最小化 | [Teleport](https://github.com/gravitational/teleport)、[Tailscale](https://tailscale.com/)、WireGuard | 管理面を直接インターネットに晒さない |
+
+### ② 検知（起きたことを見つける）
+
+| 分野 | OSS/定番ツール例 | 役割 |
+|---|---|---|
+| ネットワーク型IDS | [Suricata](https://github.com/OISF/suricata)、[Zeek](https://github.com/zeek/zeek) | 通信のシグネチャ検知・メタデータ化(本リポのSigmaルールの変換先候補) |
+| ホスト型EDR/監視 | [osquery](https://github.com/osquery/osquery)、[Wazuh](https://github.com/wazuh/wazuh)(既出)、[Elastic Defend](https://github.com/elastic/endpoint-package) | プロセス・ファイル・レジストリ等の継続監視 |
+| コンテナ/カーネルランタイム検知 | [Falco](https://github.com/falcosecurity/falco)(既出)、[Tracee](https://github.com/aquasecurity/tracee) | eBPFベースで異常なシステムコールを検知(R2/R5/R7) |
+| SIEM/ログ相関 | Wazuh・Elastic Security(既出)、[Vector](https://github.com/vectordotdev/vector)/[Fluent Bit](https://github.com/fluent/fluent-bit)(ログ集約パイプライン) | R1–R24の実装先 |
+| ハニートークン | [Thinkst Canarytokens](https://github.com/thinkst/canarytokens) | 誤検知の少ない侵害シグナル(本用語集の「ハニートークン」参照) |
+| 脅威インテリ共有 | [MISP](https://github.com/MISP/MISP) | IOC・脅威情報の組織内外での共有 |
+
+### ③ 応答（見つけたら止める・封じ込める）
+
+| 分野 | OSS/定番ツール例 | 役割 |
+|---|---|---|
+| 自動IP遮断 | [CrowdSec](https://github.com/crowdsecurity/crowdsec)(既出)、[fail2ban](https://github.com/fail2ban/fail2ban) | 偵察バースト等への自動ブロック(§4の注意点どおり、allowlist/レート制限とセットで) |
+| SOAR(自動化プレイブック) | [Shuffle](https://github.com/Shuffle/Shuffle)、[TheHive](https://github.com/TheHive-Project/TheHive) + [Cortex](https://github.com/TheHive-Project/Cortex) | 検知から対応手順の自動実行・ケース管理までを繋ぐ |
+| ネットワーク隔離 | Kubernetes NetworkPolicy、[Cilium](https://github.com/cilium/cilium) | 侵害された区画の横移動(lateral movement)を自動で遮断 |
+
+§4-6の注意点のとおり、**自律隔離(自動遮断)は自爆リスク**。最初はアラートのみ、破壊的な対応は人の承認を挟む段階導入を推奨。
+
+### ④ 復旧（壊されても元に戻す）
+
+| 分野 | OSS/定番ツール例 | 役割 |
+|---|---|---|
+| バックアップ(汎用) | [restic](https://github.com/restic/restic)、[Borg Backup](https://github.com/borgbackup/borg) | 暗号化・重複排除つきの定番バックアップツール |
+| Kubernetesバックアップ | [Velero](https://github.com/vmware-tanzu/velero) | クラスタ/永続ボリュームの復元 |
+| 不変バックアップ(WORM) | S3 Object Lock / Azure 不変BLOB / GCP Bucket Lock / [MinIO Object Lock](https://github.com/minio/minio)(既出の付録参照) | ランサムでも消せない保存先 |
+| IaCによる即時再構築 | [Terraform](https://github.com/hashicorp/terraform) + [ArgoCD](https://github.com/argoproj/argo-cd)(GitOps) | 汚染された環境を、既知の良好な状態から作り直す |
+
+復旧層で最も見落とされやすいのは**復元テストそのもの**(バックアップは取るが戻せるか検証していない、というケース)。定期的な復元訓練(机上訓練とは別に、実際にリストアする訓練)をセットにすること。
+
+---
+
 ## 付録: クラウド/環境別の対応（製品名は変わる、役割は共通）
 
 本リポのツール（netcheck / vuln_triage / detections）は**クラウド非依存**。AWS 固有ではない。
