@@ -34,6 +34,7 @@
 | R21 | 既知の昇格経路なしに非特権プロセスがroot(UID 0)へ遷移(Infinity Core、6件のLinuxカーネルLPE脆弱性、CVE-2026-98260等を狙う探索的ヒューリスティック) | ✅ | — | ✅ | — |
 | R22 | GSS-TSIG/TKEY文脈でのnamedのassertion failureクラッシュ、またはCHAOS版数バナーでの修正前BIND検出(2026-10-21のBIND 9セキュリティリリース、CVE-2026-94300等4件) | ✅ | — | ✅ | — |
 | R23 | F5 BIG-IP APMのOAuth UserInfo要求失敗の反復、または異常に長いAuthorizationヘッダー(CVE-2026-94127、ヒープオーバーフローによる事前認証RCE、悪用確認済み・CISA KEV) | ✅ | — | ✅ | — |
+| R24 | brotli文脈近くのアプリケーションworkerクラッシュ(CVE-2026-111497、通称Node2Shell/HTTP2Shell、Brotliデコーダの境界外書き込み、探索的ヒューリスティック・未確証) | ✅ | — | ✅ | — |
 
 > R9–R11 は、本連鎖（Strix/Cairn/Hermes 型の攻撃エージェント）ではなく、**LLM システム自体が標的になる側**
 > （`../llm-target-attacks.ja.md`）の検知。R9/R10 は標準的なプロキシ/ネットワークログで検知できるが、
@@ -163,6 +164,21 @@
 > シェル上で動かすことが前提**。`tmsh`でのバージョン確認、apmログの集計、TMMコアファイルの有無、
 > `tmm.finish`のハッシュ算出をJPCERTの手順どおりに自動化しただけで、独自の判定ロジックは
 > 追加していない)を使うこと。
+>
+> R24は、実在するCVE-2026-111497(通称「Node2Shell」、Brotliデコーダの境界外書き込み)の検知。
+> 元々はNode.js本体の脆弱性として公開(2026-10-21、Node.js 22.23.4/24.22.1/26.12.1で修正)だが、
+> 2026-10-22公開のGitHub公式Security Advisory(GHSA-9v8h-qqgm-4m35、Critical)で、PyPIの
+> `brotli`(1.0.3〜1.2.0が脆弱、1.2.1で修正)と`brotlicffi`(1.0.3〜1.2.0.xが脆弱、1.2.1.0で修正)
+> への波及が確認された。`requests`・`httpx`・`aiohttp`等が自動的に読み込むため、直接
+> `import brotli`していないアプリも間接的に影響を受けうる。2026-10-23時点で、Aikido Securityの
+> 指摘では**pip-audit/Dependabot/Safety等の脆弱性DBがこのCVEをPyPIパッケージに正しく
+> マッピングできていない**可能性がある。**R13(wp2shell)やR15(PHP2Shell)と違い、ベンダー/
+> 研究者が公開したリクエスト単位・ログ単位のIOCは無い**ため、R24は本リポジトリ独自に構成した
+> 未確証の探索的ヒューリスティック(gunicorn/uwsgi等のworkerクラッシュパターンを、brotli文脈の
+> 近くで探すだけ)である点に注意。ホスト側のパッケージバージョン確認には
+> `scripts/python_brotli_check.py`(確認専用。このインタプリタ、または`--python`で指定した
+> 別のインタプリタ/venvの`brotli`/`brotlicffi`バージョンを`importlib.metadata`で確認)を
+> 使うこと。
 
 ## 使い方・注意
 

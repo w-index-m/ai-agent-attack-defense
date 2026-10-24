@@ -1,0 +1,70 @@
+title: Application worker crash near Brotli decompression context, consistent with CVE-2026-111497 ("Node2Shell"/"HTTP2Shell")
+id: 2c6d8f1a-5e3b-4d7c-9a1f-r24brotli00000
+status: experimental
+description: >
+  Detects indicators of CVE-2026-111497, an out-of-bounds write in the
+  Brotli decoder that can leak memory or lead to remote code execution
+  when a process decompresses attacker-controlled Brotli data. Originally
+  disclosed against Node.js (dubbed "Node2Shell"; fixed 2026-10-21 in
+  Node.js 22.23.4/24.22.1/26.12.1, among 9 other CVEs in the same
+  release), then found to affect the Python PyPI packages `brotli`
+  (1.0.3-1.2.0, fixed 1.2.1) and `brotlicffi` (1.0.3-1.2.0.x, fixed
+  1.2.1.0) via GitHub Security Advisory GHSA-9v8h-qqgm-4m35 (critical,
+  2026-10-22). Because `requests`/`httpx`/`aiohttp` auto-load these
+  packages when present, exposure is broader than direct `import brotli`
+  use. Aikido Security additionally reports (as of 2026-10-23, not yet
+  independently corroborated) that the same root cause extends to
+  "HTTP2Shell" -- any HTTP client/server that decompresses Brotli
+  responses/requests.
+  No vendor or researcher has published a request-level or log-level IOC
+  for this CVE (unlike wp2shell/R13 or PHP2Shell/R15) -- this rule is
+  this repo's own constructed heuristic, not a confirmed signature. It
+  looks for a generic WSGI/application worker crash (gunicorn/uwsgi
+  patterns) occurring near "brotli" context (module name in a traceback,
+  or a Content-Encoding: br request/response nearby), on the theory that
+  an out-of-bounds write serious enough to corrupt memory is also likely
+  to crash the worker in many failed-exploitation cases. This is a weak,
+  unconfirmed signal -- treat a hit as a lead to investigate, not
+  evidence of exploitation.
+references:
+  - https://github.com/advisories/GHSA-9v8h-qqgm-4m35
+  - https://www.aikido.dev/blog/python-packages-vulnerable-node2shell-brotli-cve-2026-111497
+  - ../../scripts/python_brotli_check.py
+author: ai-agent-attack-defense
+date: 2026-10-24
+logsource:
+  category: application
+  product: python
+detection:
+  selection_worker_crash:
+    message|contains:
+      - 'was sent SIGSEGV'
+      - 'WORKER TIMEOUT'
+      - 'DAMN ! worker'
+      - 'Segmentation fault'
+      - 'core dumped'
+  selection_brotli_context:
+    message|contains:
+      - 'brotli'
+      - 'Brotli'
+      - 'Content-Encoding: br'
+  condition: selection_worker_crash and selection_brotli_context
+  # Unlike R15/R16/R17's two-pronged (crash + version-banner) pattern,
+  # there is no equivalent network-visible version banner for a Python
+  # package dependency, so this rule has only the crash-context leg.
+  # Prefer scripts/python_brotli_check.py for an authoritative per-host
+  # version answer instead of relying on this rule alone.
+fields:
+  - host
+  - message
+  - src_ip
+falsepositives:
+  - This is an unconfirmed, repo-constructed heuristic with no published IOC behind it (unlike R13/R15) -- a generic WSGI worker crash mentioning "brotli" in its traceback context is not proof of CVE-2026-111497 specifically; any unrelated crash in or near Brotli-handling code (compression bugs, OOM, an unrelated dependency crash) can match the same generic pattern.
+  - The word "brotli"/"Brotli" appearing in a log line is extremely broad (library names, module paths, unrelated log noise) -- tune this selection to your own application's log format before trusting it.
+  - Confirm the installed `brotli`/`brotlicffi` package version with scripts/python_brotli_check.py before treating a hit as more than a lead. As of 2026-10-23, advisory databases (pip-audit, Dependabot, Safety) reportedly do not yet correctly map this CVE to the PyPI packages, so dependency-scanner silence is not proof of being unaffected either.
+level: medium
+tags:
+  - attack.initial_access
+  - attack.t1190
+  - attack.impact
+  - attack.t1499
