@@ -26,6 +26,7 @@
     "R21": {"kind": "detection", "name": "既知の昇格経路なしに非特権プロセスがroot(UID 0)へ遷移（Infinity Core、6件のLinuxカーネルLPE脆弱性、CVE-2026-98260等を狙う探索的ヒューリスティック）"},
     "R22": {"kind": "detection", "name": "GSS-TSIG/TKEY文脈でのnamedのassertion failureクラッシュ、またはCHAOS版数バナーでの修正前BIND検出（2026-10-21のBIND 9セキュリティリリース、CVE-2026-94300等4件）"},
     "R23": {"kind": "detection", "name": "F5 BIG-IP APMのOAuth UserInfo要求失敗の反復、または異常に長いAuthorizationヘッダー（CVE-2026-94127、ヒープオーバーフローによる事前認証RCE、悪用確認済み・CISA KEV）"},
+    "R24": {"kind": "detection", "name": "brotli文脈近くのアプリケーションworkerクラッシュ（CVE-2026-111497、通称Node2Shell/HTTP2Shell、Brotliデコーダの境界外書き込み、探索的ヒューリスティック・未確証）"},
     "③": {"kind": "control", "name": "攻撃面最小化（ネット直結の露出を断つ）"},
     "③CSP": {"kind": "control", "name": "CSP による読み込み制御"}
   },
@@ -82,7 +83,8 @@
       "R20": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R21": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R22": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R23": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
+      "R23": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
+      "R24": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
     }
   }
 }

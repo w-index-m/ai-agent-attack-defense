@@ -1,0 +1,18 @@
+{
+  "name": "[R24] Application worker crash near Brotli context, consistent with CVE-2026-111497 (\"Node2Shell\"/\"HTTP2Shell\") -- exploratory heuristic, no published IOC",
+  "type": "log_detection",
+  "message": "Indicators of CVE-2026-111497, an out-of-bounds write in the Brotli decoder that can leak memory or lead to RCE when decompressing attacker-controlled Brotli data. Originally disclosed against Node.js (\"Node2Shell\", fixed 2026-10-21 in 22.23.4/24.22.1/26.12.1), then found to affect PyPI packages `brotli` (1.0.3-1.2.0, fixed 1.2.1) and `brotlicffi` (1.0.3-1.2.0.x, fixed 1.2.1.0) via GHSA-9v8h-qqgm-4m35 (critical, 2026-10-22). requests/httpx/aiohttp auto-load these packages when present, so exposure is broader than direct `import brotli` use. Aikido's unverified claim (2026-10-23) extends this to \"HTTP2Shell\" -- any HTTP client/server decompressing Brotli.\n\nNO VENDOR OR RESEARCHER HAS PUBLISHED A REQUEST-LEVEL OR LOG-LEVEL IOC for this CVE (unlike wp2shell/R13 or PHP2Shell/R15) -- this is this repo's own constructed heuristic, not a confirmed signature: a generic WSGI/application worker crash (gunicorn/uwsgi patterns) near \"brotli\" context. Weak, unconfirmed signal -- treat a hit as a lead, not evidence. Confirm the installed brotli/brotlicffi version with scripts/python_brotli_check.py; as of 2026-10-23 pip-audit/Dependabot/Safety reportedly do not yet map this CVE to these PyPI packages, so scanner silence is not proof of being unaffected.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1190", "technique:T1499", "tactic:initial-access"],
+  "queries": [
+    {
+      "name": "worker_crash_near_brotli_context",
+      "query": "source:python (@message:*\"was sent SIGSEGV\"* OR @message:*\"WORKER TIMEOUT\"* OR @message:*\"DAMN ! worker\"* OR @message:*\"Segmentation fault\"* OR @message:*\"core dumped\"*) (@message:*brotli* OR @message:*Brotli* OR @message:*\"Content-Encoding: br\"*)",
+      "aggregation": "count",
+      "groupByFields": ["host"]
+    }
+  ],
+  "cases": [
+    { "name": "Worker crash near Brotli context observed (unconfirmed heuristic)", "status": "medium", "condition": "worker_crash_near_brotli_context > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

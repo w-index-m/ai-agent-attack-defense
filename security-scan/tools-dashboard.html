@@ -240,10 +240,24 @@ python3 scripts/php_version_check.py --log-path /var/log/php-fpm/error.log</code
       <div class="tagrow"><span class="chip">標準ライブラリのみ</span><span class="chip">メモリ破壊・エクスプロイトは実行しない</span></div>
       <p class="cap" style="margin-bottom:0"><a class="src" href="php-version-check-notes.md">→ 詳細ノート</a></p>
     </div>
+    <div class="card g3">
+      <h3>python_brotli_check.py <span class="badge b-verified">実際の脆弱版→修正版で動作確認済み</span> <span class="chip r">R24</span> <span class="chip llm-no">LLM: なし</span></h3>
+      <p class="path"><code>scripts/python_brotli_check.py</code></p>
+      <p class="cap">Pythonの<code>brotli</code>/<code>brotlicffi</code>パッケージを、
+        CVE-2026-111497(通称「Node2Shell」/「HTTP2Shell」、Brotliデコーダの境界外書き込み、
+        GHSA-9v8h-qqgm-4m35)の修正版表と照合する。<code>requests</code>/<code>httpx</code>/
+        <code>aiohttp</code>が自動的に読み込むため影響範囲が広い。R13・R15と違い
+        ベンダー公開のIOCが無いため、ログ確認部分(任意)は本リポジトリ独自の未確証の
+        探索的ヒューリスティックである旨をツール自身が明記する。</p>
+      <pre><code>python3 scripts/python_brotli_check.py --out brotli_check.sarif
+python3 scripts/python_brotli_check.py --python /path/to/venv/bin/python3</code></pre>
+      <div class="tagrow"><span class="chip">標準ライブラリのみ</span><span class="chip">ベンダー未公開のヒューリスティック(ログ確認部分)</span></div>
+      <p class="cap" style="margin-bottom:0"><a class="src" href="python-brotli-check-notes.md">→ 詳細ノート</a></p>
+    </div>
     <div class="card ext">
       <h3>(参考) この区分は他に未実装</h3>
       <p class="cap">個別インシデント対応ツールは、該当する実在インシデントが見つかるたびに追加する方針
-        (直近はR14→eMudhra、R15→PHP2Shell、R21→Infinity Core、R22→BIND 9、R23→F5 BIG-IP APM)。新しい実在の脆弱性情報を確認した場合は、ここに追加を検討する。</p>
+        (直近はR14→eMudhra、R15→PHP2Shell、R21→Infinity Core、R22→BIND 9、R23→F5 BIG-IP APM、R24→Brotli/Node2Shell)。新しい実在の脆弱性情報を確認した場合は、ここに追加を検討する。</p>
     </div>
   </div>
 </section>
@@ -377,7 +391,7 @@ python3 scripts/summarize.py results --fail-on high</code></pre>
     "攻撃の実行手順・エクスプロイト・安全機構の回避方法は提供しない（確認・検知の観点のみ）。",
     "すべてのツールは確認専用(read-only)。更新の適用・設定変更・ネットワークへの能動的な攻撃は行わない。",
     "【LLMを使うツール】patch_suggest.py のみ。Semgrepの指摘に対してのみ、自前LLM(OpenAI互換エンドポイント)に最小限の修正diffを作らせる。Trivyの脆弱性はLLMを使わずマニフェストのバージョン表記を書き換えるだけの決め打ちパッチ。gitleaks(秘密情報)は対象外で手動ローテーションを案内するのみ。秘密情報の値はLLMに送らない。自動適用はせず、1件ずつ人がy/N確認する。",
-    "【LLMを使わないツール(標準ライブラリ/決め打ちロジックのみ)】dep_cve_check.py(requirements.txt/package-lock.jsonをOSV.devに照合)、ghsa_lookup.py(GHSA/CVEの構造化データを要約せず転記)、os_patch_check_linux.py(dnf updateinfo)、os_patch_check_windows.py(Get-HotFix/Windows Update API)、java_cacerts_emudhra_check.py(JDK cacertsの確認、R14 eMudhra関連)、linux_kernel_infinitycore_check.py(uname -r/os-releaseの確認、R21 Infinity Core関連)、bind_version_check.py(named -vまたは許可範囲内へのCHAOS TXT問い合わせでBIND 9のバージョン確認、R22 BIND 2026-10-21セキュリティリリース関連)、php_version_check.py(php -vのバージョン確認+任意でphp-fpmログのworkerクラッシュパターン確認、R15 PHP2Shell関連)、f5_bigip_apm_check.py(tmshバージョン確認・apmログのOAuth失敗反復集計・TMMコアファイル有無・tmm.finishハッシュ算出、R23 F5 BIG-IP APM CVE-2026-94127関連、実機のbashシェル上で動かすことが前提)、netcheck.py(自社IP・ホストへの確認専用スキャン、ブラウザUIあり)、zgrab2_guard.py(zgrab2への入力を許可範囲内に限定するガード)、summarize.py(Semgrep/Trivy/gitleaks/ZAP結果の集計のみ)。",
+    "【LLMを使わないツール(標準ライブラリ/決め打ちロジックのみ)】dep_cve_check.py(requirements.txt/package-lock.jsonをOSV.devに照合)、ghsa_lookup.py(GHSA/CVEの構造化データを要約せず転記)、os_patch_check_linux.py(dnf updateinfo)、os_patch_check_windows.py(Get-HotFix/Windows Update API)、java_cacerts_emudhra_check.py(JDK cacertsの確認、R14 eMudhra関連)、linux_kernel_infinitycore_check.py(uname -r/os-releaseの確認、R21 Infinity Core関連)、bind_version_check.py(named -vまたは許可範囲内へのCHAOS TXT問い合わせでBIND 9のバージョン確認、R22 BIND 2026-10-21セキュリティリリース関連)、php_version_check.py(php -vのバージョン確認+任意でphp-fpmログのworkerクラッシュパターン確認、R15 PHP2Shell関連)、f5_bigip_apm_check.py(tmshバージョン確認・apmログのOAuth失敗反復集計・TMMコアファイル有無・tmm.finishハッシュ算出、R23 F5 BIG-IP APM CVE-2026-94127関連、実機のbashシェル上で動かすことが前提)、python_brotli_check.py(brotli/brotlicffiパッケージのバージョン確認+任意でworkerクラッシュパターン確認、R24 CVE-2026-111497 Node2Shell/HTTP2Shell関連)、netcheck.py(自社IP・ホストへの確認専用スキャン、ブラウザUIあり)、zgrab2_guard.py(zgrab2への入力を許可範囲内に限定するガード)、summarize.py(Semgrep/Trivy/gitleaks/ZAP結果の集計のみ)。",
     "【外部の推奨ツール】php2shell-scanner(github.com/aancw/php2shell-scanner)はGo製の第三者ツールで、本リポジトリでは未実装・LLM不使用。PHP2Shell(CVE-2026-109618/109619, R15)の host/url/ssh確認に推奨。インストール・SHA256検証・3モードの使い方はphp2shell-scanner-notes.mdに利用手順書としてまとめてある(本リポジトリのスクリプトではなく、外部ツールのドキュメント)。",
     "質問が『どのツールがLLMを使うか』であれば、上記のLLM使用ツール(patch_suggest.pyのみ)とその範囲(Semgrep指摘のみ)を明記して答える。",
     "個別ツールの使い方・出力形式・検証状況を聞かれたら、このページの各カードの内容に基づいて答える。未検証/モック検証のみの点は、できる/できないを誇張せず正直に伝える。"
