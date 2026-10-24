@@ -1,5 +1,8 @@
 # F5 BIG-IP APM OAuth RCE確認（確認専用）
 
+> **CVE-2026-94127の公表日: 2026-09-22**（F5公式アドバイザリ K000162605）。JPCERT-AT-2026-0028は
+> 2026-09-24公開(本書 §背景参照)。このノート自体は2026-10-23にこのリポジトリへ追加した。
+
 `scripts/f5_bigip_apm_check.py`: F5 BIG-IP APMのOAuth UserInfoハンドラにおけるヒープベースの
 バッファオーバーフロー(CVE-2026-94127、CVSS 9.8、事前認証不要RCE、F5が悪用を確認、CISA KEV掲載。
 [`detections/`](detections/) の R23 参照)の対象になりうるか、または侵害の兆候があるかを確認する。
