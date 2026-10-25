@@ -9,6 +9,10 @@ OSコマンドインジェクション・パストラバーサル・CSRF(クロ�
 さらに実際にStrixを使った第三者の記事(Zenn)との照合をきっかけに、格納型XSS・
 マスアサインメント・SSRF・アカウント列挙の4クラスを追加し、計11クラスに拡張した。
 
+> 全11クラスを脆弱版/修正版ペアで実機検証した記録(スクリプト側ログ・サーバー側ログ・
+> SQLの実行過程・CSRFの実ブラウザ検証を含む)は[`verification-log.ja.md`](verification-log.ja.md)
+> ([English](verification-log.en.md))を参照。
+
 Claude Codeのクラウドサンドボックス環境は外向きのLLM通信がほぼ全てブロックされているため
 (詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md))、Strixのようなエージェント実行は
 ここでは成立しなかった。一方で、**このサンドボックス自体を対象にしたSQLi実証**であれば、
