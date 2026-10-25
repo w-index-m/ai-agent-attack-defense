@@ -13,6 +13,7 @@
 | `strix-local-backend.patch` | strix に当てる 3 ファイルの差分。`local` バックエンド追加＋Docker 事前チェックのゲート＋caido 結合のバックエンド単位ゲート。 |
 | `poc_local_backend.py` | LLM 非依存の検証1。`local` バックエンドでセッション起動→ホスト実行→ソース materialize を確認。 |
 | `poc_caido_free.py` | LLM 非依存の検証3。`create_or_reuse(backend=local)` が caido 非依存で完走し、`caido_client=None`・proxy env 未注入を確認。 |
+| `mock_llm_server.py` | 検証4。実LLMキー不要の、OpenAI互換モックLLMサーバー。疎通確認(非ストリーミング)には`OK`、本番ループ(ストリーミング)には台本どおりのツール呼び出し(`exec_command`→`finish_scan`)を返し、Strixをエンドツーエンドで完走させる。詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md)の「検証4」参照。 |
 
 ## 再現手順
 
@@ -35,6 +36,14 @@ uv run python /path/to/poc_caido_free.py
 export STRIX_RUNTIME_BACKEND=local
 export STRIX_LLM="anthropic/claude-sonnet-5-5"   # LiteLLM の model id
 export LLM_API_KEY="<有効なキー>"
+uv run strix -n -t ./ --scan-mode quick --max-budget 10
+
+# 3c) 実 CLI、ただし実 LLM キー不要（モックLLMでエンドツーエンド完走、検証4）
+python3 /path/to/mock_llm_server.py 8899 &
+export STRIX_RUNTIME_BACKEND=local
+export STRIX_LLM="openai/mock-model"
+export OPENAI_API_BASE="http://127.0.0.1:8899/v1"
+export OPENAI_API_KEY="dummy-mock-key"
 uv run strix -n -t ./ --scan-mode quick --max-budget 10
 ```
 

@@ -180,9 +180,62 @@ uv run strix -n -t ./ --scan-mode quick --max-budget 10
 - シンボリックリンクは `LocalDir` 展開で非サポート（`symlink_not_supported`）。
   `.git` などリンクを含むツリーは除外して渡すのが無難。
 
+### 検証 4: モック LLM によるエンドツーエンド完走（実 LLM キー不要、2026-10-25）
+
+「実 LLM キーでのエンドツーエンドのスキャン完走」は検証 2 の時点で未検証だったが、
+**実 LLM キーが無くても**、Strix 自身が送ってくる本物のリクエストに台本どおり応答する
+ローカルのモック LLM サーバー（[`strix-local-poc/mock_llm_server.py`](strix-local-poc/mock_llm_server.py)）
+を使うことで、エンドツーエンドの完走を実証できた。外部通信・コストは一切発生しない。
+
+**つまずき(2回)とその原因:**
+
+1. **非ストリーミングの応答を返していた** → Strix 側は`stream:true`を送っているのに、
+   単発JSONで応答していたため、OpenAI公式SDKの`AsyncStream`が解釈できず
+   `'tuple' object has no attribute 'choices'`で停止。**ストリーミング(SSE)形式**に直して解消。
+2. **`Transfer-Encoding: chunked`を使わず接続クローズで区切っていた** → 同じエラーが再発。
+   明示的なHTTP/1.1チャンク転送エンコーディングに変更して解消。
+3. **常にストリーミングで応答していた** → 疎通確認("Reply with just 'OK'")は実は
+   **非ストリーミング**リクエストだったため、同じエラーが3度目に再発。原因究明には、
+   Strix CLIの簡潔なエラー表示(`LLM CONNECTION FAILED`)では不十分だったため、
+   `strix.interface.main.warm_up_llm()`を直接呼び出してフルスタックトレースを取得し、
+   `strix/interface/main.py` → `strix/interface/scan_setup.py` → `strix/config/models.py`
+   → `agents/models/openai_chatcompletions.py`の`get_response()`(非ストリーミング専用)
+   に到達していることを突き止めた。**リクエストの`stream`フィールドを見て、無ければ
+   プレーンJSON、あれば chunked SSE、と分岐**させて最終的に解消。
+
+**完走結果:**
+
+```bash
+export STRIX_RUNTIME_BACKEND=local
+export STRIX_LLM="openai/mock-model"
+export OPENAI_API_BASE="http://127.0.0.1:8899/v1"
+export OPENAI_API_KEY="dummy-mock-key"
+python3 strix-local-poc/mock_llm_server.py 8899 &   # 別ターミナル/バックグラウンドで
+uv run strix -n -t ./ --scan-mode quick --max-budget 10
+```
+
+- `Penetration test initiated` → `in progress` → `completed`まで到達。
+- モックが`exec_command(cmd="ls -la && pwd")`を指示 → **実際にホスト上で`ls`が実行**され
+  （`Process exited with code 0`、実行時間0.0166秒）、本物のディレクトリ一覧が返った。
+- モックが`finish_scan(...)`を指示 → 台本の文面が実際のレポート生成パイプラインを通り、
+  `strix_runs/<run_id>/penetration_test_report.md`・`findings.sarif`・`coverage.json`として
+  実際にファイル出力された。
+- コスト`$0.0000`、LLMリクエスト数0（モック自体は数えられないが、課金APIへのリクエストは0）。
+- 副産物として、Strixの**実際のシステムプロンプト全文**と**実際の48個のツール定義**
+  （`exec_command`・`apply_patch`・`finish_scan`等の厳密なJSONスキーマ込み）を取得できた。
+  `finish_scan`は「ルートエージェントのみ」「全フィールド必須・追加プロパティ禁止」等、
+  かなり厳格な設計であることもわかった。
+- テレメトリ送信(`strix.gateway.scarf.sh`)のみ、このサンドボックスのネットワーク制限により
+  失敗するが、スキャン自体には影響しない無害なエラー。
+
+→ **「頭脳(LLMの判断)は台本どおりの偽物だが、手足(実際のツール実行・ログ出力・レポート
+生成)は本物」という、検知シグネチャ研究の目的には十分な、無料・無コストの再現環境が
+完成した。**
+
 ### 未検証（本 PoC のスコープ外）
 
-- 実 LLM キーでのエンドツーエンドのスキャン完走。
+- 実 LLM キーでの、**本物の知能による**エンドツーエンドのスキャン完走（検証4は台本による
+  機械的な完走であり、実際にAIが考えて動く様子ではない）。
 - 動的スキャン（live_test）で `proxy` ツールを使うフロー。`local` では caido が無いため
   トラフィック捕捉系は使えない（コード解析系に限定すれば問題なし）。
 - nmap など外部ツールを要する動的スキャン（ホストに未導入）。
