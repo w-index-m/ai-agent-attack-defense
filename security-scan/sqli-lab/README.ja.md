@@ -152,8 +152,36 @@ Target assessment:
 ```
 
 `vulnerable_app.py`はFlask/Pythonなので`Server`は`Werkzeug/...`になり、この照合は常に
-スキップされる。モックのApache/nginx風サーバー(`Server`ヘッダーのみ偽装)でのみ
-実動作を確認済み。
+スキップされる。
+
+**2026-10-25追記(実機検証)**: このサンドボックスに実際に`apt install apache2 nginx`で
+両方を導入し(ポート衝突を避けるためApacheは8090、Nginxは8091で起動)、本物のバイナリが
+返す実際の`Server`ヘッダーを`check_apache_http2()`/`check_nginx_rewrite()`、および
+`auto_vuln_scanner.py`本体に通して確認した:
+
+```
+$ curl -sI http://127.0.0.1:8090/
+Server: Apache/2.4.58 (Ubuntu)
+
+$ python3 auto_vuln_scanner.py --url http://127.0.0.1:8090/ --class cmdi --baseline host=zzz --fuzz host
+  Server='Apache/2.4.58 (Ubuntu)' X-Powered-By='(none)'
+  warning: Apache 2.4.58 is below the first fixed release 2.4.67 -- vulnerable to CVE-2026-23918 ...
+
+$ curl -sI http://127.0.0.1:8091/
+Server: nginx/1.24.0 (Ubuntu)
+
+$ python3 auto_vuln_scanner.py --url http://127.0.0.1:8091/ --class cmdi --baseline host=zzz --fuzz host
+  Server='nginx/1.24.0 (Ubuntu)' X-Powered-By='(none)'
+  warning: nginx 1.24.0 is below the first fixed release 1.30.1 -- vulnerable to CVE-2026-42945 ...
+```
+
+Ubuntuパッケージ版の実際のバージョン表記(`Apache/2.4.58 (Ubuntu)`、`nginx/1.24.0
+(Ubuntu)`、末尾に`(Ubuntu)`等のディストリ注記が付く点を含む)に対して、正規表現が
+正しくバージョン番号を抽出し、意図どおりの警告を出すことを確認できた。これにより、上記の
+「モックのApache/nginx風サーバーでのみ実動作を確認済み」という限界は解消された。
+(実際にmod_http2のダブルフリーやngx_http_rewrite_moduleのオーバーフローを発火させる
+エクスプロイトの実行は、このリポジトリの方針により行っていない。あくまでバージョン照合
+ロジックの実機確認。)
 
 ## 対象アプリ
 
