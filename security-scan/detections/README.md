@@ -35,6 +35,7 @@
 | R22 | GSS-TSIG/TKEY文脈でのnamedのassertion failureクラッシュ、またはCHAOS版数バナーでの修正前BIND検出(2026-10-21のBIND 9セキュリティリリース、CVE-2026-94300等4件) | ✅ | — | ✅ | — |
 | R23 | F5 BIG-IP APMのOAuth UserInfo要求失敗の反復、または異常に長いAuthorizationヘッダー(CVE-2026-94127、ヒープオーバーフローによる事前認証RCE、悪用確認済み・CISA KEV) | ✅ | — | ✅ | — |
 | R24 | brotli文脈近くのアプリケーションworkerクラッシュ(CVE-2026-111497、通称Node2Shell/HTTP2Shell、Brotliデコーダの境界外書き込み、探索的ヒューリスティック・未確証) | ✅ | — | ✅ | — |
+| R25 | Node.js本体の修正前バージョンでの稼働、またはbrotli文脈近くのNode.jsプロセスクラッシュ(CVE-2026-111497、Node.js公式2026-10-21リリースで修正、クラッシュ検知部分は探索的ヒューリスティック・未確証) | ✅ | — | ✅ | — |
 
 > R9–R11 は、本連鎖（Strix/Cairn/Hermes 型の攻撃エージェント）ではなく、**LLM システム自体が標的になる側**
 > （`../llm-target-attacks.ja.md`）の検知。R9/R10 は標準的なプロキシ/ネットワークログで検知できるが、
@@ -179,6 +180,16 @@
 > `scripts/python_brotli_check.py`(確認専用。このインタプリタ、または`--python`で指定した
 > 別のインタプリタ/venvの`brotli`/`brotlicffi`バージョンを`importlib.metadata`で確認)を
 > 使うこと。
+>
+> R25は、R24と同じCVE-2026-111497の**Node.js本体**向け。元々Node.js本体の脆弱性として公開
+> された経緯どおり、Node.js公式が2026-10-21に22.23.4/24.22.1/26.12.1で修正。2026-10-25時点で、
+> 複数の独立したセキュリティニュースサイトの報道でこのNode.js修正の実在を確認済み(一方、Bun/
+> Envoy Proxy/Istoへの波及を主張する情報は単一ソースのため本リポジトリでは未確証として扱う。
+> `node-version-check-notes.md`参照)。R24と同様、**ベンダー/研究者が公開したリクエスト単位・
+> ログ単位のIOCは無い**ため、Node.jsプロセスクラッシュ検知部分は本リポジトリ独自に構成した
+> 未確証の探索的ヒューリスティックである点に注意。ホスト側のNode.jsバージョン確認には
+> `scripts/node_version_check.py`(確認専用。`node --version`、または`--node-path`で指定した
+> 別のNode.js実行ファイルのバージョンをメジャーラインごとの修正版と照合)を使うこと。
 
 ## 使い方・注意
 

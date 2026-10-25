@@ -12,10 +12,16 @@ description: >
   1.2.1.0) via GitHub Security Advisory GHSA-9v8h-qqgm-4m35 (critical,
   2026-10-22). Because `requests`/`httpx`/`aiohttp` auto-load these
   packages when present, exposure is broader than direct `import brotli`
-  use. Aikido Security additionally reports (as of 2026-10-23, not yet
-  independently corroborated) that the same root cause extends to
-  "HTTP2Shell" -- any HTTP client/server that decompresses Brotli
-  responses/requests.
+  use. Aikido Security additionally reports (as of 2026-10-23) that the
+  same root cause extends to "HTTP2Shell" -- any HTTP client/server that
+  decompresses Brotli responses/requests. As of 2026-10-25, the Node.js
+  portion of this CVE (official 2026-10-21 security release,
+  22.23.4/24.22.1/26.12.1) has been independently corroborated via
+  multiple secondary security-news outlets covering that release. Claims
+  that the vulnerability also affects Bun, Envoy Proxy, and Istio (seen
+  on a dedicated disclosure page) remain single-sourced -- repeated
+  searches found no corroborating advisory from Bun, Envoy, or Istio
+  themselves, so those are NOT treated as confirmed by this repo.
   No vendor or researcher has published a request-level or log-level IOC
   for this CVE (unlike wp2shell/R13 or PHP2Shell/R15) -- this rule is
   this repo's own constructed heuristic, not a confirmed signature. It
