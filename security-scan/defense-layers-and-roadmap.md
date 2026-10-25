@@ -107,7 +107,7 @@ Claude自身の見解としてまとめる。**既存セクション(1〜5)へ�
 | ネットワーク型IDS | [Suricata](https://github.com/OISF/suricata)、[Zeek](https://github.com/zeek/zeek) | 通信のシグネチャ検知・メタデータ化(本リポのSigmaルールの変換先候補) |
 | ホスト型EDR/監視 | [osquery](https://github.com/osquery/osquery)、[Wazuh](https://github.com/wazuh/wazuh)(既出)、[Elastic Defend](https://github.com/elastic/endpoint-package) | プロセス・ファイル・レジストリ等の継続監視 |
 | コンテナ/カーネルランタイム検知 | [Falco](https://github.com/falcosecurity/falco)(既出)、[Tracee](https://github.com/aquasecurity/tracee) | eBPFベースで異常なシステムコールを検知(R2/R5/R7) |
-| SIEM/ログ相関 | Wazuh・Elastic Security(既出)、[Vector](https://github.com/vectordotdev/vector)/[Fluent Bit](https://github.com/fluent/fluent-bit)(ログ集約パイプライン) | R1–R24の実装先 |
+| SIEM/ログ相関 | Wazuh・Elastic Security(既出)、[Vector](https://github.com/vectordotdev/vector)/[Fluent Bit](https://github.com/fluent/fluent-bit)(ログ集約パイプライン) | R1–R25の実装先 |
 | ハニートークン | [Thinkst Canarytokens](https://github.com/thinkst/canarytokens) | 誤検知の少ない侵害シグナル(本用語集の「ハニートークン」参照) |
 | 脅威インテリ共有 | [MISP](https://github.com/MISP/MISP) | IOC・脅威情報の組織内外での共有 |
 

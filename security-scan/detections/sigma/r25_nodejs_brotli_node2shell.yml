@@ -1,0 +1,63 @@
+title: Node.js process crash near Brotli decompression context, consistent with CVE-2026-111497
+id: 7a3e1c9d-8f42-4b1e-9c5a-r25nodejs0000
+status: experimental
+description: >
+  Detects indicators of CVE-2026-111497, an out-of-bounds write in the
+  Brotli decoder that can leak memory or lead to remote code execution
+  when a process decompresses attacker-controlled Brotli data, against
+  Node.js itself (the originally-disclosed target, fixed 2026-10-21 in
+  Node.js 22.23.4/24.22.1/26.12.1, among 9 other CVEs in the same
+  release). As of 2026-10-25, this Node.js fix has been independently
+  corroborated via multiple secondary security-news outlets covering
+  that release (see ../../node-version-check-notes.md).
+  Like R24 (the PyPI brotli/brotlicffi sibling of this rule), no vendor
+  or researcher has published a request-level or log-level IOC for this
+  CVE against Node.js itself -- this rule is this repo's own constructed
+  heuristic, not a confirmed signature. It looks for a Node.js process
+  crash (SIGSEGV/segfault/core dump/fatal error patterns, including
+  common process-manager restart log lines) occurring near "brotli"
+  context (module name in a traceback, or a Content-Encoding: br
+  request/response nearby), on the theory that an out-of-bounds write
+  serious enough to corrupt memory is also likely to crash the process
+  in many failed-exploitation cases. This is a weak, unconfirmed signal
+  -- treat a hit as a lead to investigate, not evidence of exploitation.
+  Prefer scripts/node_version_check.py for an authoritative per-host
+  Node.js version answer instead of relying on this rule alone.
+references:
+  - https://github.com/w-index-m/ai-agent-attack-defense (R24, same CVE, PyPI brotli/brotlicffi)
+  - ../../node-version-check-notes.md
+  - ../../scripts/node_version_check.py
+author: ai-agent-attack-defense
+date: 2026-10-25
+logsource:
+  category: application
+  product: nodejs
+detection:
+  selection_process_crash:
+    message|contains:
+      - 'SIGSEGV'
+      - 'Segmentation fault'
+      - 'core dumped'
+      - 'FATAL ERROR'
+      - 'signal 11'
+  selection_brotli_context:
+    message|contains:
+      - 'brotli'
+      - 'Brotli'
+      - 'Content-Encoding: br'
+      - 'zlib.js'
+  condition: selection_process_crash and selection_brotli_context
+fields:
+  - host
+  - message
+  - src_ip
+falsepositives:
+  - This is an unconfirmed, repo-constructed heuristic with no published IOC behind it -- a generic Node.js process crash mentioning "brotli" in its log context is not proof of CVE-2026-111497 specifically; any unrelated crash in or near Brotli-handling code (an unrelated out-of-memory crash, a different native-addon bug) can match the same generic pattern.
+  - The word "brotli"/"Brotli" appearing in a log line is extremely broad (library names, module paths, unrelated log noise) -- tune this selection to your own application's log format before trusting it.
+  - Confirm the running Node.js version with scripts/node_version_check.py before treating a hit as more than a lead.
+level: medium
+tags:
+  - attack.initial_access
+  - attack.t1190
+  - attack.impact
+  - attack.t1499

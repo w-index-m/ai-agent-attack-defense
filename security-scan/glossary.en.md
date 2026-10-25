@@ -15,7 +15,7 @@ Stacking these four is called "defense in depth" — the point is not relying on
 | # | Layer | Plain explanation |
 |---|---|---|
 | ① | Prevent | Stop the attack from succeeding in the first place: shrink/close the attackable entry points (attack surface). This repo's symbol: **③**. |
-| ② | Detect | Notice that an attack happened. This repo's symbols: **R1–R24**. |
+| ② | Detect | Notice that an attack happened. This repo's symbols: **R1–R25**. |
 | ③ | Respond | Once found, stop it and contain it (block, isolate). |
 | ④ | Recover | Be able to restore what was broken (backup, restore). |
 

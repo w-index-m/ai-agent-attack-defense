@@ -1,0 +1,18 @@
+{
+  "name": "[R25] Node.js process crash near Brotli context, consistent with CVE-2026-111497 -- exploratory heuristic, no published IOC",
+  "type": "log_detection",
+  "message": "Indicators of CVE-2026-111497, an out-of-bounds write in the Brotli decoder that can leak memory or lead to RCE when decompressing attacker-controlled Brotli data, against Node.js itself (fixed 2026-10-21 in 22.23.4/24.22.1/26.12.1). As of 2026-10-25, this Node.js fix is independently corroborated via multiple secondary security-news outlets. See R24 for the PyPI brotli/brotlicffi sibling of this rule.\n\nNO VENDOR OR RESEARCHER HAS PUBLISHED A REQUEST-LEVEL OR LOG-LEVEL IOC for this CVE against Node.js itself -- this is this repo's own constructed heuristic, not a confirmed signature: a Node.js process crash (SIGSEGV/segfault/core dump/fatal error, including common process-manager restart lines) near \"brotli\" context. Weak, unconfirmed signal -- treat a hit as a lead, not evidence. Confirm the running Node.js version with scripts/node_version_check.py.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1190", "technique:T1499", "tactic:initial-access"],
+  "queries": [
+    {
+      "name": "nodejs_crash_near_brotli_context",
+      "query": "(@message:*SIGSEGV* OR @message:*\"Segmentation fault\"* OR @message:*\"core dumped\"* OR @message:*\"FATAL ERROR\"* OR @message:*\"signal 11\"*) (@message:*brotli* OR @message:*Brotli* OR @message:*\"Content-Encoding: br\"* OR @message:*\"zlib.js\"*)",
+      "aggregation": "count",
+      "groupByFields": ["host"]
+    }
+  ],
+  "cases": [
+    { "name": "Node.js process crash near Brotli context observed (unconfirmed heuristic)", "status": "medium", "condition": "nodejs_crash_near_brotli_context > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}
