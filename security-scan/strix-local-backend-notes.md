@@ -232,10 +232,56 @@ uv run strix -n -t ./ --scan-mode quick --max-budget 10
 生成)は本物」という、検知シグネチャ研究の目的には十分な、無料・無コストの再現環境が
 完成した。**
 
+### 検証 5: `create_vulnerability_report` による実レポート生成（実 LLM キー不要、2026-10-26）
+
+検証4は`exec_command`→`finish_scan`のみで、Strixの**脆弱性レポーティング機能そのもの**
+(`create_vulnerability_report`、スキーマは8項目のCVSS分解値・白箱コード位置・反証
+(`counterevidence`)必須等、かなり厳格)は未確認だった。モックLLMの台本を拡張し、
+`security-scan/sqli-lab`で既に実機確認済みのSQLi認証バイパス(`admin' --`による`/login`の
+バイパス、`verification-log.ja.md`参照)を**実際にcreate_vulnerability_reportツール経由で
+ファイリング**させ、本物のレポート生成パイプライン全体を検証した。
+
+**台本の流れ**(`strix-local-poc/mock_llm_server.py`に実装):
+
+1. 疎通確認(`OK`、非ストリーミング) — 検証4と同じ
+2. `exec_command(cmd="curl ... /login?username=admin%27%20--&password=x")` —
+   対象ディレクトリと一緒に起動しておいた本物の`vulnerable_app.py`(`VULN_APP_HOST`で
+   127.0.0.1:5000にbind)に対して**実際にHTTPリクエストを送り、実際にバイパスを再現**
+3. `create_vulnerability_report(...)` — 上記で得た実際のレスポンス本文を`evidence`に、
+   実際のソース行(`vulnerable_app.py`の58–61行目・65行目)を`code_locations`の
+   `fix_before`/`fix_after`に、CVSSベクタ(`AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N`)を
+   `cvss_breakdown`に詰めて呼び出し
+4. `finish_scan(...)` — 1件のレポートをファイリング済みであることを要約
+
+**結果:**
+
+```bash
+export STRIX_RUNTIME_BACKEND=local
+export STRIX_LLM="openai/mock-model"
+export OPENAI_API_BASE="http://127.0.0.1:8899/v1"
+export OPENAI_API_KEY="dummy-mock-key"
+python3 strix-local-poc/mock_llm_server.py 8899 &
+uv run strix -n -t ./ --scan-mode quick --max-budget 10
+```
+
+- `create_vulnerability_report`の呼び出しが**検証を含めて正常に受理**され、
+  `Penetration test in progress`の時点で`Vulnerabilities 1 / CRITICAL: 1`と表示された。
+- `strix_runs/<run_id>/`配下に、本物のレポーティングパイプラインが生成した
+  `vulnerabilities/vuln-0001.md`・`vulnerabilities.json`・`vulnerabilities.csv`・
+  `findings.sarif`(CWE-89、`security-severity: 9.1`付き)が出力され、台本で渡した
+  `evidence`・`technical_analysis`・PoC・`code_locations`の`fix_before`/`fix_after`が
+  そのまま反映されていることを確認。
+- コスト`$0.0000`。完全に新規の`git clone` + `v1.7.0`チェックアウト + パッチ適用から
+  再現し、再現性を確認済み。
+
+→ **「台本による既知の発見」を、Strixの実際の脆弱性レポーティング・CVSS算出・
+SARIF/CSV/Markdown出力パイプラインに通す**ところまで、無料・無コストで検証できた。
+依然として「実LLMが自力で発見する」部分は未検証(検証4と同じ限界)。
+
 ### 未検証（本 PoC のスコープ外）
 
-- 実 LLM キーでの、**本物の知能による**エンドツーエンドのスキャン完走（検証4は台本による
-  機械的な完走であり、実際にAIが考えて動く様子ではない）。
+- 実 LLM キーでの、**本物の知能による**エンドツーエンドのスキャン完走（検証4・5は台本による
+  機械的な完走であり、実際にAIが考えて脆弱性を発見する様子ではない）。
 - 動的スキャン（live_test）で `proxy` ツールを使うフロー。`local` では caido が無いため
   トラフィック捕捉系は使えない（コード解析系に限定すれば問題なし）。
 - nmap など外部ツールを要する動的スキャン（ホストに未導入）。
