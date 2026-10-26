@@ -665,6 +665,74 @@ XSS脆弱版は4ペイロード中4件検出、両方の修正版は誤検知ゼ
 古典的な脆弱性クラスについては、決定的なルールベースのアプローチのほうが、
 セットアップの複雑さ・実行の安定性・再現性のいずれにおいても優れていた。
 
+## 追記(2026-10-27): モックLLM版(検証4・5)はWSLでも完全再現を確認
+
+上記はすべて「実LLM(ローカルOllama/クラウド)で本物の知能に判断させる」路線の記録。
+一方、`strix-local-poc/mock_llm_server.py`(検証4・5、台本によるツール呼び出しで
+`exec_command`→`create_vulnerability_report`→`finish_scan`までエンドツーエンドで
+完走させるモックLLM)は、**Dockerもクラウド接続も不要**なため、Windows 11 + WSL2環境
+でも実機で完全に再現できることを確認した。
+
+### 最短手順(実機で確認済み)
+
+```bash
+# 1) uv 導入
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.local/bin/env
+
+# 2) 両リポジトリを取得し、strix に local バックエンドパッチを適用
+git clone https://github.com/w-index-m/ai-agent-attack-defense.git ~/ai-agent-attack-defense
+git clone https://github.com/usestrix/strix ~/strix
+cd ~/strix && git checkout v1.7.0 && uv sync
+git apply ~/ai-agent-attack-defense/security-scan/strix-local-poc/strix-local-backend.patch
+
+# 3) sqli-lab の依存(venv推奨。WSLのDebian/Ubuntu系は pip install がPEP668で拒否されるため)
+python3 -m venv ~/venv && source ~/venv/bin/activate
+pip install flask requests
+
+# 4) 脆弱な対象アプリを起動
+cd ~/ai-agent-attack-defense/security-scan/sqli-lab
+VULN_APP_HOST=127.0.0.1 python3 vulnerable_app.py &
+
+# 5) モックLLMサーバーを起動(ログ出力先ディレクトリを先に作る)
+mkdir -p /tmp/mock_llm
+cd ~/ai-agent-attack-defense/security-scan/strix-local-poc
+python3 mock_llm_server.py 8899 &
+
+# 6) スキャン対象をCWD配下に用意(LocalDir展開の制約。code_locationsのpathを
+#    実リポジトリと揃えるため同じ相対パスでコピーする)
+mkdir -p /tmp/strix_target/security-scan/sqli-lab
+cp ~/ai-agent-attack-defense/security-scan/sqli-lab/*.py /tmp/strix_target/security-scan/sqli-lab/
+
+# 7) 実行
+cd /tmp/strix_target
+export STRIX_RUNTIME_BACKEND=local
+export STRIX_LLM="openai/mock-model"
+export OPENAI_API_BASE="http://127.0.0.1:8899/v1"
+export OPENAI_API_KEY="dummy-mock-key"
+uv run --project ~/strix strix -n -t ./ --scan-mode quick --max-budget 10
+```
+
+### 実機でハマった点とその場しのぎ(初回のみ発生、上の手順には反映済み)
+
+- `git apply` が「patch does not apply」で失敗することがあるが、`git diff` で見ると
+  **実は既に適用済み**だったケースがあった(一度成功した`git apply`を気づかず再実行した
+  だけ)。失敗時はまず`git status`/`git diff`で本当に未適用か確認するのが先。
+- WSL標準のPythonは`pip install`が`externally-managed-environment`で拒否される
+  (PEP 668)。`venv`を切るのが素直な回避策。
+- `vulnerable_app.py`は`flask`と`requests`の2つが必要(標準ライブラリ以外はこれだけ)。
+- `mock_llm_server.py`は起動時に`/tmp/mock_llm/requests.jsonl`へ書き込むため、
+  `/tmp/mock_llm`ディレクトリを先に`mkdir -p`しておかないと`FileNotFoundError`で落ちる。
+
+### 結果
+
+クラウドサンドボックスでの検証(「検証5」)と**完全に同一のレポート**
+(`SQL Injection Authentication Bypass in /login`、CVSS 9.1、CWE-89、CRITICAL)が
+WSL実機でも生成されることを確認した(`Penetration test completed` / `Vulnerabilities
+CRITICAL: 1 (Total: 1)` / `Cost $0.0000`)。→ **この構成(Docker不要・LLM API キー不要の
+モックLLM経由スキャン)は、クラウドサンドボックス固有の挙動ではなく、一般的なWSL2環境
+でも再現可能**であることが裏付けられた。
+
 ## 未検証(このメモの範囲外)
 
 - `qwen2.5:7b` でのスキャン完走、および実際の脆弱性検出精度(DVWAの既知のSQLi等を
