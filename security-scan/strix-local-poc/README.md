@@ -13,7 +13,7 @@
 | `strix-local-backend.patch` | strix に当てる 3 ファイルの差分。`local` バックエンド追加＋Docker 事前チェックのゲート＋caido 結合のバックエンド単位ゲート。 |
 | `poc_local_backend.py` | LLM 非依存の検証1。`local` バックエンドでセッション起動→ホスト実行→ソース materialize を確認。 |
 | `poc_caido_free.py` | LLM 非依存の検証3。`create_or_reuse(backend=local)` が caido 非依存で完走し、`caido_client=None`・proxy env 未注入を確認。 |
-| `mock_llm_server.py` | 検証4。実LLMキー不要の、OpenAI互換モックLLMサーバー。疎通確認(非ストリーミング)には`OK`、本番ループ(ストリーミング)には台本どおりのツール呼び出し(`exec_command`→`finish_scan`)を返し、Strixをエンドツーエンドで完走させる。詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md)の「検証4」参照。 |
+| `mock_llm_server.py` | 検証4・5。実LLMキー不要の、OpenAI互換モックLLMサーバー。疎通確認(非ストリーミング)には`OK`、本番ループ(ストリーミング)には台本どおりのツール呼び出し(`exec_command`→`create_vulnerability_report`→`finish_scan`)を返し、Strixをエンドツーエンドで完走させる。`exec_command`は`security-scan/sqli-lab`の`/login`SQLiバイパスを実際にcurlで再現し、その結果を`create_vulnerability_report`に実データとして渡す。詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md)の「検証4」「検証5」参照。 |
 
 ## 再現手順
 
@@ -38,7 +38,9 @@ export STRIX_LLM="anthropic/claude-sonnet-5-5"   # LiteLLM の model id
 export LLM_API_KEY="<有効なキー>"
 uv run strix -n -t ./ --scan-mode quick --max-budget 10
 
-# 3c) 実 CLI、ただし実 LLM キー不要（モックLLMでエンドツーエンド完走、検証4）
+# 3c) 実 CLI、ただし実 LLM キー不要（モックLLMでエンドツーエンド完走、検証4・5）
+#     対象ディレクトリを ./ とし、sqli-lab の vulnerable_app.py を VULN_APP_HOST=127.0.0.1 で
+#     先に起動しておくと、台本が実際にSQLi認証バイパスを再現してレポートに反映する。
 python3 /path/to/mock_llm_server.py 8899 &
 export STRIX_RUNTIME_BACKEND=local
 export STRIX_LLM="openai/mock-model"
