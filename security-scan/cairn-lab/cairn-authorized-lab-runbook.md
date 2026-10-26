@@ -4,7 +4,10 @@
 
 > ⚠️ Cairn は能動的に脆弱性を突いてシェル/権限を奪う実行役。**対象を所有しているか、書面で認可を得ている場合のみ**実行すること。本ランブックは authorized pentest / 自前ラボ / CTF を想定し、第三者・本番・未認可の対象には一切向けない。
 >
-> ℹ️ この Claude セッションの sandbox では実行しない（Docker デーモン無し・LLM キー無し・外部通信制限）。実行はあなたの隔離ラボ側で行う。
+> ℹ️ **本番の exploitation(実標的への攻撃)は、このClaudeセッションのsandboxでは実行しない**。実行はあなたの隔離ラボ側で行う。
+> ただし2026-10-25〜26に、**モックLLM(台本応答・実標的なし)限定でこのsandbox内での動作確認**を実施した
+> (§6参照)。「Dockerデーモン無し」は誤りと判明——手動で`dockerd`を起動すれば動く。「外部通信制限」
+> についても、モックLLMをこのsandbox内で自己完結させれば問題にならない。
 
 ---
 
@@ -128,7 +131,17 @@ UV_DEFAULT_INDEX="https://pypi.org/simple" uv run --project cairn cairn dispatch
 
 - fact-intent グラフが OODA で成長していくのを `GET /projects/{id}` / static UI で観察。**どこへもパケットは飛ばない**。
 
-> **この環境で検証済み（2026-10-06）**: 上記手順で `cairn serve` 起動 → `proj_001` 作成（`origin`/`goal` の 2 Fact）→ mock ディスパッチャ起動で、OODA ループが bootstrap→reason→explore を回し、`f001–f003` のダミー Fact と i001–i005 の Intent を生成。ディスパッチャログに外部 URL/接続は 0 件。**Docker/LLM/標的すべて不要**で完走した。本番の exploitation はラボ側のみ。
+> **この環境で検証済み（2026-10-06）**: 上記手順で `cairn serve` 起動 → `proj_001` 作成（`origin`/`goal` の 2 Fact）→ mock ディスパッチャ起動で、OODA ループが bootstrap→reason→explore を回し、`f001–f003` のダミー Fact と i001–i005 の Intent を生成。ディスパッチャログに外部 URL/接続は 0 件。**LLM/標的は不要**で完走した。本番の exploitation はラボ側のみ。
+>
+> **訂正(2026-10-25再検証)**: 「Docker不要」の部分は誤りだった。実際に`v0.2.1`のソース
+> (`cairn/src/cairn/dispatcher/config.py`)を確認したところ、`runtime.execution`という
+> フィールドは**コードベースのどこからも参照されていない**(`grep -rl execution cairn/src/`
+> がヒットしない)。`dispatch_mock_local.yaml`の`execution: local`はこのバージョンでは
+> **完全な無効設定**で、`mock`タイプを含む全ワーカーが常にDockerコンテナ内で実行される。
+> 2026-10-06時点の「Docker不要」という記述は、別バージョンでの検証か誤認の可能性が高い。
+> 実際にこのsandboxで`dispatch_mock_local.yaml`を動かす場合は、`container:`ブロックを
+> 追加(`image`に実在するイメージ、例: `python:3-alpine`等pythonが入ったものを指定)し、
+> かつ`dockerd`を手動起動しておく必要がある(詳細は§6)。
 
 ---
 
@@ -154,6 +167,137 @@ UV_DEFAULT_INDEX="https://pypi.org/simple" uv run --project cairn cairn dispatch
 > したがって **dispatcher ホスト自体を隔離セグメントに置く**こと（`container.network_mode` ではなくホスト配置で隔離）。
 > ローカルLLM のエンドポイントも隔離ネット内 or localhost に限定し、外部プロキシを設定しないことで egress ゼロを保つ。
 > `codex` CLI がホストに導入済み・PATH 上にあることが前提。
+>
+> ⚠️ **未検証の記述**: 上記の「ホストプロセスで動く」は`dispatch.lab.yaml`(`execution: host`?)側の
+> 設計意図の記述であり、このファイル自体を実行して確認したわけではない。§4で明らかになった通り、
+> 少なくとも`dispatch_mock_local.yaml`の`execution: local`はv0.2.1のソース上は無効な設定だった。
+> `dispatch.lab.yaml`についても同様に無効化されている(常にDockerコンテナで実行される)可能性があるため、
+> 実際に使う前にv0.2.1のソースで`execution`フィールドの扱いを再確認すること。
+
+## 6. モックLLMによる、`codex`ワーカー経由の実ツール実行（2026-10-25〜26、このsandbox内で検証）
+
+§4の`mock`タイプワーカーは完全にランダムな振る舞いで、実際のコマンド実行は一切発生しない。
+Strixでの検証(`../strix-local-backend-notes.md`「検証4」参照)と同じ発想で、**実際の`codex`
+タイプワーカーを、台本に従うモックLLMで動かし、実際のツール実行(安全な`pwd`のみ)まで再現
+できるか**を検証した。実標的・課金APIキーは一切使わない。
+
+### 6.1 背景: `codex`ワーカーの実際の呼び出し
+
+`cairn/src/cairn/dispatcher/workers/adapters/codex.py`を読むと、`codex`タイプのワーカーは
+実行のたびに以下のコマンドを起動する(`--dangerously-bypass-approvals-and-sandbox`で**承認も
+サンドボックスも両方無効化**):
+
+```
+codex exec --dangerously-bypass-approvals-and-sandbox --model <CODEX_MODEL> \
+  -c model_provider="cairn" \
+  -c model_providers.cairn.wire_api="responses" \
+  -c model_providers.cairn.base_url="<CODEX_BASE_URL>" \
+  -c model_providers.cairn.env_key="OPENAI_API_KEY" \
+  -- <prompt>
+```
+
+つまりCairn側で特別なことは何もしておらず、`OPENAI_API_KEY`/`CODEX_BASE_URL`/`CODEX_MODEL`を
+差し替えれば、`codex` CLI自体が話す「OpenAI Responses API」をそのまま乗っ取れる。
+
+### 6.2 モックLLMサーバーの作成([`mock_codex_responses_server.py`](mock_codex_responses_server.py))
+
+Strixの時と同様、最初は試行錯誤で何度も接続エラーになった。最終的に**codex自身のRust実装
+ソース**(`github.com/openai/codex`、`codex-rs/codex-api/src/sse/responses.rs`と
+`codex-rs/protocol/src/models.rs`)を直接読んで、実際に必要なプロトコルを特定した:
+
+- `response.completed`イベントの`response.output`フィールドは**実は一切使われていない**
+  (`ResponseCompleted`というRust構造体は`id`と`usage`程度しかパースしない)。実際の出力は、
+  **`response.output_item.done`イベントの`item`**(Codex独自の内部型`ResponseItem`、
+  `type`フィールドで区別するsnake_case、例: `function_call`は`name`/`arguments`/`call_id`が
+  必須)から読み取っている。公式のOpenAI SDK(Python)が定義する`Response`オブジェクトの
+  公開スキーマとは別物である点に注意。
+- 各SSEイベントに`sequence_number`(整数)フィールドが無いと、`response.created`すら
+  受理されず切断される。
+- `http.server.BaseHTTPRequestHandler`は既定で`protocol_version = "HTTP/1.0"`のままだと、
+  `Transfer-Encoding: chunked`と矛盾し、2ターン目以降の接続で`error sending request`に
+  なる。`protocol_version = "HTTP/1.1"`を明示する必要がある。
+- 疎通確認(`codex exec`起動直前のヘルスチェック、"Reply with just 'OK'"相当)は
+  **非ストリーミング**(`stream`フィールド無し)、本番のエージェントループは**ストリーミング**
+  (`stream: true`)で、Strixの時と同じく両方に対応する必要がある。
+
+### 6.3 単体での動作確認(Cairnを介さず、`codex exec`のみ)
+
+```bash
+export STRIX_RUNTIME_BACKEND=local  # (不要だが参考: Strixの変数ではない)
+export OPENAI_API_KEY="dummy-mock-key"
+python3 mock_codex_responses_server.py 8900 &
+codex exec --skip-git-repo-check --model mock-model \
+  -c 'model_provider="cairn"' \
+  -c 'model_providers.cairn.name="cairn"' \
+  -c 'model_providers.cairn.wire_api="responses"' \
+  -c 'model_providers.cairn.base_url="http://127.0.0.1:8900"' \
+  -c 'model_providers.cairn.env_key="OPENAI_API_KEY"' \
+  "say hi"
+```
+
+結果(実機確認済み):
+```
+exec
+/bin/bash -lc pwd in /tmp/codex_test_target
+ succeeded in 0ms:
+/tmp/codex_test_target
+
+codex
+Mock run complete: no real analysis was performed.
+```
+
+台本通り、1手目で`exec_command(cmd="pwd")`を指示 → **実際にホスト上で`pwd`が実行**され
+(既定のサンドボックスモード`read-only`、承認無しフラグは未使用の素の`codex exec`)、2手目で
+終了。APIキー不要・外部通信なし・コストゼロ。
+
+### 6.4 Cairnのディスパッチャ経由での配線([`worker-mock.Dockerfile`](worker-mock.Dockerfile)、[`dispatch_codex_mock.yaml`](dispatch_codex_mock.yaml))
+
+公式のワーカーイメージ(`ghcr.io/oritera/cairn-worker-container`)の実体は
+`pkg-containers.githubusercontent.com`というGHCRの別ホストから配信されており、このsandboxの
+ネットワーク許可リストでは403で取得不可だった。代わりに、`codex` CLIだけを入れた最小限の
+自作イメージ(`worker-mock.Dockerfile`、ベースは`node:22`。エージェントプロキシの自己署名
+CA証明書を`NODE_EXTRA_CA_CERTS`で信頼させることで`npm install -g @openai/codex`が通る)で代用した。
+
+```bash
+docker build -t cairn-worker-mock:latest -f worker-mock.Dockerfile .
+dockerd &                                          # 要手動起動(§4訂正参照)
+python3 mock_codex_responses_server.py 8900 &       # ホスト側、0.0.0.0で待受
+cairn serve --host 127.0.0.1 --port 8000 &
+curl -s -X POST http://127.0.0.1:8000/projects -H 'Content-Type: application/json' \
+  -d '{"title":"codex-mock-smoke","origin":"mock target (no network)","goal":"say hi and stop","bootstrap_enabled":true}'
+cairn dispatch --config dispatch_codex_mock.yaml
+```
+
+`dispatch_codex_mock.yaml`は、コンテナからホストのモックサーバーへ到達させるため、
+`host.docker.internal`ではなく**Dockerブリッジの既定ゲートウェイIP(`172.17.0.1`)を直接指定**
+している(このバージョンのdockerd/ネットワーク構成では`--add-host`等のextra_hosts機構が
+Cairnの設定スキームに存在しないため)。
+
+結果(実機確認済み、ディスパッチャログより):
+```
+[+]   codex-mock-worker 200   (疎通確認成功)
+runtime.containers    creating container ... image=cairn-worker-mock:latest
+tasks.common          starting container exec ... phase=explore_execute
+stdout_preview: Mock run complete: no real analysis was performed.
+```
+
+実際にCairnが「コンテナ起動 → 本物の探索プロンプト(タスクグラフのYAMLスナップショットを
+含む、Cairn自身のテンプレート)を送信 → コンテナ内で`codex exec
+--dangerously-bypass-approvals-and-sandbox`実行 → モックの応答を受信」まで配線が機能する
+ことを確認した。
+
+### 6.5 残っている既知の限界
+
+- Cairn自身はワーカーの応答が特定のJSON形式(`{"accepted": true, ...}`等、explore/reason/
+  bootstrapで異なる)であることを期待しており、台本のプレーンテキスト応答はこれに合わないため
+  「JSON解析失敗」としてタスクが`failed`扱いになり、同じ安全なタスクへの無限リトライが起きる
+  (クラッシュや危険な動作ではない)。正式に`completed`扱いまで持っていくには、Cairnが期待する
+  タスク出力のJSONスキーマを別途特定する必要があり、未実施。
+- `--dangerously-bypass-approvals-and-sandbox`はCairnの`CodexDriver`にハードコードされており、
+  設定では無効化できない。台本は常に安全な読み取り専用コマンド(`pwd`)のみに限定すること。
+
+> 以上はすべて、**実標的への攻撃を一切伴わない**、モックLLMによる配線確認である。本物の
+> exploitationの実行は、引き続きこのsandboxでは行わない。
 
 ## 参考（リポジトリ内）
 - `dispatch.example.yaml` — container モードの完全な設定例
