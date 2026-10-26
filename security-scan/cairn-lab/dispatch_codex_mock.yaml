@@ -1,0 +1,41 @@
+server: "http://127.0.0.1:8000"
+
+container:
+  image: "cairn-worker-mock:latest"
+  network_mode: "bridge"
+  completed_action: "stop"
+
+runtime:
+  interval: 3
+  max_workers: 1
+  max_running_projects: 1
+  max_project_workers: 1
+  healthcheck_timeout: 20
+  worker_healthcheck: "startup_only"
+  prompt_group: "default"
+
+tasks:
+  bootstrap:
+    timeout: 60
+    conclude_timeout: 30
+  reason:
+    timeout: 60
+    max_intents: 1
+  explore:
+    timeout: 60
+    conclude_timeout: 30
+
+common_env:
+  TSEC_BASE_URL: "http://172.17.0.1:8000/api"
+  TSEC_AGENT_TOKEN: "common-agent-token"
+
+workers:
+  - name: "codex-mock-worker"
+    type: "codex"
+    task_types: [bootstrap, reason, explore]
+    max_running: 1
+    priority: 0
+    env:
+      CODEX_MODEL: "mock-model"
+      CODEX_BASE_URL: "http://172.17.0.1:8900"
+      OPENAI_API_KEY: "dummy-mock-key"
