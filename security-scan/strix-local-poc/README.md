@@ -14,6 +14,7 @@
 | `poc_local_backend.py` | LLM 非依存の検証1。`local` バックエンドでセッション起動→ホスト実行→ソース materialize を確認。 |
 | `poc_caido_free.py` | LLM 非依存の検証3。`create_or_reuse(backend=local)` が caido 非依存で完走し、`caido_client=None`・proxy env 未注入を確認。 |
 | `mock_llm_server.py` | 検証4・5。実LLMキー不要の、OpenAI互換モックLLMサーバー。疎通確認(非ストリーミング)には`OK`、本番ループ(ストリーミング)には台本どおりのツール呼び出し(`exec_command`→`create_vulnerability_report`→`finish_scan`)を返し、Strixをエンドツーエンドで完走させる。`exec_command`は`security-scan/sqli-lab`の`/login`SQLiバイパスを実際にcurlで再現し、その結果を`create_vulnerability_report`に実データとして渡す。詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md)の「検証4」「検証5」参照。 |
+| `mock_llm_server_deserialize.py` | 検証6。`mock_llm_server.py`の台本を書き換えた別シナリオ。脆弱性クラスをSQLiから`/deserialize`の安全でないデシリアライゼーション(pickle)→RCEに差し替え、ターン数も2段階→5段階(ペイロード作成→送信→確認→レポート提出→終了)に増やしている。台本(ツール名・引数・ターン数)が自由に差し替え可能であることの実証。詳細は[`../strix-local-backend-notes.md`](../strix-local-backend-notes.md)の「検証6」参照。 |
 
 ## 再現手順
 

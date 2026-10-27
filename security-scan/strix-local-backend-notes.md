@@ -278,6 +278,44 @@ uv run strix -n -t ./ --scan-mode quick --max-budget 10
 SARIF/CSV/Markdown出力パイプラインに通す**ところまで、無料・無コストで検証できた。
 依然として「実LLMが自力で発見する」部分は未検証(検証4と同じ限界)。
 
+### 検証 6: 台本の脆弱性クラス・ターン数は自由に差し替え可能(2026-10-27)
+
+検証4・5のモックLLM(`mock_llm_server.py`)は、「SQLi認証バイパスを1回確認→レポート提出→
+終了」という固定の台本だった。これが**特定の脆弱性クラスやターン数に縛られた仕組みではなく、
+台本(if/elifの分岐とツール引数)を書き換えるだけで自由に差し替えられる**ことを、実際に
+別シナリオを作って検証した。
+
+**変更点**(`mock_llm_server_deserialize.py`、`mock_llm_server.py`からの差分):
+
+- **脆弱性クラス**: SQLi認証バイパス → `/deserialize`の安全でないデシリアライゼーション
+  (`pickle.loads()`を攻撃者制御データに対して呼ぶ、CWE-502)経由のRCEに変更。
+- **ターン数**: 2段階(`exec_command`→`create_vulnerability_report`)→
+  **5段階**(①ペイロード作成→②送信→③実行結果の確認→④`create_vulnerability_report`→
+  ⑤`finish_scan`)に増加。
+- **exec_commandの中身**: `curl`によるSQLi確認 → 「`__reduce__`で`os.system("id > /tmp/
+  pickle_rce_proof.txt")`を実行するpickleペイロードをbase64生成 → `/deserialize`へPOST →
+  証拠ファイルを`cat`で確認」という3段階のコマンド列に変更。
+
+**結果**: 変更後もStrix側のコード(台本を解釈する側)には一切手を加えず、台本ファイルの
+書き換えだけで問題なく完走した。
+
+```
+Penetration test completed
+Target  /tmp/strix_deser_target
+Vulnerabilities  CRITICAL: 1 (Total: 1)
+Cost $0.0000 · Tokens 0
+```
+
+生成された`vulnerabilities/vuln-0001.md`は、CVSS 9.8(RCEのため機密性・完全性・可用性すべて
+`H`)、CWE-502で正しく出力された。何より、`/tmp/pickle_rce_proof.txt`の中身が実際の
+`id`コマンドの出力(`uid=0(root) gid=0(root) groups=0(root)`、このサンドボックスのプロセスが
+root権限だったため)になっていることを確認し、**捏造ではなく本物のOSコマンド実行が
+`exec_command`経由で起きた**ことを裏付けた。
+
+→ **モックLLMの台本は、ツール名・引数・ターン数・対象の脆弱性クラスのいずれも自由に
+カスタマイズできる汎用的な仕組みである**ことが確認できた。新しい脆弱性クラスを検証したい
+場合も、Strix本体やパッチを変更する必要はなく、台本ファイルだけを書き換えればよい。
+
 ### 未検証（本 PoC のスコープ外）
 
 - 実 LLM キーでの、**本物の知能による**エンドツーエンドのスキャン完走（検証4・5は台本による
