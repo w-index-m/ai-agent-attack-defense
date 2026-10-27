@@ -143,11 +143,81 @@ uv run cai --prompt "Check the /login endpoint on 127.0.0.1:5000 for SQL injecti
 CAIでも成立することを確認した。** 鍵となった条件は、CAIが`OPENAI_API_BASE`での接続先差し替えに
 対応していたこと(`src/cai/util/llm_api_base.py`で明示的にサポートされている設計)。
 
+## 検証2: プロンプトインジェクションガードレールの実機検証(2026-10-27)
+
+モックLLMは台本どおりに固定の行動を返すだけなので、「悪意ある文字列に騙されるか」という
+**LLM自身の判断力**は検証できない。その代わり、CAIが**フレームワーク側に自動的な防御機構
+(guardrails)を持っているか**をソースから調査し、実機で検証した。
+
+`src/cai/agents/guardrails.py`に、`prompt_injection_guardrail`という正規表現ベースの
+検知機構(`INJECTION_PATTERNS`、Unicode同形異字の正規化、base64デコードしての危険コマンド検出
+等、かなり作り込まれている)が実装されていることを発見。これは`@input_guardrail`として
+CAIのAgent定義に組み込まれている。
+
+実機で2点を確認:
+
+```python
+import os
+print(os.getenv('CAI_GUARDRAILS', 'false').lower() == 'false')  # -> True(未設定時)
+```
+
+1. **既定で無効**: `prompt_injection_guardrail`は冒頭で
+   `if os.getenv("CAI_GUARDRAILS", "false").lower() == "false": return allowed`
+   と早期リターンしており、環境変数`CAI_GUARDRAILS=true`を明示的に設定しない限り、
+   パターンマッチは一切実行されない。
+
+2. **ツール出力由来に見える文字列は検知対象外**: `detect_injection_patterns()`自身の
+   冒頭に `if "'role': 'tool'" in text: return False, []` という早期リターンがある。
+   同一の悪意ある文字列(`IGNORE ALL PREVIOUS INSTRUCTIONS...`等)を、素のユーザー入力として
+   渡すと5個のパターンにヒットして検知されるが、`{'role': 'tool', 'content': '...'}`という
+   ツール出力の形で渡すと**0個のパターンで検知されない**ことを、`detect_injection_patterns()`を
+   直接呼び出して確認した:
+
+   ```
+   as tool-output-shaped string -> flagged: False patterns: 0
+   as plain user input          -> flagged: True patterns: 5
+   ```
+
+   さらに、`@input_guardrail`はSDKの設計上、**セッション開始時のユーザー入力1回だけ**に
+   適用される仕組みであり、会話途中で`exec_command`等のツール出力として流れ込んでくる
+   悪意あるコンテンツ(間接プロンプトインジェクション、OWASP LLM01の典型例)は、
+   そもそもこのガードレールの評価対象にすら入らない。
+
+→ **この実装は「素の自己申告的な指示上書き」を素のユーザー入力として受け取った場合には
+機能するが、エージェント型ツールにとって最も現実的な脅威である「ツール出力経由の間接的な
+プロンプトインジェクション」には、既定設定でも、明示的に有効化した設定でも、届いていない**
+ことが、ソースコードの直接実行による検証で判明した。これはCAI固有の実装詳細の指摘であり、
+一般的なLLMの脆弱性ではない。
+
+## 検証3: マルチエージェント・ハンドオフの実機検証(2026-10-27)
+
+検証1は`one_tool_agent`という単一エージェント・単一ツール構成だった。CAIの既定エージェントは
+`selection_agent`で、タスクに応じて専門エージェント(`red_team_agent`・`blue_team_agent`等、
+計19個)に**SDKのhandoff機構で制御を引き渡す**設計(`src/cai/agents/operational_handoffs.py`の
+`build_operational_handoffs()`)。これが台本からも実際に機能するか検証した。
+
+まずログ専用のモック(`probe_mock_server.py`、常に`OK`を返しつつリクエストのtools一覧を
+出力するだけ)で、`selection_agent`が実際に`transfer_to_red_team_agent`等19個のhandoffツールを
+モデルに渡していることを確認(`check_available_agents`等3個の通常ツール+19個のhandoff)。
+
+その上で、台本を「1手目: `transfer_to_red_team_agent`を呼ぶ→2手目以降: ハンドオフ先の
+`generic_linux_command`で実際にcurlを実行→終了」という流れに変更して実行したところ:
+
+- 画面表示が`● CTF agent`から**`● Red Team Agent`に切り替わった**(実際にアクティブ
+  エージェントが変化したことを示す)。
+- ハンドオフ後に呼んだ`generic_linux_command`の結果が、CAIのセッションログに
+  本物のHTTPレスポンス(`HTTP/1.1 401 UNAUTHORIZED\r\nServer: Werkzeug/3.1.9 ...`)として
+  記録されていることを確認。
+
+→ **ハンドオフは見た目だけのギミックではなく、実際にアクティブエージェントが切り替わり、
+切り替わった先のエージェントが持つ別のツールセットで本物の実行が行われる**ことを実証した。
+
 ## 未検証(本PoCのスコープ外)
 
-- `one_tool_agent`以外の、より複雑な複数ツール・マルチエージェント構成(`selection_agent`等)での
-  動作。
 - 実LLMキーでの、本物の知能によるエンドツーエンドの脆弱性発見(今回はStrix/Cairn同様、
   既知の脆弱性を台本で再確認しただけ)。
 - Docker/SSH/CTFコンテナバックエンド(`active_container`/`ssh_user`経由)での動作
   (今回はローカルホスト実行のみ検証)。
+- `CAI_GUARDRAILS=true`を有効化した状態での、素のユーザー入力への実際のブロック動作
+  (ソースの早期リターンロジックから「無効時は確実に素通りする」ことは確認したが、
+  有効化後の実ブロック挙動そのものは未検証)。
