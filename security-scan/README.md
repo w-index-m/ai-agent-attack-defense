@@ -23,6 +23,35 @@ techniques. Use only against assets you own or are authorized to test.
   practice target (DVWA/Juice Shop) → automated scanning with Strix + a local LLM, with links to
   each step.
 
+## Currently supported vulnerability scans (real CVEs)
+
+A quick-reference roster of the **specific, real CVEs/vulnerabilities** this repo can currently
+check a host or target for (as opposed to R1–R12/R20, which are behavioral detections not tied to
+one CVE). "Host-side check" is a script you run against your own machine; "external tool" is a
+third-party tool this repo documents usage for but doesn't vendor or run. All are confirmation-only.
+
+| CVE(s) | Target | Severity | Host-side check | External tool | Rule |
+|---|---|---|---|---|---|
+| CVE-2026-63030 + CVE-2026-60137 (wp2shell) | WordPress REST API batch endpoint | Critical (chain) | — (covered by `sqli-lab/auto_vuln_scanner.py`'s `sqli` class) | — | R13 |
+| (eMudhra intermediate-CA compromise, no single CVE) | JDK trust store (cacerts) | — | `scripts/java_cacerts_emudhra_check.py` | — | R14 |
+| CVE-2026-109618 / CVE-2026-109619 (PHP2Shell) | PHP core runtime | CVSS 9.2 each | `scripts/php_version_check.py` | [`php2shell-scanner`](php2shell-scanner-notes.md) (url/local/ssh modes) | R15 |
+| CVE-2026-23918 | Apache httpd `mod_http2` | CVSS 8.8 | via `sqli-lab/auto_vuln_scanner.py`'s `check_apache_http2()` | — | R16 |
+| CVE-2026-42945 ("NGINX Rift") | Nginx `ngx_http_rewrite_module` | CVSS 9.2 | via `sqli-lab/auto_vuln_scanner.py`'s `check_nginx_rewrite()` | — | R17 |
+| CVE-2017-9841 | PHPUnit `eval-stdin.php` | CISA KEV | — (detection-only, plain URI match) | — | R18 |
+| CVE-2018-20062 / CVE-2019-9082 | ThinkPHP `invokefunction` | CISA KEV | — (detection-only, plain URI match) | — | R19 |
+| CVE-2026-98260 + 5 more ("Infinity Core") | Linux kernel (timer/signal/mm/futex/sched/SLUB) | CVSS 7.8 (primary) | `scripts/linux_kernel_infinitycore_check.py` | — | R21 |
+| CVE-2026-94300 + 3 more (BIND 9) | ISC BIND 9 | CVSS 8.1 | `scripts/bind_version_check.py` | — | R22 |
+| CVE-2026-94127 | F5 BIG-IP APM (OAuth UserInfo) | CVSS 9.8, CISA KEV | `scripts/f5_bigip_apm_check.py` | — | R23 |
+| CVE-2026-111497 (Node2Shell/HTTP2Shell, PyPI side) | PyPI `brotli`/`brotlicffi` | GHSA Critical | `scripts/python_brotli_check.py` | [Node2Shell Radar](brotli-node2shell-radar-notes.md) (server-side exposure) | R24 |
+| CVE-2026-111497 (Node.js core) | Node.js runtime | — | `scripts/node_version_check.py` | [Node2Shell Radar](brotli-node2shell-radar-notes.md) (server-side exposure) | R25 |
+| CVE-2026-98432 | Linux kernel IPv4 TCP SYN/SYNACK path | CVSS 9.8, no fix yet (any distro) | `scripts/linux_kernel_cve202698432_check.py` | — | R26 |
+
+Also covered, outside this CVE table: `scripts/os_patch_check_linux.py` / `_windows.py` (general
+pending-update inventory, not one CVE), `scripts/dep_cve_check.py` (your own
+`requirements.txt`/`package-lock.json` against OSV.dev). An external tool's own bug found while
+building this repo's test harness — not a vulnerability in a scanned target — gets a regression
+**canary** instead of a scan entry: see `hackingbuddygpt-local-poc/run_regression.py`.
+
 ## Documents
 
 Grown past 25 files, so it's grouped by theme below. For the formal definition of the detection

@@ -15,6 +15,35 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
   脆弱性チェックを試したい人向けの入口。netcheckでの棚卸し → DVWA/Juice Shopでの練習 →
   Strix+ローカルLLMでの自動診断、という一連の流れと手順リンクをまとめたもの。
 
+## 現在対応している脆弱性スキャン（実在CVE）一覧
+
+本リポジトリが**特定の実在CVE/脆弱性**に対して現在確認できるものの早見表(R1〜R12・R20のような、
+特定のCVEに紐づかない行動ベースの検知とは別)。「ホスト側確認」は自分のマシンに対して実行する
+スクリプト、「外部ツール」は本リポジトリでは実装・実行せず利用ノートだけ用意している第三者ツール。
+いずれも確認専用。
+
+| CVE | 対象 | 深刻度 | ホスト側確認 | 外部ツール | 検知ルール |
+|---|---|---|---|---|---|
+| CVE-2026-63030 + CVE-2026-60137 (wp2shell) | WordPress REST APIバッチエンドポイント | Critical(チェーン) | — (`sqli-lab/auto_vuln_scanner.py`の`sqli`クラスでカバー) | — | R13 |
+| (eMudhra中間CA侵害、単一CVEなし) | JDKトラストストア(cacerts) | — | `scripts/java_cacerts_emudhra_check.py` | — | R14 |
+| CVE-2026-109618 / CVE-2026-109619 (PHP2Shell) | PHPコアランタイム | 各CVSS 9.2 | `scripts/php_version_check.py` | [`php2shell-scanner`](php2shell-scanner-notes.md)(url/local/sshモード) | R15 |
+| CVE-2026-23918 | Apache httpd `mod_http2` | CVSS 8.8 | `sqli-lab/auto_vuln_scanner.py`の`check_apache_http2()`経由 | — | R16 |
+| CVE-2026-42945(通称「NGINX Rift」) | Nginx `ngx_http_rewrite_module` | CVSS 9.2 | `sqli-lab/auto_vuln_scanner.py`の`check_nginx_rewrite()`経由 | — | R17 |
+| CVE-2017-9841 | PHPUnit `eval-stdin.php` | CISA KEV | — (検知専用、URI単純一致) | — | R18 |
+| CVE-2018-20062 / CVE-2019-9082 | ThinkPHP `invokefunction` | CISA KEV | — (検知専用、URI単純一致) | — | R19 |
+| CVE-2026-98260 他5件(「Infinity Core」) | Linuxカーネル(timer/signal/mm/futex/sched/SLUB) | CVSS 7.8(主要) | `scripts/linux_kernel_infinitycore_check.py` | — | R21 |
+| CVE-2026-94300 他3件(BIND 9) | ISC BIND 9 | CVSS 8.1 | `scripts/bind_version_check.py` | — | R22 |
+| CVE-2026-94127 | F5 BIG-IP APM(OAuth UserInfo) | CVSS 9.8、CISA KEV | `scripts/f5_bigip_apm_check.py` | — | R23 |
+| CVE-2026-111497(Node2Shell/HTTP2Shell、PyPI側) | PyPI `brotli`/`brotlicffi` | GHSA Critical | `scripts/python_brotli_check.py` | [Node2Shell Radar](brotli-node2shell-radar-notes.md)(サーバー側露出) | R24 |
+| CVE-2026-111497(Node.js本体) | Node.jsランタイム | — | `scripts/node_version_check.py` | [Node2Shell Radar](brotli-node2shell-radar-notes.md)(サーバー側露出) | R25 |
+| CVE-2026-98432 | Linuxカーネル IPv4 TCP SYN/SYNACK処理 | CVSS 9.8、全ディストリビューションで修正版未公開 | `scripts/linux_kernel_cve202698432_check.py` | — | R26 |
+
+この表の対象外で他にカバーしているもの: `scripts/os_patch_check_linux.py` / `_windows.py`(単一
+CVEではなく未適用更新の一般的な棚卸し)、`scripts/dep_cve_check.py`(自分の
+`requirements.txt`/`package-lock.json`をOSV.devと照合)。「対象の脆弱性」ではなく「本リポジトリの
+検証用ハーネスを作る過程で見つけた外部ツール自身のバグ」は、スキャン項目ではなく回帰テストの
+**カナリア**として扱う: `hackingbuddygpt-local-poc/run_regression.py`参照。
+
 ## ドキュメント
 
 全体で25件超になったため、テーマ別に分けている。横断的な索引（検知タグ R1–R11・G1–G6の正式な定義）は [`../shared/taxonomy.json`](../shared/taxonomy.json)。
