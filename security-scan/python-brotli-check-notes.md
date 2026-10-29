@@ -81,4 +81,11 @@ python3 scripts/python_brotli_check.py --log-path /var/log/myapp/gunicorn.log
   言及があるトレースバック)でユニットテストし、正しく検知することを確認した。brotli文脈を
   伴わない無関係なクラッシュ行(合成データ)では検知しないことも確認した。
 
+## 関連: サーバー側の露出確認
+
+本スクリプトは「このホストに入っているパッケージのバージョン」しか確認できない。社外に
+公開しているサーバー/ドメインが実際にどう見えるかを確認したい場合は、第三者ツール
+[Node2Shell Radar](https://github.com/Secragon/node2shell-radar)が使える
+([`brotli-node2shell-radar-notes.md`](brotli-node2shell-radar-notes.md)に利用ノート)。
+
 > 確認・検知の設計に限定。攻撃の実行手順やエクスプロイトコードは含めない。
