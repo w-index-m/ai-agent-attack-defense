@@ -76,6 +76,26 @@
   (OWASP LLM01)**には、既定でも有効化後でも届いていない。CAI固有の実装詳細の指摘で
   あり、LLM一般の脆弱性ではない。詳細: [`cai-local-backend-notes.md`](cai-local-backend-notes.md) 検証2。
 
+## 事例3: hackingBuddyGPT — `api_base`設定項目が丸ごとデッドコード
+
+- **手法**: 台本を書く前に、まず手法のステップ3(内部関数を直接呼ぶ)の前段として
+  「ソースを直接読む」を実施したところ、境界ケースを試すまでもなくコード中に
+  発見があった。
+- **発見**: LLM接続先を切り替える設定フィールド`api_base`が、実際に
+  `litellm.completion()`へ渡す呼び出し箇所で`# api_base=self.api_base, TODO: why
+  is this not working anymore`とコメントアウトされていた。全コードベースを検索しても
+  他に使用箇所は無く、**ユーザーが`api_base`を設定しても完全に無視される**(エラーも
+  出ない)。実機で`api_base`にモックサーバーを指定して呼び出したところ、モックには
+  一切届かず、litellmの既定(実際のOpenAI API)への接続を試みて失敗することを確認した。
+- **回避策の確認**: litellm自身が読む`OPENAI_API_BASE`環境変数を設定したところ、
+  hackingBuddyGPT側の壊れた設定をバイパスしてモックサーバーに正しく到達することを
+  確認した。
+- **意味**: 開発者自身がTODOコメントで認識している既知の不具合で、悪意ある入力とは
+  無関係の、素朴な「設定が効かない」バグ。StrixやCAIの発見より地味だが、
+  「ソースを読むだけで見つかる」という、手法のステップ1(境界ケースの台本)より
+  手前の段階でも価値があることを示した。詳細:
+  [`hackingbuddygpt-local-backend-notes.md`](hackingbuddygpt-local-backend-notes.md) 検証1。
+
 ## 横展開できそうな対象
 
 同じ4ステップの手法を、まだ試していない独立したAIセキュリティ/エージェントツールに
@@ -86,8 +106,9 @@
   (Claude Code/Codexを駆動する自律型、LLM API直叩きではないため同じ手法が
   そのままは通用しない)は未着手のまま残っている。詳細:
   [`pentestgpt-local-backend-notes.md`](pentestgpt-local-backend-notes.md)。
-- **hackingBuddyGPT**: Strix/CAIと同系統のAIペンテストエージェント。同じくOpenAI互換
-  APIのモック化が効くかを先に確認する必要がある。未着手。
+- **hackingBuddyGPT**: 着手した。`api_base`設定項目が丸ごとデッドコードだった
+  (下記「事例3」参照)。`OPENAI_API_BASE`環境変数で回避できることも確認。詳細:
+  [`hackingbuddygpt-local-backend-notes.md`](hackingbuddygpt-local-backend-notes.md)。
 - **Cairn**(本リポジトリの`cairn-lab/`で既にモックdispatcher配線は確認済み、PR #71):
   マルチエージェント構成のワーカー間で、Strixと同種の「前の手の結果が欠落する」問題が
   無いかを、攻撃チェーン型の台本で再検証する余地がある。
