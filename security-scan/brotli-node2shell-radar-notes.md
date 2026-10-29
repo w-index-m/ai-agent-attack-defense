@@ -9,7 +9,7 @@ HTTP2Shell(CVE-2026-111497、Brotliデコーダの境界外書き込み。本リ
 露出確認**はできません。Node2Shell Radarはそのギャップを埋める、対象ドメイン/URLに対する
 確認専用(パッシブ中心)ツールです。本リポジトリでは実装せず(既に公開・保守されている
 第三者ツールのため)、R24・R25の検知ルールと[`tools-dashboard.html`](tools-dashboard.html)
-から参照しています。
+から参照しています。検証者ごとの実施状況は[`external-scanner-verification-log.md`](external-scanner-verification-log.md)にもまとめてある(下記「実機検証」の詳細版)。
 
 > ⚠️ 方針：**第三者ツール**。「ディスカバリ」は公開情報源(サブドメイン列挙・DNS・TLS証明書名)
 > に接触し、任意の「アクティブチェック」は対象サイトへ実際に追加のHTTPリクエストを送ります。
