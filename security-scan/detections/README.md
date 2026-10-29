@@ -36,6 +36,7 @@
 | R23 | F5 BIG-IP APMのOAuth UserInfo要求失敗の反復、または異常に長いAuthorizationヘッダー(CVE-2026-94127、ヒープオーバーフローによる事前認証RCE、悪用確認済み・CISA KEV) | ✅ | — | ✅ | — |
 | R24 | brotli文脈近くのアプリケーションworkerクラッシュ(CVE-2026-111497、通称Node2Shell/HTTP2Shell、Brotliデコーダの境界外書き込み、探索的ヒューリスティック・未確証) | ✅ | — | ✅ | — |
 | R25 | Node.js本体の修正前バージョンでの稼働、またはbrotli文脈近くのNode.jsプロセスクラッシュ(CVE-2026-111497、Node.js公式2026-10-21リリースで修正、クラッシュ検知部分は探索的ヒューリスティック・未確証) | ✅ | — | ✅ | — |
+| R26 | TCP SYN/SYNACK処理近傍でのLinuxカーネルUAF/KASANクラッシュ(CVE-2026-98432、CVSS 3.1 9.8・Critical、Ubuntu優先度High。2026-10-28時点で全サポート対象リリース未修正、探索的ヒューリスティック・未確証) | ✅ | — | ✅ | — |
 
 > R9–R11 は、本連鎖（Strix/Cairn/Hermes 型の攻撃エージェント）ではなく、**LLM システム自体が標的になる側**
 > （`../llm-target-attacks.ja.md`）の検知。R9/R10 は標準的なプロキシ/ネットワークログで検知できるが、
@@ -190,6 +191,21 @@
 > 未確証の探索的ヒューリスティックである点に注意。ホスト側のNode.jsバージョン確認には
 > `scripts/node_version_check.py`(確認専用。`node --version`、または`--node-path`で指定した
 > 別のNode.js実行ファイルのバージョンをメジャーラインごとの修正版と照合)を使うこと。
+>
+> R26は、CVE-2026-98432(Ubuntuセキュリティページ、公開2026-10-15・最終更新2026-10-28時点、
+> Ubuntu優先度High、CVSS 3.1 9.8/Critical)——LinuxカーネルのIPv4 TCP SYN/SYNACK処理における
+> use-after-free。再送されたSYNが別CPUで処理されると、既に子ソケットへ渡されて通常の
+> `kfree()`で解放済みのIPオプションをSYNACK経路が参照してしまい、`ip_options_build()`内で
+> UAFが発生する。関連関数は`tcp_v4_syn_recv_sock`・`tcp_v4_reqsk_destructor`・
+> `inet_sock_destruct`。リクエストソケットのマイグレーション機能(`net.ipv4.tcp_migrate_req=1`、
+> またはBPF_SK_REUSEPORT_SELECT_OR_MIGRATEプログラム使用時)でも類似の経路が存在する。
+> **2026-10-28時点、Ubuntuの全サポート対象リリース(16.04〜26.10、aws/azure/gcp/fips派生
+> カーネル含む)で"Vulnerable (work in progress)"のままで、修正済みパッケージは1件も
+> 公開されていない。** R20・R21・R24・R25と同様、**ベンダー/研究者が公開したリクエスト単位・
+> ログ単位のIOCは無い**ため、本リポジトリ独自に構成した未確証の探索的ヒューリスティック
+> (本CVE関連関数名の近傍でのKASAN/UAFクラッシュパターン)である点に注意。修正版が存在しない
+> ため、ホスト側確認(`scripts/linux_kernel_cve202698432_check.py`)もバージョンでの合否判定は
+> 行わず、カーネルリリース・`net.ipv4.tcp_migrate_req`の値の表示と、任意のログ確認に留まる。
 
 ## 使い方・注意
 

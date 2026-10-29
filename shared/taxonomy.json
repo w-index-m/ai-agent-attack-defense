@@ -28,6 +28,7 @@
     "R23": {"kind": "detection", "name": "F5 BIG-IP APMのOAuth UserInfo要求失敗の反復、または異常に長いAuthorizationヘッダー（CVE-2026-94127、ヒープオーバーフローによる事前認証RCE、悪用確認済み・CISA KEV）"},
     "R24": {"kind": "detection", "name": "brotli文脈近くのアプリケーションworkerクラッシュ（CVE-2026-111497、通称Node2Shell/HTTP2Shell、Brotliデコーダの境界外書き込み、探索的ヒューリスティック・未確証）"},
     "R25": {"kind": "detection", "name": "Node.js本体の修正前バージョンでの稼働、またはbrotli文脈近くのNode.jsプロセスクラッシュ（CVE-2026-111497、Node.js公式2026-10-21リリースで修正、R24のNode.js本体版・探索的ヒューリスティック部分は未確証）"},
+    "R26": {"kind": "detection", "name": "TCP SYN/SYNACK処理近傍でのLinuxカーネルUAF/KASANクラッシュ（CVE-2026-98432、CVSS 3.1 9.8・Critical、Ubuntu優先度High、2026-10-28時点で全リリース未修正・探索的ヒューリスティック）"},
     "③": {"kind": "control", "name": "攻撃面最小化（ネット直結の露出を断つ）"},
     "③CSP": {"kind": "control", "name": "CSP による読み込み制御"}
   },
@@ -86,7 +87,8 @@
       "R22": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R23": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R24": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R25": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
+      "R25": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
+      "R26": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
     }
   }
 }
