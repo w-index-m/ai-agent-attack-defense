@@ -111,4 +111,19 @@ print(llm.get_response('ping').answer)
   今回は「ソースを直接読む」ステップだけで実質的なバグが見つかったため、そこで
   区切った。
 
+## CIでの継続監視(カナリア)
+
+この発見は一度確認して終わりではなく、[`hackingbuddygpt-local-poc/run_regression.py`](hackingbuddygpt-local-poc/run_regression.py)
+として、本リポジトリのCI(`.github/workflows/security-scan.yml`)に組み込んだ。
+毎回upstreamの最新`main`をクローンし、上記3パターン(`api_base`単体・
+`OPENAI_API_BASE`併用・陰性対照)を実際に動かして、このノートに記録した挙動が
+今も成立しているかを確認する。upstreamが修正した、または挙動が変わった場合は
+`scripts/summarize.py`の`hackingbuddygpt_regression`ソースとして指摘が出る
+(本リポジトリや hackingBuddyGPT の「脆弱性」としてではなく、「このドキュメントが
+古くなった」というカナリアとして)。
+
+架空の「修正済みの状態」をシミュレートしたスタブパッケージ(`api_base`を実際に
+litellmへ渡す最小実装)でも検証し、その場合は正しく2件の指摘(「upstreamで修正
+された可能性」「陰性対照が崩れた=因果関係の再確認が必要」)が出ることを確認した。
+
 > 確認・検知の設計に限定。攻撃の実行手順や安全機構の回避方法は含めない。

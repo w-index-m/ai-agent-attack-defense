@@ -15,6 +15,35 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
   脆弱性チェックを試したい人向けの入口。netcheckでの棚卸し → DVWA/Juice Shopでの練習 →
   Strix+ローカルLLMでの自動診断、という一連の流れと手順リンクをまとめたもの。
 
+## 現在対応している脆弱性スキャン（実在CVE）一覧
+
+本リポジトリが**特定の実在CVE/脆弱性**に対して現在確認できるものの早見表(R1〜R12・R20のような、
+特定のCVEに紐づかない行動ベースの検知とは別)。「ホスト側確認」は自分のマシンに対して実行する
+スクリプト、「外部ツール」は本リポジトリでは実装・実行せず利用ノートだけ用意している第三者ツール。
+いずれも確認専用。
+
+| CVE | 対象 | 深刻度 | ホスト側確認 | 外部ツール | 検知ルール |
+|---|---|---|---|---|---|
+| CVE-2026-63030 + CVE-2026-60137 (wp2shell) | WordPress REST APIバッチエンドポイント | Critical(チェーン) | — (`sqli-lab/auto_vuln_scanner.py`の`sqli`クラスでカバー) | — | R13 |
+| (eMudhra中間CA侵害、単一CVEなし) | JDKトラストストア(cacerts) | — | `scripts/java_cacerts_emudhra_check.py` | — | R14 |
+| CVE-2026-109618 / CVE-2026-109619 (PHP2Shell) | PHPコアランタイム | 各CVSS 9.2 | `scripts/php_version_check.py` | [`php2shell-scanner`](php2shell-scanner-notes.md)(url/local/sshモード) | R15 |
+| CVE-2026-23918 | Apache httpd `mod_http2` | CVSS 8.8 | `sqli-lab/auto_vuln_scanner.py`の`check_apache_http2()`経由 | — | R16 |
+| CVE-2026-42945(通称「NGINX Rift」) | Nginx `ngx_http_rewrite_module` | CVSS 9.2 | `sqli-lab/auto_vuln_scanner.py`の`check_nginx_rewrite()`経由 | — | R17 |
+| CVE-2017-9841 | PHPUnit `eval-stdin.php` | CISA KEV | — (検知専用、URI単純一致) | — | R18 |
+| CVE-2018-20062 / CVE-2019-9082 | ThinkPHP `invokefunction` | CISA KEV | — (検知専用、URI単純一致) | — | R19 |
+| CVE-2026-98260 他5件(「Infinity Core」) | Linuxカーネル(timer/signal/mm/futex/sched/SLUB) | CVSS 7.8(主要) | `scripts/linux_kernel_infinitycore_check.py` | — | R21 |
+| CVE-2026-94300 他3件(BIND 9) | ISC BIND 9 | CVSS 8.1 | `scripts/bind_version_check.py` | — | R22 |
+| CVE-2026-94127 | F5 BIG-IP APM(OAuth UserInfo) | CVSS 9.8、CISA KEV | `scripts/f5_bigip_apm_check.py` | — | R23 |
+| CVE-2026-111497(Node2Shell/HTTP2Shell、PyPI側) | PyPI `brotli`/`brotlicffi` | GHSA Critical | `scripts/python_brotli_check.py` | [Node2Shell Radar](brotli-node2shell-radar-notes.md)(サーバー側露出) | R24 |
+| CVE-2026-111497(Node.js本体) | Node.jsランタイム | — | `scripts/node_version_check.py` | [Node2Shell Radar](brotli-node2shell-radar-notes.md)(サーバー側露出) | R25 |
+| CVE-2026-98432 | Linuxカーネル IPv4 TCP SYN/SYNACK処理 | CVSS 9.8、全ディストリビューションで修正版未公開 | `scripts/linux_kernel_cve202698432_check.py` | — | R26 |
+
+この表の対象外で他にカバーしているもの: `scripts/os_patch_check_linux.py` / `_windows.py`(単一
+CVEではなく未適用更新の一般的な棚卸し)、`scripts/dep_cve_check.py`(自分の
+`requirements.txt`/`package-lock.json`をOSV.devと照合)。「対象の脆弱性」ではなく「本リポジトリの
+検証用ハーネスを作る過程で見つけた外部ツール自身のバグ」は、スキャン項目ではなく回帰テストの
+**カナリア**として扱う: `hackingbuddygpt-local-poc/run_regression.py`参照。
+
 ## ドキュメント
 
 全体で25件超になったため、テーマ別に分けている。横断的な索引（検知タグ R1–R11・G1–G6の正式な定義）は [`../shared/taxonomy.json`](../shared/taxonomy.json)。
@@ -41,7 +70,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | [`strix-local-poc/`](strix-local-poc/) | 上記の PoC（パッチ・検証スクリプト・結果）。実LLMキー不要・OpenAI互換の**モックLLMサーバー**で、Strixを実際の`sqli-lab`相手にエンドツーエンド完走させる台本一式(SQLi認証バイパスのレポート生成、デシリアライズRCE、SSRF+IDORの攻撃連鎖)。攻撃連鎖の検証では、1手目のツール呼び出し結果が後続の会話コンテキストから欠落するという、原因未特定のStrix側の挙動も発見・再現確認している。 |
 | [`cai-local-backend-notes.md`](cai-local-backend-notes.md) / [`cai-local-poc/`](cai-local-poc/) | 同じモックLLM手法を、アーキテクチャの異なる第2のAIペネトレーションエージェント **CAI**([aliasrobotics/cai](https://github.com/aliasrobotics/cai))に適用。必要な環境変数(`CAI_LICENSE_OFF`、`CAI_MODEL`、`CAI_AGENT_TYPE`、`CAI_SINGLE_SHOT_CLI`)と、Strixとは異なる非ストリーミング形式のChat Completionsプロトコルを整理。加えて、CAI自身のガードレールコードを直接呼び出して確認した2つの防御上の発見(プロンプトインジェクション検知が既定で**無効**(`CAI_GUARDRAILS=false`)であること、有効化してもツール出力らしきテキスト(`'role': 'tool'`)は一切検査されないこと)と、実際に機能するマルチエージェント・ハンドオフ(`transfer_to_red_team_agent`でアクティブエージェントが切り替わり、本物の`sqli-lab`へのHTTPリクエストが実行された)の検証結果を含む。 |
 | [`pentestgpt-local-backend-notes.md`](pentestgpt-local-backend-notes.md) / [`pentestgpt-local-poc/`](pentestgpt-local-poc/) | アーキテクチャの異なる4つ目の事例: [GreyDGL/PentestGPT](https://github.com/GreyDGL/PentestGPT)の`pentestgpt_legacy`(USENIX-2024設計のモダナイズ版、人間同席型 — Strix/CAIのような自律的なツール実行エージェントではなく、reasoning/generation/parsingの3役がプレーンテキスト・非ストリーミングで人間と対話し、人間がコマンドを実行して結果を貼り戻す設計)。CLI自身が組み込みで持つ`ollama:<model>`+`OLLAMA_BASE_URL`差し替え(APIキー不要)でモック化し、対話CLI(TTYが要る)ではなくコア層のLLM層を直接駆動して検証。[フレームワークのバグ探しの手法](mock-llm-framework-bug-hunting.md)をこの境界ケースに適用したところ、Strix/CAIとは異なり今回はバグが見つからず、3つのセッションの会話履歴が複数ターンにわたって正しく分離されていることを確認(クリーンな負の結果)。新しい`pentestgpt_agent/`(LLM APIを直接叩かずClaude Code/Codexを駆動する自律型)は未着手で、同じ手法はそのままは通用しない。 |
-| [`hackingbuddygpt-local-backend-notes.md`](hackingbuddygpt-local-backend-notes.md) / [`hackingbuddygpt-local-poc/`](hackingbuddygpt-local-poc/) | 5つ目の事例: [ipa-lab/hackingBuddyGPT](https://github.com/ipa-lab/hackingBuddyGPT)。Strix/CAIと同じく、単一の`LiteLLM`ラッパーがOpenAI形式の関数呼び出しでCapability(コマンド実行等)を駆動する設計。台本を書く前にソースを読んだだけで実際のバグを発見: LLM接続先を切り替える`api_base`設定項目が、唯一の呼び出し箇所で**コメントアウトされていた**(`# api_base=self.api_base, TODO: why is this not working anymore`)。設定しても一切効かないことを実機で確認(モックではなく実際のOpenAI APIへ接続を試みて失敗)。litellm自身の`OPENAI_API_BASE`環境変数がこの壊れた設定をバイパスして正しくモックに到達する回避策も発見・確認した。`RecordNote`というCapabilityを使った関数呼び出し(`tools`→台本どおりの`tool_calls`→正しいパース)の一連の配線も実機で確認済み。 |
+| [`hackingbuddygpt-local-backend-notes.md`](hackingbuddygpt-local-backend-notes.md) / [`hackingbuddygpt-local-poc/`](hackingbuddygpt-local-poc/) | 5つ目の事例: [ipa-lab/hackingBuddyGPT](https://github.com/ipa-lab/hackingBuddyGPT)。Strix/CAIと同じく、単一の`LiteLLM`ラッパーがOpenAI形式の関数呼び出しでCapability(コマンド実行等)を駆動する設計。台本を書く前にソースを読んだだけで実際のバグを発見: LLM接続先を切り替える`api_base`設定項目が、唯一の呼び出し箇所で**コメントアウトされていた**(`# api_base=self.api_base, TODO: why is this not working anymore`)。設定しても一切効かないことを実機で確認(モックではなく実際のOpenAI APIへ接続を試みて失敗)。litellm自身の`OPENAI_API_BASE`環境変数がこの壊れた設定をバイパスして正しくモックに到達する回避策も発見・確認した。`RecordNote`というCapabilityを使った関数呼び出し(`tools`→台本どおりの`tool_calls`→正しいパース)の一連の配線も実機で確認済み。クリーンな状態から2回再現+陰性対照(`api_base`が部分的にでも効いている可能性を排除)で再検証済み。この発見は現在**CIのカナリア**になっている(`hackingbuddygpt-local-poc/run_regression.py`、`.github/workflows/security-scan.yml`に組み込み済み): 毎回upstreamの最新`main`をクローンし、記録した挙動が変わった場合に`hackingbuddygpt_regression`の指摘として報告する(本リポジトリやhackingBuddyGPTの脆弱性ではなく、「ドキュメントが古くなった」というシグナル)。 |
 | [`mock-llm-framework-bug-hunting.md`](mock-llm-framework-bug-hunting.md) | **上記2件のフレームワークバグを、再現可能な手法として一般化**。単発の素直なシナリオではなく境界ケース(攻撃チェーン、マルチエージェントのハンドオフ、ツール出力っぽい文字列)を台本にする、最終成果物ではなく生ログ/セッション状態をフレームワーク自身の主張と突き合わせる、エージェントループ全体ではなく内部関数を直接呼ぶ、クリーンな状態から2回以上再現する、という4ステップ。未着手の横展開候補(PentestGPT、hackingBuddyGPT、Cairnでの同種のコンテキスト欠落バグの再チェック)も整理。「フレームワークの配線バグを見つける手法であり、実LLMの判断力の検証にはならない」という限界も明記。 |
 | [`cairn-lab/`](cairn-lab/) | Cairn を認可済み隔離ラボで動かすランブックと実設定（`dispatch.lab.yaml` ほか）、攻撃なし mock 設定。 |
 | [`strix-local-poc/windows-wsl-ollama-setup.md`](strix-local-poc/windows-wsl-ollama-setup.md) | Windows 11 + WSL2 + ローカルOllamaで、クラウドLLM課金なしにStrixを動かす実機セットアップ手順（DVWA等の自分で立てた練習環境を対象）、Groq/OpenRouterクラウドLLMでの試行、Claude Codeクラウドサンドボックスでの試行を記録。**最終結論：断念。** 試した全構成(ローカル3サイズ・Groq・OpenRouter・クラウドサンドボックス)がそれぞれ異なる構造的な壁(ツール呼び出しJSONの崩壊/無意味なコマンドループ、無料枠のトークン/分制限、大きいリクエストで原因不明の404、LLMプロバイダ全拒否のネットワーク許可リスト)に当たった。セットアップを自動化するPowerShellスクリプト（[`start-strix-test.ps1`](strix-local-poc/start-strix-test.ps1)）も収録(今は断念した旧アプローチの記録)。 |

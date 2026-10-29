@@ -76,12 +76,23 @@ def sqli_lab(data):
         yield ("sqli_lab", r.get("severity", "high"), r.get("title", ""), r.get("location", ""), False)
 
 
+def hackingbuddygpt_regression(data):
+    # security-scan/hackingbuddygpt-local-poc/run_regression.py の出力。ここに現れるのは
+    # 「このリポジトリの脆弱性」でも「hackingBuddyGPTの脆弱性」でもなく、本リポジトリが
+    # 記録した外部プロジェクト(hackingBuddyGPT)のバグ(api_baseが死んでいる設定項目)に
+    # 関するドキュメントが、upstream側の変化で古くなっていないかのカナリア。
+    # 詳細は security-scan/hackingbuddygpt-local-backend-notes.md 参照。
+    for r in data or []:
+        yield ("hackingbuddygpt_regression", r.get("severity", "medium"), r.get("title", ""), r.get("location", ""), False)
+
+
 SOURCES = [
     ("semgrep.json", semgrep),
     ("trivy.json", trivy),
     ("gitleaks.json", gitleaks),
     ("zap.json", zap),
     ("sqli_lab.json", sqli_lab),
+    ("hackingbuddygpt_regression.json", hackingbuddygpt_regression),
 ]
 
 
