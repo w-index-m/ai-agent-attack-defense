@@ -81,8 +81,13 @@
 同じ4ステップの手法を、まだ試していない独立したAIセキュリティ/エージェントツールに
 適用できないか、という観点での候補(いずれも未着手、優先度順ではない):
 
-- **PentestGPT**・**hackingBuddyGPT**: Strix/CAIと同系統のAIペンテストエージェント。
-  同じくOpenAI互換APIのモック化が効くかを先に確認する必要がある。
+- **PentestGPT**: 着手した。`pentestgpt_legacy`(対話型、OpenAI互換APIのモック化が
+  素直に効いた)ではこの境界ケースでバグは見つからず、新しい`pentestgpt_agent`
+  (Claude Code/Codexを駆動する自律型、LLM API直叩きではないため同じ手法が
+  そのままは通用しない)は未着手のまま残っている。詳細:
+  [`pentestgpt-local-backend-notes.md`](pentestgpt-local-backend-notes.md)。
+- **hackingBuddyGPT**: Strix/CAIと同系統のAIペンテストエージェント。同じくOpenAI互換
+  APIのモック化が効くかを先に確認する必要がある。未着手。
 - **Cairn**(本リポジトリの`cairn-lab/`で既にモックdispatcher配線は確認済み、PR #71):
   マルチエージェント構成のワーカー間で、Strixと同種の「前の手の結果が欠落する」問題が
   無いかを、攻撃チェーン型の台本で再検証する余地がある。
