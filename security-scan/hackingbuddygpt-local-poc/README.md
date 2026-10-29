@@ -16,6 +16,7 @@
 |---|---|
 | `mock_llm_server.py` | OpenAI互換(非ストリーミング)モックLLMサーバー。リクエストに`tools`が含まれていれば`record_note`等の1件目のツール名に対する台本どおりの`tool_calls`を返し、無ければプレーンテキストを返す。 |
 | `drive_tools_smoke_test.py` | `hackingBuddyGPT.utils.llm.LiteLLM`を直接呼び出し、(1)プレーンテキスト応答、(2)`RecordNote`というCapabilityを関数呼び出しスキーマに変換して渡し、モックが返した`tool_calls`が正しくパースされること、の両方を検証するスクリプト。 |
+| `api_base_bug_repro.py` | `api_base`デッドコードバグの再現スクリプト。「`api_base`だけ設定(失敗)」「`api_base`+`OPENAI_API_BASE`両方設定(成功)」をそれぞれ2回ずつ、さらに「`api_base`は正しいが`OPENAI_API_BASE`は到達不能(失敗)」という陰性対照を1回実行し、到達先を実際に決めているのが`OPENAI_API_BASE`環境変数だけであることを切り分ける。 |
 
 ## 再現手順
 

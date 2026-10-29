@@ -41,24 +41,39 @@ return litellm.completion(
 `api_base`を設定しても、**完全に無視される**(エラーも出ない)。開発者自身が
 TODOコメントで「なぜ動かなくなったのか分からない」と認めている既知の不具合。
 
-### 実機で再現・確認
+### 実機で再現・確認(2回再現+陰性対照で原因を切り分け)
 
-実際に`LiteLLM(api_base="http://127.0.0.1:8900/v1", ...)`でモックサーバーを指定して
-`get_response()`を呼んだところ、**モックサーバーには一切リクエストが届かず**、
-litellmの既定(実際のOpenAI API)へ接続しようとして`ConnectionError`になることを
-確認した(キーがダミーのため失敗して当然だが、重要なのは**到達先が全く別**という点)。
+「台本を書く前にソースを読んだだけで見つけた」発見だったため、本当にそのとおりか
+([`mock-llm-framework-bug-hunting.md`](mock-llm-framework-bug-hunting.md)の
+「クリーンな状態から2回以上再現する」に沿って)サンドボックスで4パターン・計5回、
+改めて検証した(モックサーバーを再起動したクリーンな状態から実施)。
 
-### ワークアラウンドの確認
+| 実行 | `api_base`引数 | `OPENAI_API_BASE`環境変数 | 結果 |
+|---|---|---|---|
+| B-run1 | モックのURL | (未設定) | **失敗**(モックに届かず、`ConnectionError`) |
+| B-run2 | モックのURL | (未設定) | **失敗**(同上、再現) |
+| C-run1 | モックのURL | モックのURL | **成功**(モックが応答) |
+| C-run2 | モックのURL | モックのURL | **成功**(同上、再現) |
+| D(陰性対照) | モックのURL | **到達不能なURL**(`http://127.0.0.1:1/v1`) | **失敗** |
 
-litellm自身が標準で読む`OPENAI_API_BASE`環境変数を設定したところ、
-hackingBuddyGPT側の(死んでいる)`api_base`設定をバイパスして、
-litellmが直接モックサーバーへリクエストを送ることを確認した:
+B(2回とも)は、`api_base`引数にモックを正しく指定していても毎回失敗し、モック側の
+ログにはリクエストが一切記録されない(=litellmの既定である実際のOpenAI APIへ
+接続しようとして失敗している)ことを確認した。C(2回とも)は、同じ`api_base`引数に
+加えて`OPENAI_API_BASE`環境変数も設定すると毎回成功し、モック側のログに
+実際に2件のリクエストが記録されていることをサーバー側ログでも照合した。
+
+D(陰性対照)が重要: `api_base`引数は**正しくモックのURLを指している**ままで、
+`OPENAI_API_BASE`だけを到達不能なアドレスに変えると、**やはり失敗する**。これは
+「`api_base`引数が多少なりとも効いている可能性」を完全に排除し、**到達先を
+決めているのは`OPENAI_API_BASE`環境変数だけであり、`api_base`引数は本当に
+何の影響も持たない**ことを示す。
 
 ```bash
+# C run (再現コマンド)
 OPENAI_API_BASE="http://127.0.0.1:8900/v1" python3 -c "
 from hackingBuddyGPT.utils.llm import LiteLLM
 llm = LiteLLM(api_key='dummy-mock-key', model='openai/mock-model', context_size=8000,
-              api_base='http://127.0.0.1:8900/v1')  # この行自体は無視される
+              api_base='http://127.0.0.1:8900/v1')  # この引数自体は本当に無視される(D run で確認)
 llm.init()
 print(llm.get_response('ping').answer)
 "
@@ -69,6 +84,8 @@ print(llm.get_response('ping').answer)
 なく`OPENAI_API_BASE`環境変数を使うこと**(モデル名を`openai/`プレフィックス付きに
 する必要あり。`openrouter/`等、litellmが別の環境変数を参照するプレフィックスでは
 この回避策は効かない可能性がある、未検証)。
+
+上記5回分の再現手順は[`hackingbuddygpt-local-poc/api_base_bug_repro.py`](hackingbuddygpt-local-poc/api_base_bug_repro.py)として収録済み。
 
 ## 検証2: 関数呼び出し(tool_calls)の配線確認
 
