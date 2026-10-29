@@ -1,0 +1,18 @@
+{
+  "name": "[R26] Linux kernel UAF/KASAN crash near TCP SYN/SYNACK handling (CVE-2026-98432)",
+  "type": "log_detection",
+  "message": "Exploratory heuristic for CVE-2026-98432 (Ubuntu priority High, CVSS 3.1 9.8/Critical): a use-after-free in the Linux kernel's IPv4 TCP SYN/SYNACK path. When a retransmitted SYN is processed on another CPU, the SYNACK path can read IP options already handed to a child socket and freed with plain kfree() instead of kfree_rcu(), causing a UAF in ip_options_build(). A related path exists via request-socket migration (net.ipv4.tcp_migrate_req=1, or a BPF_SK_REUSEPORT_SELECT_OR_MIGRATE program). As of 2026-10-28 Ubuntu lists every supported release as \"Vulnerable (work in progress)\" -- no fixed package exists yet.\n\nA kernel memory-safety bug leaves no reliable userspace log line by itself, so this looks for the kernel's own crash signature: a KASAN/UAF report (or general oops/panic) whose nearby lines name the functions this CVE implicates (tcp_v4_syn_recv_sock, tcp_v4_reqsk_destructor, inet_sock_destruct, ip_options_build). Requires the crash to actually surface (e.g. a KASAN-instrumented kernel) -- a miss proves nothing, a hit is a lead not proof.\n\nConfirm kernel version and sysctl net.ipv4.tcp_migrate_req with scripts/linux_kernel_cve202698432_check.py and Ubuntu's own advisory before attributing a hit to this CVE specifically.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1190", "tactic:initial-access"],
+  "queries": [
+    {
+      "name": "kernel_uaf_near_tcp_syn_functions",
+      "query": "source:kernel (\"BUG: KASAN: slab-use-after-free\" OR \"BUG: KASAN:\" OR \"Kernel panic\" OR \"general protection fault\") AND (\"tcp_v4_syn_recv_sock\" OR \"tcp_v4_reqsk_destructor\" OR \"inet_sock_destruct\" OR \"ip_options_build\")",
+      "aggregation": "count",
+      "groupByFields": ["host"]
+    }
+  ],
+  "cases": [
+    { "name": "Kernel UAF/KASAN crash near TCP SYN/SYNACK handling observed", "status": "medium", "condition": "kernel_uaf_near_tcp_syn_functions > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

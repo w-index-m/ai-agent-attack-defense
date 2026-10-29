@@ -1,0 +1,66 @@
+title: Linux kernel UAF/KASAN crash near TCP SYN/SYNACK handling (CVE-2026-98432)
+id: 5f8b2e1a-9c4d-4a7e-b3f6-r26tcpuaf0000
+status: experimental
+description: >
+  Exploratory heuristic for CVE-2026-98432 (Ubuntu priority High, CVSS 3.1
+  9.8/Critical), a use-after-free in the Linux kernel's IPv4 TCP SYN/SYNACK
+  path: when a retransmitted SYN is processed on another CPU, the SYNACK
+  path can read IP options (ireq->ireq_opt) already handed to a child
+  socket and freed with plain kfree() instead of kfree_rcu(), causing a
+  use-after-free in ip_options_build(). A related path exists via request
+  socket migration (net.ipv4.tcp_migrate_req=1, or a
+  BPF_SK_REUSEPORT_SELECT_OR_MIGRATE program). As of 2026-10-28 Ubuntu
+  lists every supported release (16.04 through 26.10, including the
+  aws/azure/gcp/fips kernel flavours) as "Vulnerable (work in progress)"
+  -- no fixed package exists yet for any of them.
+  A kernel memory-safety bug leaves no reliable userspace log line by
+  itself, so this rule looks for the kernel's own crash signature instead:
+  a KASAN/UAF report (or a general kernel oops/panic) whose nearby lines
+  name the functions this CVE's description implicates
+  (tcp_v4_syn_recv_sock, tcp_v4_reqsk_destructor, inet_sock_destruct,
+  ip_options_build). This requires the crash to actually surface (e.g. a
+  KASAN-instrumented kernel) -- a successful exploit against a
+  non-instrumented production kernel may leave no crash at all, so a miss
+  here proves nothing, and a hit is a lead to investigate, not proof of
+  this specific CVE.
+references:
+  - https://ubuntu.com/security/CVE-2026-98432
+  - ../../scripts/linux_kernel_cve202698432_check.py
+author: ai-agent-attack-defense
+date: 2026-10-29
+logsource:
+  category: application
+  product: linux
+  service: kernel
+detection:
+  selection_crash:
+    message|contains:
+      - 'BUG: KASAN: slab-use-after-free'
+      - 'BUG: KASAN:'
+      - 'Kernel panic'
+      - 'general protection fault'
+  selection_relevant_function:
+    message|contains:
+      - 'tcp_v4_syn_recv_sock'
+      - 'tcp_v4_reqsk_destructor'
+      - 'inet_sock_destruct'
+      - 'ip_options_build'
+  condition: selection_crash and selection_relevant_function
+  # Both selections are expected to match within the same multi-line kernel
+  # log record (a KASAN report prints the crash header and the call trace
+  # together) -- if your log pipeline splits dmesg into separate per-line
+  # events, correlate selection_crash and selection_relevant_function
+  # within a short window (a few seconds) on the same host instead of
+  # requiring both in one event.
+fields:
+  - host
+  - message
+falsepositives:
+  - The implicated function names appear in the kernel's general TCP/IPv4 stack and can show up near an unrelated crash with no connection to this CVE.
+  - A non-KASAN production kernel is unlikely to surface a clean UAF report at all; absence of a hit says nothing about whether the host is vulnerable (it almost certainly still is -- no fix exists as of this rule's authoring date).
+  - This is this repo's own constructed, explicitly-labeled-unconfirmed heuristic -- no vendor or researcher has published a request- or log-level IOC for this CVE. Confirm kernel version and sysctl net.ipv4.tcp_migrate_req with scripts/linux_kernel_cve202698432_check.py and Ubuntu's own advisory before attributing a hit to this CVE specifically.
+level: medium
+tags:
+  - attack.initial_access
+  - attack.t1190
+  - attack.impact
