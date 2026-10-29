@@ -82,6 +82,23 @@ jobs:
           pip install --quiet flask requests markupsafe
           python3 security-scan/sqli-lab/run_regression.py --out results/sqli_lab.json || true
 
+      # --- hackingBuddyGPTのapi_baseバグに関する、本リポジトリの記録のカナリア ---
+      # 「このリポジトリの脆弱性」でも「hackingBuddyGPTの脆弱性」でもない。upstream の
+      # 現在のmainを毎回クローンし、本リポジトリがsecurity-scan/hackingbuddygpt-local-
+      # backend-notes.mdに記録した挙動(api_base設定項目が死んでいる、OPENAI_API_BASE
+      # 環境変数で回避できる)が今も成立しているかだけを確認する。失敗してもCI自体は
+      # 止めない(upstream起因の失敗でジョブを赤くしないため)。
+      - name: hackingBuddyGPT api_base バグの記録カナリア
+        run: |
+          set +e
+          rm -rf /tmp/hbgpt-canary
+          git clone --depth 1 https://github.com/ipa-lab/hackingBuddyGPT /tmp/hbgpt-canary
+          pip install --quiet litellm httpx pydantic PyYAML python-dotenv rich tenacity \
+            fabric asyncssh Mako requests pypsexec beautifulsoup4 faker mcp
+          python3 security-scan/hackingbuddygpt-local-poc/run_regression.py \
+            --hbgpt-src /tmp/hbgpt-canary/src --out results/hackingbuddygpt_regression.json
+          exit 0
+
       - name: 集計(要約を表示)
         run: |
           sudo chown -R "$(id -u):$(id -g)" results || true
