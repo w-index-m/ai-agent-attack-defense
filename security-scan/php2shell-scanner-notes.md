@@ -102,10 +102,27 @@ READMEもその旨を明記している)。
   バージョン文字列だけを比較する最小限のチェックで、php2shell-scannerのurlモードの一部
   (バージョン判定のみ)に相当する。設定ベースの悪用可否判定や侵害痕跡スキャンは持たない。
 
-## 検証状況(正直な限界)
+## 検証状況
 
-- このセッションでは、php2shell-scannerのソース(README、`main.go`、`internal/`)を取得して
-  読んだのみで、**ビルド・実行・実機での動作確認はしていない**(Go言語の実行環境を要する点、
+- **リポジトリ所有者の実機(Windows 11 + WSL2)での検証(2026-10下旬)**: 実際に
+  `php2shell-scanner`をダウンロード(`curl`でリリースアセット+`SHA256SUMS`取得、
+  `sha256sum --check`、`tar -xzf`、`sudo install`)し、`local`モードを実行。
+  - このWSL環境のCLI版PHP(`8.5.4`、修正版`8.5.12`未満)を正しく`critical`判定。
+  - 悪用経路を成立させる設定もHIGH 2件として正しく検知: `session.upload_progress.enabled=1`
+    (CVE-2026-109619の起点)と`fatal_error_backtraces=1`(どちらもPHP 8.5の既定値で、
+    特別な設定をしたわけではない)。
+  - INFO 3件(`session.upload_progress.cleanup=1`・`memory_limit=-1`等)も参考情報として出力。
+  - この時点ではCLI版PHPが入っているだけでWebサーバーとして待ち受けるプロセスは無く、
+    外部から攻撃可能な状態ではないことも確認済み。
+  - 追加で、R15検知ルール(`detections/sigma/r15_php2shell_worker_crash.yml`)が探す
+    php-fpm workerクラッシュパターンの確認として、手作りの3行の合成ログ
+    (`/tmp/fpm-test.log`、`[pool www] child 5678 exited on signal 11 (SIGSEGV) ...`を含む)
+    を用意し、`php_version_check.py`(本リポジトリ自身のスクリプト)のログ確認機能が
+    正しく1件ヒットすることを確認(実際の攻撃成立の証拠ではなく、検知パターン自体が
+    正しく動くことの確認)。
+  - 結果のスクリーンショットは本人提供のパワポ資料で確認済み。
+- **このClaude Codeセッション自身では**、php2shell-scannerのソース(README、`main.go`、
+  `internal/`)を取得して読んだのみで、ビルド・実行はしていない(Go言語の実行環境を要する点、
   および実在するPHP2Shell脆弱環境がこのサンドボックスに無い点から)。
 - 上記の使い方・フラグ・バージョン表は、ツール自身のREADME(2026-10-22時点の内容)から
   転記したもの。ツールが更新された場合、内容が古くなる可能性がある。利用前に
