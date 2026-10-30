@@ -52,6 +52,28 @@ pending-update inventory, not one CVE), `scripts/dep_cve_check.py` (your own
 building this repo's test harness — not a vulnerability in a scanned target — gets a regression
 **canary** instead of a scan entry: see `hackingbuddygpt-local-poc/run_regression.py`.
 
+### Sandbox verification log
+
+Each rule above was actually run in this repo's own sandbox (not just read), against whatever
+real software happened to be installed there, to confirm each script's version/log comparison
+logic produces the correct verdict. Kept as a compact, honest log — a "ran it and here's what
+happened," not a new write-up.
+
+| Rule | Verified | Environment found | Result |
+|---|---|---|---|
+| R13 | 2026-10-30 | n/a — `check_php2shell()` called directly | Correct vulnerable verdict for `PHP/8.3.6` header, correct `None` (safe) for `PHP/8.3.36` header. |
+| R14 | 2026-10-30 | OpenJDK 21.0.12.1 (this sandbox) | Ran live: cacerts has 123 entries, no eMudhra/`AAA Certificate Services` root found (correctly negative); separately flagged JSSE version as IPA-listed vulnerable (21.0.12.1). |
+| R15 | 2026-10-30 | PHP 8.3.6 (this sandbox) | Ran live: correctly flagged `high` (8.3.6 < first fixed 8.3.36 for the 8.3 branch). |
+| R16 | 2026-10-30 | n/a — `check_apache_http2()` called directly (no Apache installed here) | Correct vulnerable verdict for `Apache/2.4.58` and `Apache/2.4.64` (both < fixed 2.4.67); correct `None` (safe) for `Apache/2.4.67` and `Apache/2.5.0`. |
+| R17 | 2026-10-30 | n/a — `check_nginx_rewrite()` called directly (no nginx installed here) | Correct vulnerable verdict for `nginx/1.25.3`; correct `None` (safe) for `nginx/1.30.1` and `nginx/1.31.0`. |
+| R18/R19 | — | n/a | Plain URI-match, no host-side script to run; not re-verified here. |
+| R21 | 2026-10-30 | Kernel 6.18.44-fc-v185 / Ubuntu 24.04.5 LTS (this sandbox) | Ran live: correctly reports running kernel/distro and declines a numeric verdict (by design — distro backport versions aren't comparable). |
+| R22 | 2026-10-30 | BIND 9.18.39-0ubuntu0.24.04.8-Ubuntu (this sandbox) | Ran live: correctly flagged `high` (9.18.39 in the affected 9.11.0–9.18.50 range; 9.18 branch is EOL with no ISC-side fix). |
+| R23 | 2026-10-30 | No real BIG-IP hardware here; `--version` mode only | Ran live with `--version`: correct `high` for `17.1.0` (affected), correct `info`/safe for `17.5.2`. The log-file/core-dir/tmm-finish detection paths need a real BIG-IP box and were **not** live-exercised, only read-reviewed. |
+| R24 | 2026-10-30 | Python `brotli` 1.2.1 (installed fresh in this sandbox for the test) | Ran live: correctly reports `brotli` 1.2.1 as fixed (not vulnerable); `brotlicffi` correctly reported as not installed. |
+| R25 | 2026-10-30 | Node.js 22.22.0 (this sandbox) | Ran live: correctly flagged `high` (22.22.0 < first fixed 22.23.4 for the 22.x branch). |
+| R26 | 2026-10-30 | Kernel 6.18.44-fc-v185 / Ubuntu 24.04.5 LTS (this sandbox) | Verified earlier this session: real host check + synthetic positive/negative crash-log fixtures (KASAN/UAF marker detection confirmed) + real dmesg (375 lines, no false positives). See `linux-kernel-cve-2026-98432-check-notes.md`. |
+
 ## Documents
 
 Grown past 25 files, so it's grouped by theme below. For the formal definition of the detection
