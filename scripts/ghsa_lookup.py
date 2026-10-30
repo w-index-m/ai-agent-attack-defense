@@ -19,12 +19,11 @@
     python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --cve CVE-2026-25592 --out report.md
     python3 scripts/ghsa_lookup.py --ghsa GHSA-xjw9-4gw8-4rqx --json-out raw.json
 
-未検証: GitHub の公開 Advisories API（https://api.github.com/advisories/...）への
-実際の接続は、開発環境からは別の理由で確認できていない（このセッションの GitHub
-連携が、接続済みリポジトリ以外の API パスを塞いでいるため）。JSON のパースと
-Markdown への整形は、ローカルのモックサーバーで検証済み（詳細: security-scan/
-ghsa-lookup-notes.md）。一般的なインターネット接続がある環境（自分の PC、CI）
-であれば、通常はこの制約を受けない。
+検証状況: GitHub の公開 Advisories API（https://api.github.com/advisories/...）への
+実通信は、Windows の PC で確認済み（2026-10-30。--ghsa 1件、--cve 2件とも取得
+成功、失敗 0件）。JSON のパースと Markdown への整形は、ローカルのモックサーバーでも
+検証済み（詳細: security-scan/ghsa-lookup-notes.md）。取得内容そのものの照合
+（GitHub 上のページとの突き合わせ）は、別途行うこと。
 """
 import argparse
 import json
@@ -78,15 +77,19 @@ def _patched_version(vuln):
 
 def _cvss(adv):
     """cvss（単一）と cvss_severities（複数版）の両方の API の形に対応する。
-    見つかった値をそのまま返し、推測で補わない。"""
+    見つかった値をそのまま返し、推測で補わない。両方に同じ値が入っている場合
+    （実際の API で確認済み）は、重複して出さない。"""
     out = []
+    def add(score, vector):
+        if (score, vector) not in out:
+            out.append((score, vector))
     if adv.get("cvss") and adv["cvss"].get("vector_string"):
-        out.append((adv["cvss"].get("score"), adv["cvss"].get("vector_string")))
+        add(adv["cvss"].get("score"), adv["cvss"].get("vector_string"))
     sevs = adv.get("cvss_severities") or {}
     for key in ("cvss_v4", "cvss_v3"):
         v = sevs.get(key)
         if v and v.get("vector_string"):
-            out.append((v.get("score"), v.get("vector_string")))
+            add(v.get("score"), v.get("vector_string"))
     return out
 
 
@@ -110,7 +113,8 @@ def to_markdown(adv):
         lines.append("- **CWE**: " + ", ".join("%s（%s）" % (c.get("cwe_id"), c.get("name")) for c in cwes))
     lines.append("- **公表日**: %s" % adv.get("published_at", "(無し)"))
     lines.append("- **最終更新**: %s" % adv.get("updated_at", "(無し)"))
-    lines.append("- **状態**: %s" % adv.get("state", "(無し)"))
+    if adv.get("state"):  # グローバルな Advisories API のレスポンスには無いことが多い
+        lines.append("- **状態**: %s" % adv["state"])
     lines.append("- **GitHub 上のページ**: %s" % adv.get("html_url", "(無し)"))
     vulns = adv.get("vulnerabilities") or []
     if vulns:
