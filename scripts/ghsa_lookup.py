@@ -19,12 +19,11 @@
     python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --cve CVE-2026-25592 --out report.md
     python3 scripts/ghsa_lookup.py --ghsa GHSA-xjw9-4gw8-4rqx --json-out raw.json
 
-未検証: GitHub の公開 Advisories API（https://api.github.com/advisories/...）への
-実際の接続は、開発環境からは別の理由で確認できていない（このセッションの GitHub
-連携が、接続済みリポジトリ以外の API パスを塞いでいるため）。JSON のパースと
-Markdown への整形は、ローカルのモックサーバーで検証済み（詳細: security-scan/
-ghsa-lookup-notes.md）。一般的なインターネット接続がある環境（自分の PC、CI）
-であれば、通常はこの制約を受けない。
+検証状況: GitHub の公開 Advisories API（https://api.github.com/advisories/...）への
+実通信は、Windows の PC で確認済み（2026-10-30。--ghsa 1件、--cve 2件とも取得
+成功、失敗 0件）。JSON のパースと Markdown への整形は、ローカルのモックサーバーでも
+検証済み（詳細: security-scan/ghsa-lookup-notes.md）。取得内容そのものの照合
+（GitHub 上のページとの突き合わせ）は、別途行うこと。
 """
 import argparse
 import json

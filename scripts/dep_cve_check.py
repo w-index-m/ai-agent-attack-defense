@@ -17,9 +17,13 @@ requirements.txt（pip、`==` で固定された行のみ）と、npm の packag
     python3 scripts/dep_cve_check.py --npm-lock package-lock.json --out dep_cve.sarif
     python3 scripts/dep_cve_check.py --requirements requirements.txt --npm-lock package-lock.json
 
-未検証: このスクリプトのネットワーク呼び出し（OSV API）は、開発時の環境では
-api.osv.dev に到達できず、実機では確認できていない。パース処理とSARIF生成は、
-ローカルのモックサーバーで検証済み（詳細: security-scan/dep-cve-check-notes.md）。
+検証状況: OSV API（api.osv.dev）への実通信は、Windows の PC（一般的なインターネット
+接続）で確認済み（2026-10-30。jinja2==2.10 / requests==2.19.0 で 22件を検出、
+確認できなかった 0件）。パース処理と SARIF 生成はローカルのモックサーバーでも検証済み
+（詳細: security-scan/dep-cve-check-notes.md）。
+
+終了コード: 0=脆弱性なし・全件確認済み / 1=既知の脆弱性あり / 2=確認できなかった
+パッケージがある（脆弱性なしとは言えない）。
 """
 import argparse
 import json
@@ -224,7 +228,9 @@ def main():
     for e in errors:
         print("  ⚠ %s %s: %s" % (e["name"], e["version"], e["reason"]))
     print("出力: %s（vuln_triage.html に読み込めます）" % args.out)
-    return 1 if findings else 0
+    if findings:
+        return 1
+    return 2 if errors else 0
 
 
 if __name__ == "__main__":

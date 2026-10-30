@@ -30,10 +30,10 @@ python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --cve CVE-2026-25592 --out r
 - **JSON のパースと Markdown への整形**：ローカルのモック HTTP サーバー（実際に確認した
   GHSA-xjw9-4gw8-4rqx のデータを再現したもの）で検証済み。404（見つからない場合）、CVE 番号での
   検索、`first_patched_version`（オブジェクト形式）からの修正版の抽出を確認した。
-- **実際の `api.github.com` への接続**：**この開発環境からは確認できていない。** 理由は、ネットワーク
-  自体の制限ではなく、**このセッションの GitHub 連携が、接続済みリポジトリ以外の API パスへのアクセスを
-  塞いでいる**ため（`api.github.com/advisories/...` への `curl` が、Claude Code 側のメッセージを返した）。
-  一般的なインターネット接続がある環境（自分の PC、CI）であれば、この制約は無いはずだが、未確認。
+- **実際の `api.github.com` への接続**：**2026-10-30、Windows の PC で確認済み。** `--ghsa GHSA-xjw9-4gw8-4rqx`
+  は取得 1件・失敗 0件、`--cve CVE-2026-26030 --cve CVE-2026-25592` は取得 2件・失敗 0件。
+  クラウド開発環境（ネットワーク許可リスト制）からは 403 で拒否され、接続失敗として明示された（空の結果にはならなかった）。
+  取得内容が GitHub 上のページと一致するか（特に 2つの CVE が混ざっていないか）の照合は、まだ行っていない。
 - GitHub の公開 Advisories API は、**認証なしでも読めるが、レート制限が低い**（認証ありより少ない回数）。
   連続して多数のアドバイザリを取得する場合は、`--delay` の間隔を空けることを推奨する（既定 1 秒）。
 
@@ -54,7 +54,8 @@ number) from the public Advisories API and writes it to Markdown **verbatim, wit
 This exists because summarizing an advisory page with an LLM earlier led to mixing up two distinct
 CVEs' contents (see the revision history of `llm-target-attacks.en.md`). Parsing and formatting were
 verified against a local mock server reproducing GHSA-xjw9-4gw8-4rqx's real data; the real
-`api.github.com` endpoint could not be reached from this development environment (this session's
-GitHub integration blocks API paths outside the attached repository, not a general network
-restriction) and has **not** been verified. Advisories that exist only outside GHSA (e.g., a
+`api.github.com` endpoint was verified on a Windows PC on 2026-10-30 (1 GHSA and 2 CVE lookups
+all succeeded). The fetched content has not yet been cross-checked against the advisory pages.
+From the cloud dev environment (allow-listed network) the calls got 403 and were reported as
+connection failures rather than empty results. Advisories that exist only outside GHSA (e.g., a
 VulnCheck-only advisory such as Context7's CVE-2026-75130) cannot be fetched by this tool.
