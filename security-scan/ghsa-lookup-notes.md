@@ -25,6 +25,17 @@ python3 scripts/ghsa_lookup.py --ghsa GHSA-xjw9-4gw8-4rqx --out report.md
 python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --cve CVE-2026-25592 --out report.md
 ```
 
+## CI での使い方
+
+`.github/workflows/security-scan.yml` の「検出された CVE の詳細 (GHSA)」ステップが、`dep_cve_check.py` の SARIF
+（`results/dep_cve.json`）に出てきた CVE 番号を、`--cve-from-sarif` でまとめて調べ、`results/ghsa_report.md` を作る
+（アーティファクト `security-scan-results` に保存される）。
+- 照合の結果（`dep_cve.json`）が無い、または CVE 番号が無ければ、何もしない。
+- 調べる件数は `--max 20`。超えた分は、レポートの「件数の上限のため、調べなかったもの」に載る。
+- `GITHUB_TOKEN`（または `GH_TOKEN`）があれば、認証つきで呼ぶ（レート制限が緩くなる）。トークンは `api.github.com`
+  にしか送らず、出力にも出さない。CI では、ワークフローの `github.token` を渡している。
+- CI は止めない。GHSA に無い CVE（PYSEC のみなど）は、レポートの「取得できなかったもの」に載る。
+
 ## 検証の状態（正直に）
 
 - **JSON のパースと Markdown への整形**：ローカルのモック HTTP サーバー（実際に確認した
@@ -36,6 +47,10 @@ python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --cve CVE-2026-25592 --out r
   取得内容が GitHub 上のページと一致するか（特に 2つの CVE が混ざっていないか）の照合は、まだ行っていない。
 - GitHub の公開 Advisories API は、**認証なしでも読めるが、レート制限が低い**（認証ありより少ない回数）。
   連続して多数のアドバイザリを取得する場合は、`--delay` の間隔を空けることを推奨する（既定 1 秒）。
+
+- **CI 連携の検証状態**: `--cve-from-sarif`・`--max`・トークンの付与（`api.github.com` の URL にだけ付く）は、
+  ネットワークをモックしたテストで確認した。ワークフローのステップは、GitHub Actions 上では、まだ実行を確認していない。
+  実際の GitHub API に対する `--cve-from-sarif` の実行も、まだ確認していない。
 
 ## 限界
 

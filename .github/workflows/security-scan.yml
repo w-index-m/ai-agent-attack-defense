@@ -96,6 +96,25 @@ jobs:
           if [ "$DEP_CVE_FAIL" = "true" ]; then exit "$rc"; fi
           exit 0
 
+      # --- 検出された CVE の詳細(GitHub Security Advisory の構造化データ) -----------
+      # 上の照合で見つかった CVE について、影響版・修正版・CWE・CVSS を GitHub の公開
+      # Advisories API から取得し、要約せずそのまま転記した Markdown を作る
+      # (results/ghsa_report.md。アーティファクトに保存される)。照合の結果が無ければ何もしない。
+      # GITHUB_TOKEN で認証して呼ぶ(未認証より、レート制限が緩い)。調べる件数は 20 件まで。
+      # CI は止めない(GHSA に無い CVE などは、レポートの「取得できなかったもの」に載る)。
+      - name: 検出された CVE の詳細 (GHSA)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          if [ ! -f results/dep_cve.json ]; then
+            echo "GHSA の取得: 依存関係の照合結果が無いためスキップ" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          python3 -I scripts/ghsa_lookup.py --cve-from-sarif results/dep_cve.json --max 20 \
+            --out results/ghsa_report.md 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 0
+
       # --- Web アプリへの診断(検証環境のみ) -------------------------------------
       # リポジトリ変数 STAGING_URL に、ダミーデータの検証環境の URL を設定したときだけ動く。
       # ここは受け身の診断(baseline)。攻撃的な full scan は、別途、許可を取って手動で行う。
@@ -143,5 +162,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: security-scan-results
-          path: results/*.json
+          path: |
+            results/*.json
+            results/ghsa_report.md
           retention-days: 30
