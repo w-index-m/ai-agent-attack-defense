@@ -114,6 +114,34 @@ def severity_level(vuln):
     return "warning"
 
 
+_LEVEL_RANK = {"note": 0, "warning": 1, "error": 2}
+
+
+def merge_by_cve(findings):
+    """同じパッケージ・同じ CVE が、別のデータベースのエントリ（GHSA と PYSEC など）
+    として複数返ることがある。CVE 番号（無ければ OSV ID）ごとに1件にまとめる。
+    - 重大度: 明示された値（database_specific.severity）があるものを優先し、
+      複数あれば高いほうを採る。どれも明示が無ければ既定値のまま。
+    - 修正版: 和集合。
+    - 要約: 空でない最初のもの（OSV ID そのままの要約は避ける）。"""
+    merged = {}
+    for f in findings:
+        key = (f["manifest"], f["name"], f["version"], f["cve"] or f["osv_id"])
+        m = merged.get(key)
+        if m is None:
+            merged[key] = dict(f, osv_ids=[f["osv_id"]], fixed=list(f["fixed"]))
+            continue
+        m["osv_ids"].append(f["osv_id"])
+        if f["explicit"] and (not m["explicit"] or _LEVEL_RANK[f["level"]] > _LEVEL_RANK[m["level"]]):
+            m["level"], m["explicit"] = f["level"], True
+        for v in f["fixed"]:
+            if v not in m["fixed"]:
+                m["fixed"].append(v)
+        if not m["summary"] and f["summary"]:
+            m["summary"] = f["summary"]
+    return list(merged.values())
+
+
 def fixed_versions_for(vuln, name, ecosystem):
     """この (name, ecosystem) に対応する affected エントリから、
     "fixed" イベントのバージョンを集めて返す。"""
@@ -152,6 +180,8 @@ def to_sarif(findings, errors):
         rule_id = f["cve"] or f["osv_id"]
         title = "%s %s %s" % (f["name"], f["version"], rule_id)
         msg = f["summary"] or f["osv_id"]
+        if len(f.get("osv_ids", [])) > 1:
+            msg += "（OSV: %s）" % ", ".join(f["osv_ids"])
         if f["fixed"]:
             msg += "（修正版: %s）" % ", ".join(f["fixed"])
         results.append({
@@ -217,14 +247,16 @@ def main():
                 "cve": cve_alias(vuln),
                 "summary": vuln.get("summary", ""),
                 "level": severity_level(vuln),
+                "explicit": bool((vuln.get("database_specific") or {}).get("severity")),
                 "fixed": fixed_versions_for(vuln, name, ecosystem),
             })
 
+    findings = merge_by_cve(findings)
     sarif = to_sarif(findings, errors)
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(sarif, f, ensure_ascii=False, indent=2)
 
-    print("対象: %d件 / 既知の脆弱性: %d件 / 確認できなかった: %d件" % (len(targets), len(findings), len(errors)))
+    print("対象: %d件 / 既知の脆弱性: %d件（CVE 単位。同じ CVE の重複エントリはまとめた）/ 確認できなかった: %d件" % (len(targets), len(findings), len(errors)))
     for e in errors:
         print("  ⚠ %s %s: %s" % (e["name"], e["version"], e["reason"]))
     print("出力: %s（vuln_triage.html に読み込めます）" % args.out)

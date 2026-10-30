@@ -39,6 +39,9 @@ python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --cve CVE-2026-25592 --out r
 
 ## 限界
 
+- 実通信で、CVSS が `cvss` と `cvss_severities` の両方に同じ値で返ることを確認した。同じ値は1回だけ出す。
+  グローバルな Advisories API のレスポンスには `state` が無いので、無い場合は「状態」の行を出さない。
+
 - GitHub の API のレスポンス形式は、`cvss`（単一）と `cvss_severities`（複数版）、
   `patched_versions`（文字列）と `first_patched_version`（オブジェクト）など、**時期により形が違う**。
   両方に対応しているが、将来の API 変更には追従できない可能性がある。
