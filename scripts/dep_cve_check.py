@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """依存関係の既知脆弱性の確認（OSV.dev への照合）。
 
-requirements.txt（pip、`==` で固定された行のみ）と、npm の package-lock.json
-（lockfileVersion 1/2/3 に対応）を読み、各パッケージの正確なバージョンを、
+requirements.txt（pip、`==` で固定された行のみ）、npm の package-lock.json
+（lockfileVersion 1/2/3 に対応）、NuGet の packages.lock.json と .csproj（版が
+固定されている PackageReference のみ）を読み、各パッケージの正確なバージョンを、
 公開の脆弱性データベース OSV（https://osv.dev）に照合する。
 
 確認専用：
@@ -15,6 +16,9 @@ requirements.txt（pip、`==` で固定された行のみ）と、npm の packag
 使い方:
     python3 scripts/dep_cve_check.py --requirements requirements.txt --out dep_cve.sarif
     python3 scripts/dep_cve_check.py --npm-lock package-lock.json --out dep_cve.sarif
+    python3 scripts/dep_cve_check.py --nuget-lock packages.lock.json --out dep_cve.sarif
+    python3 scripts/dep_cve_check.py --csproj App/App.csproj --out dep_cve.sarif
+（各オプションは繰り返し指定できる）
     python3 scripts/dep_cve_check.py --requirements requirements.txt --npm-lock package-lock.json
 
 検証状況: OSV API（api.osv.dev）への実通信は、Windows の PC（一般的なインターネット
@@ -31,6 +35,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+import xml.etree.ElementTree as ET
 
 OSV_QUERY_URL = "https://api.osv.dev/v1/query"
 TIMEOUT = 10.0
@@ -85,6 +90,49 @@ def parse_npm_lock(path):
             walk(info.get("dependencies"))
 
     walk(data.get("dependencies"))
+    return out
+
+
+def parse_nuget_lock(path):
+    """NuGet の packages.lock.json を読み、解決済み（resolved）の (name, version) を返す。
+    ターゲットフレームワークごとに同じパッケージが出るので、重複は除く。
+    プロジェクト参照（resolved が無い）は対象外。"""
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    seen, out = set(), []
+    for deps in (data.get("dependencies") or {}).values():
+        for name, info in (deps or {}).items():
+            version = info.get("resolved") if isinstance(info, dict) else None
+            if version and (name, version) not in seen:
+                seen.add((name, version))
+                out.append((name, version))
+    return out
+
+
+_PLAIN_VERSION = re.compile(r"^[0-9]+(\.[0-9]+)*(-[0-9A-Za-z.\-]+)?(\+[0-9A-Za-z.\-]+)?$")
+
+
+def parse_csproj(path):
+    """.csproj の <PackageReference> から、版が単一の値で固定されているものだけを
+    (name, version) で返す。範囲（[1.0,2.0)）、浮動版（1.*）、MSBuild 変数（$(X)）は、
+    実際に使われる版が分からないためスキップし、stderr に出す。
+    正確な版が必要なら packages.lock.json（RestorePackagesWithLockFile）を使うこと。"""
+    out = []
+    for el in ET.parse(path).iter():
+        if el.tag.rsplit("}", 1)[-1] != "PackageReference":
+            continue
+        name = el.get("Include") or el.get("Update")
+        version = el.get("Version") or el.get("VersionOverride")
+        if version is None:
+            for child in el:
+                if child.tag.rsplit("}", 1)[-1] == "Version" and child.text:
+                    version = child.text.strip()
+        if not name:
+            continue
+        if version and _PLAIN_VERSION.match(version):
+            out.append((name, version))
+        else:
+            print("%s: 正確な版が分からないためスキップ: %s (Version=%s)" % (path, name, version), file=sys.stderr)
     return out
 
 
@@ -148,7 +196,7 @@ def fixed_versions_for(vuln, name, ecosystem):
     fixed = []
     for aff in vuln.get("affected", []):
         pkg = aff.get("package", {})
-        if pkg.get("name") != name or pkg.get("ecosystem") != ecosystem:
+        if str(pkg.get("name", "")).lower() != name.lower() or pkg.get("ecosystem") != ecosystem:
             continue
         for rng in aff.get("ranges", []):
             for ev in rng.get("events", []):
@@ -223,22 +271,30 @@ def to_sarif(findings, errors):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--requirements", help="pip の requirements.txt")
-    ap.add_argument("--npm-lock", help="npm の package-lock.json")
+    ap.add_argument("--requirements", action="append", default=[], help="pip の requirements.txt（繰り返し指定可）")
+    ap.add_argument("--npm-lock", action="append", default=[], help="npm の package-lock.json（繰り返し指定可）")
+    ap.add_argument("--nuget-lock", action="append", default=[], help="NuGet の packages.lock.json（繰り返し指定可）")
+    ap.add_argument("--csproj", action="append", default=[], help="NuGet の .csproj（版が固定された PackageReference のみ。繰り返し指定可）")
     ap.add_argument("--out", default="dep_cve.sarif", help="SARIF の出力先")
     ap.add_argument("--timeout", type=float, default=TIMEOUT)
     args = ap.parse_args()
 
     targets = []  # (ecosystem, manifest_path, name, version)
-    if args.requirements:
-        for name, version in parse_requirements(args.requirements):
-            targets.append(("PyPI", args.requirements, name, version))
-    if args.npm_lock:
-        for name, version in parse_npm_lock(args.npm_lock):
-            targets.append(("npm", args.npm_lock, name, version))
+    for path in args.requirements:
+        for name, version in parse_requirements(path):
+            targets.append(("PyPI", path, name, version))
+    for path in args.npm_lock:
+        for name, version in parse_npm_lock(path):
+            targets.append(("npm", path, name, version))
+    for path in args.nuget_lock:
+        for name, version in parse_nuget_lock(path):
+            targets.append(("NuGet", path, name, version))
+    for path in args.csproj:
+        for name, version in parse_csproj(path):
+            targets.append(("NuGet", path, name, version))
 
     if not targets:
-        print("確認対象がありません。--requirements か --npm-lock を指定してください。", file=sys.stderr)
+        print("確認対象がありません。--requirements / --npm-lock / --nuget-lock / --csproj のいずれかを指定してください。", file=sys.stderr)
         return 1
 
     findings, errors = [], []
