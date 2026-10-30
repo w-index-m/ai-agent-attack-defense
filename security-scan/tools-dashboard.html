@@ -335,13 +335,14 @@ python3 scripts/node_version_check.py --log-path /var/log/myapp/node.log</code><
       <p class="cap" style="margin-bottom:0"><a class="src" href="local-vuln-testing-walkthrough.ja.md">→ 利用の流れ(ウォークスルー)</a></p>
     </div>
     <div class="card g4">
-      <h3>zgrab2_guard.py <span class="badge b-untested">実機では未検証</span> <span class="chip llm-no">LLM: なし</span></h3>
+      <h3>zgrab2_guard.py <span class="badge b-verified">フィルタリングロジックを実行確認済み</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>scripts/zgrab2_guard.py</code></p>
       <p class="cap">能動スキャナ zgrab2 自体には許可範囲を制限する機能が無いため、標準入力の対象を
         netcheck と同じ許可範囲判定で検査し、範囲内のものだけを zgrab2 の入力形式で出力するガード。
         1件でも範囲外が混ざると、全体を出力せず終了コード2で止まる。</p>
       <pre><code>cat targets.txt | python3 scripts/zgrab2_guard.py | zgrab2 http</code></pre>
       <div class="tagrow"><span class="chip">何にも接続しない</span><span class="chip">netcheck/config.jsonのallowed_rangesを使用</span></div>
+      <p class="cap" style="margin-bottom:0">zgrab2本体は呼ばないため、zgrab2未インストールでもフィルタリング判定(--i-own-these必須、範囲外混入の全体拒否、重複排除、ホスト名解決、max_targets超過)を6パターン実行確認済み(2026-10-30)。未検証なのは出力をzgrab2本体にパイプで渡す結合部分のみ。</p>
       <p class="cap" style="margin-bottom:0"><a class="src" href="zgrab2-notes.md">→ 詳細ノート</a></p>
     </div>
   </div>
