@@ -171,6 +171,15 @@ def cve_alias(vuln):
     return None
 
 
+_COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _fmt_fixed(v):
+    """PYSEC 由来のレコードは、"fixed" にバージョン番号でなく git のコミットハッシュを
+    入れることがある。バージョンと取り違えないよう、短縮してコミットと明示する。"""
+    return "コミット %s" % v[:7] if _COMMIT_SHA.match(v) else v
+
+
 def to_sarif(findings, errors):
     """vuln_triage.html がそのまま読み込める SARIF 2.1.0 を作る
     （taxonomy.json の triage_scanners に "sarif" が既にあるため、新しい取り込み
@@ -183,7 +192,7 @@ def to_sarif(findings, errors):
         if len(f.get("osv_ids", [])) > 1:
             msg += "（OSV: %s）" % ", ".join(f["osv_ids"])
         if f["fixed"]:
-            msg += "（修正版: %s）" % ", ".join(f["fixed"])
+            msg += "（修正版: %s）" % ", ".join(_fmt_fixed(v) for v in f["fixed"])
         results.append({
             "ruleId": rule_id,
             "level": f["level"],

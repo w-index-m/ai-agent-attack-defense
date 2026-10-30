@@ -1,6 +1,6 @@
 # セキュリティ問題のまとめ（日本語）
 
-English: [`security-summary.en.md`](security-summary.en.md)
+🌐 **English version:** [Security summary (English)](security-summary.en.md)
 
 このリポジトリで扱った、AI エージェント攻撃と既知の脆弱性について、**何が起きたか・何を作ったか・何が未検証か**を1枚にまとめたもの。
 個別の詳細は、各文書へのリンクを参照。
