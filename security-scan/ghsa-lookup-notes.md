@@ -39,6 +39,9 @@ python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --cve CVE-2026-25592 --out r
 
 ## 限界
 
+- 実通信（2026-10-30）で、`--cve CVE-2026-26030 --cve CVE-2026-25592` が 2件とも取得でき、2つの CVE は別の節に分かれ、
+  CWE・CVSS・修正版がリポジトリ内の既存の記述（`llm-target-attacks.ja.md`）と一致することを、出力の目視で確認した。
+  CVSS の重複と「状態」行の修正は、修正前の出力で問題を確認済み。修正後の出力の再確認は、別途行う。
 - 実通信で、CVSS が `cvss` と `cvss_severities` の両方に同じ値で返ることを確認した。同じ値は1回だけ出す。
   グローバルな Advisories API のレスポンスには `state` が無いので、無い場合は「状態」の行を出さない。
 
