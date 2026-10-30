@@ -29,7 +29,7 @@ Legend: **本リポ** = implemented in this repository · **外部案** = extern
 | `vuln_triage.html` | Browser page: load Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2 (JSON Lines) output, get priority, fixes and a plan. Runs locally, nothing is uploaded. Secrets are masked. | Open the file in a browser, drop a JSON report. |
 | `.github/workflows/security-scan.yml` + `scripts/summarize.py` | CI scan set: Semgrep, Trivy, gitleaks (+ ZAP baseline if `STAGING_URL` is set). | See "CI scan" below. |
 | `netcheck/` | Confirmation-only checker (ports, banners, headers, TLS, admin-like URLs, exposed config/backup files). Private ranges only by default. Cannot judge SQL injection. | `python3 netcheck/netcheck.py` then open the printed URL. |
-| `scripts/dep_cve_check.py` | Checks your own `requirements.txt` / npm `package-lock.json` against the public OSV.dev vulnerability database; outputs SARIF (`dep` = dependency); also reads NuGet `packages.lock.json` / `.csproj` and runs in CI (non-blocking by default). Known-vulnerability lookup only — it does not see flaws in your own code, unpublished vulnerabilities, or whether you actually use the affected feature. | See [`security-scan/dep-cve-check-notes.md`](security-scan/dep-cve-check-notes.md). |
+| `scripts/dep_cve_check.py` | Checks your own `requirements.txt` / npm `package-lock.json` against the public OSV.dev vulnerability database; outputs SARIF (`dep` = dependency); also reads NuGet `packages.lock.json` / `.csproj`, `poetry.lock`, `uv.lock` and `go.sum`, and runs in CI (non-blocking by default). Known-vulnerability lookup only — it does not see flaws in your own code, unpublished vulnerabilities, or whether you actually use the affected feature. | See [`security-scan/dep-cve-check-notes.md`](security-scan/dep-cve-check-notes.md). |
 | `deck/` | Generator scripts for the JP/EN slide decks (pptxgenjs). | See `deck/README.md`. |
 
 ## CI scan
@@ -88,7 +88,7 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 | `vuln_triage.html` | ブラウザで動くトリアージ画面。Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2（JSON Lines）の出力を読み込み、優先度・修正案・対応計画を表示。ローカル完結でアップロードなし、秘密情報はマスク。 | ファイルをブラウザで開き、JSON レポートをドロップ。 |
 | `.github/workflows/security-scan.yml` + `scripts/summarize.py` | CI スキャン一式：Semgrep・Trivy・gitleaks（`STAGING_URL` を設定すれば ZAP ベースラインも）。 | 下の「CI スキャン」を参照。 |
 | `netcheck/` | 確認専用のチェッカー（ポート・バナー・ヘッダ・TLS・管理画面らしき URL・設定/バックアップの露出）。ブラウザ UI 付き。既定ではプライベート範囲のみ。SQL インジェクションの有無は判定しない。 | `python3 netcheck/netcheck.py` を実行し、表示された URL を開く。 |
-| `scripts/dep_cve_check.py` | 自分の `requirements.txt` / npm `package-lock.json` を、公開の脆弱性データベース OSV.dev に照合。SARIF を出力（`dep` = dependency）。NuGet の `packages.lock.json` / `.csproj` にも対応し、CI でも動く（既定では CI を止めない）。確認できるのは既知の脆弱性との照合のみで、自分のコードの欠陥・未公開の脆弱性・影響を受ける機能を実際に使っているか、は対象外。 | [`security-scan/dep-cve-check-notes.md`](security-scan/dep-cve-check-notes.md) を参照。 |
+| `scripts/dep_cve_check.py` | 自分の `requirements.txt` / npm `package-lock.json` を、公開の脆弱性データベース OSV.dev に照合。SARIF を出力（`dep` = dependency）。NuGet の `packages.lock.json` / `.csproj`、`poetry.lock`、`uv.lock`、`go.sum` にも対応し、CI でも動く（既定では CI を止めない）。確認できるのは既知の脆弱性との照合のみで、自分のコードの欠陥・未公開の脆弱性・影響を受ける機能を実際に使っているか、は対象外。 | [`security-scan/dep-cve-check-notes.md`](security-scan/dep-cve-check-notes.md) を参照。 |
 | `deck/` | 日英スライドの生成スクリプト（pptxgenjs）。 | `deck/README.md` を参照。 |
 
 ## CI スキャン

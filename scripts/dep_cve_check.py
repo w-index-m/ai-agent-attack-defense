@@ -3,7 +3,7 @@
 
 requirements.txt（pip、`==` で固定された行のみ）、npm の package-lock.json
 （lockfileVersion 1/2/3 に対応）、NuGet の packages.lock.json と .csproj（版が
-固定されている PackageReference のみ）を読み、各パッケージの正確なバージョンを、
+固定されている PackageReference のみ）、Python の poetry.lock / uv.lock、Go の go.sum を読み、各パッケージの正確なバージョンを、
 公開の脆弱性データベース OSV（https://osv.dev）に照合する。
 
 確認専用：
@@ -18,6 +18,9 @@ requirements.txt（pip、`==` で固定された行のみ）、npm の package-l
     python3 scripts/dep_cve_check.py --npm-lock package-lock.json --out dep_cve.sarif
     python3 scripts/dep_cve_check.py --nuget-lock packages.lock.json --out dep_cve.sarif
     python3 scripts/dep_cve_check.py --csproj App/App.csproj --out dep_cve.sarif
+    python3 scripts/dep_cve_check.py --poetry-lock poetry.lock --out dep_cve.sarif
+    python3 scripts/dep_cve_check.py --uv-lock uv.lock --out dep_cve.sarif
+    python3 scripts/dep_cve_check.py --go-sum go.sum --out dep_cve.sarif
 （各オプションは繰り返し指定できる）
     python3 scripts/dep_cve_check.py --requirements requirements.txt --npm-lock package-lock.json
 
@@ -133,6 +136,73 @@ def parse_csproj(path):
             out.append((name, version))
         else:
             print("%s: 正確な版が分からないためスキップ: %s (Version=%s)" % (path, name, version), file=sys.stderr)
+    return out
+
+
+def _load_toml(path):
+    try:
+        import tomllib  # Python 3.11+
+    except ImportError:
+        raise SystemExit("%s: TOML を読むには Python 3.11 以上が必要です（標準ライブラリの tomllib）。" % path)
+    with open(path, "rb") as f:
+        return tomllib.load(f)
+
+
+def parse_poetry_lock(path):
+    """poetry.lock（TOML）の [[package]] から、PyPI のパッケージの (name, version) を返す。
+    git / ディレクトリ / URL / 別のインデックス（[package.source] があるもの）は、PyPI の版として
+    照合できないため、スキップして stderr に出す。"""
+    out = []
+    for pkg in _load_toml(path).get("package", []):
+        name, version = pkg.get("name"), pkg.get("version")
+        if not name or not version:
+            continue
+        src = pkg.get("source")
+        if src:
+            print("%s: PyPI 以外が由来のためスキップ: %s %s (source=%s)" % (path, name, version, src.get("type", "?")), file=sys.stderr)
+            continue
+        out.append((name, version))
+    return out
+
+
+_PYPI_REGISTRIES = ("https://pypi.org/simple", "https://pypi.org/simple/")
+
+
+def parse_uv_lock(path):
+    """uv.lock（TOML）の [[package]] から、PyPI（レジストリが pypi.org）のパッケージの
+    (name, version) を返す。プロジェクト自身（virtual / editable）、git、ディレクトリ、
+    URL、別のレジストリが由来のものは、スキップして stderr に出す。"""
+    out = []
+    for pkg in _load_toml(path).get("package", []):
+        name, version = pkg.get("name"), pkg.get("version")
+        if not name or not version:
+            continue
+        src = pkg.get("source") or {}
+        if src.get("registry") in _PYPI_REGISTRIES:
+            out.append((name, version))
+        else:
+            kind = next(iter(src), "?")
+            print("%s: PyPI 以外が由来のためスキップ: %s %s (source=%s)" % (path, name, version, kind), file=sys.stderr)
+    return out
+
+
+def parse_go_sum(path):
+    """go.sum から、(モジュール名, 版) を返す。`<版>/go.mod` の行（go.mod だけのハッシュ）は
+    除き、モジュール本体の行だけを使う。OSV の Go では、版の先頭の "v" と "+incompatible" を
+    除いて問い合わせる。
+    注意：go.sum には、過去に使った版や、ビルドに使われない版も残ることがある。そのため、
+    実際にビルドされる版より多く（古い版も）照合され、誤検知が出ることがある。"""
+    seen, out = set(), []
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) != 3 or parts[1].endswith("/go.mod"):
+                continue
+            name, version = parts[0], parts[1]
+            version = re.sub(r"\+incompatible$", "", version[1:] if version.startswith("v") else version)
+            if (name, version) not in seen:
+                seen.add((name, version))
+                out.append((name, version))
     return out
 
 
@@ -274,6 +344,9 @@ def main():
     ap.add_argument("--requirements", action="append", default=[], help="pip の requirements.txt（繰り返し指定可）")
     ap.add_argument("--npm-lock", action="append", default=[], help="npm の package-lock.json（繰り返し指定可）")
     ap.add_argument("--nuget-lock", action="append", default=[], help="NuGet の packages.lock.json（繰り返し指定可）")
+    ap.add_argument("--poetry-lock", action="append", default=[], help="Python の poetry.lock（繰り返し指定可）")
+    ap.add_argument("--uv-lock", action="append", default=[], help="Python の uv.lock（繰り返し指定可）")
+    ap.add_argument("--go-sum", action="append", default=[], help="Go の go.sum（繰り返し指定可）")
     ap.add_argument("--csproj", action="append", default=[], help="NuGet の .csproj（版が固定された PackageReference のみ。繰り返し指定可）")
     ap.add_argument("--out", default="dep_cve.sarif", help="SARIF の出力先")
     ap.add_argument("--timeout", type=float, default=TIMEOUT)
@@ -289,12 +362,21 @@ def main():
     for path in args.nuget_lock:
         for name, version in parse_nuget_lock(path):
             targets.append(("NuGet", path, name, version))
+    for path in args.poetry_lock:
+        for name, version in parse_poetry_lock(path):
+            targets.append(("PyPI", path, name, version))
+    for path in args.uv_lock:
+        for name, version in parse_uv_lock(path):
+            targets.append(("PyPI", path, name, version))
+    for path in args.go_sum:
+        for name, version in parse_go_sum(path):
+            targets.append(("Go", path, name, version))
     for path in args.csproj:
         for name, version in parse_csproj(path):
             targets.append(("NuGet", path, name, version))
 
     if not targets:
-        print("確認対象がありません。--requirements / --npm-lock / --nuget-lock / --csproj のいずれかを指定してください。", file=sys.stderr)
+        print("確認対象がありません。--requirements / --npm-lock / --nuget-lock / --csproj / --poetry-lock / --uv-lock / --go-sum のいずれかを指定してください。", file=sys.stderr)
         return 1
 
     findings, errors = [], []
