@@ -210,7 +210,7 @@ python scripts/os_patch_check_windows.py --windows-pending --out os_patch.sarif<
       <p class="cap" style="margin-bottom:0"><a class="src" href="java-cacerts-emudhra-check-notes.md">→ 詳細ノート</a></p>
     </div>
     <div class="card g3">
-      <h3>bind_version_check.py <span class="badge b-partial">合成パケットでユニットテスト済み</span> <span class="chip r">R22</span> <span class="chip llm-no">LLM: なし</span></h3>
+      <h3>bind_version_check.py <span class="badge b-verified">実BIND 9.18.39で実行確認済み</span> <span class="chip r">R22</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>scripts/bind_version_check.py</code></p>
       <p class="cap">BIND 9のバージョンを、ISCの2026-10-21セキュリティリリース(4件のCVE。
         目玉はCVE-2026-94300、CVSS 8.1、GSS-TSIGリプレイによるメモリ破損で、ISC自身は
@@ -220,7 +220,7 @@ python scripts/os_patch_check_windows.py --windows-pending --out os_patch.sarif<
         (<code>version.bind</code>)問い合わせを1回だけ送る(netcheckの許可範囲判定を再利用)。</p>
       <pre><code>python3 scripts/bind_version_check.py --out bind_check.sarif
 python3 scripts/bind_version_check.py --query 127.0.0.1 --i-own-these</code></pre>
-      <div class="tagrow"><span class="chip">標準ライブラリのみ</span><span class="chip">稼働中の実BINDでは未検証</span></div>
+      <div class="tagrow"><span class="chip">標準ライブラリのみ</span><span class="chip">サンドボックスの実BIND 9.18.39(影響範囲・EOLブランチ)で判定を確認済み</span></div>
       <p class="cap" style="margin-bottom:0"><a class="src" href="bind-version-check-notes.md">→ 詳細ノート</a></p>
     </div>
     <div class="card g3">
@@ -264,6 +264,20 @@ python3 scripts/php_version_check.py --log-path /var/log/php-fpm/error.log</code
 python3 scripts/python_brotli_check.py --python /path/to/venv/bin/python3</code></pre>
       <div class="tagrow"><span class="chip">標準ライブラリのみ</span><span class="chip">ベンダー未公開のヒューリスティック(ログ確認部分)</span></div>
       <p class="cap" style="margin-bottom:0"><a class="src" href="python-brotli-check-notes.md">→ 詳細ノート</a></p>
+    </div>
+    <div class="card g3">
+      <h3>node_version_check.py <span class="badge b-verified">実Node.js 22.22.0で実行確認済み</span> <span class="chip r">R25</span> <span class="chip llm-no">LLM: なし</span></h3>
+      <p class="path"><code>scripts/node_version_check.py</code></p>
+      <p class="cap">R24(python_brotli_check.py)のNode.js本体版。CVE-2026-111497
+        (Brotliデコーダの境界外書き込み)の対象になりうるかを、<code>node --version</code>を
+        Node.js公式の2026-10-21セキュリティリリース修正版(22.23.4/24.22.1/26.12.1)と
+        照合して確認する。20系以下はサポート終了のため修正版が存在しない。任意でアプリログ
+        から、R25のSigmaルールと同じクラッシュパターン(未確証の探索的ヒューリスティック)も
+        確認できる。</p>
+      <pre><code>python3 scripts/node_version_check.py --out node_check.sarif
+python3 scripts/node_version_check.py --log-path /var/log/myapp/node.log</code></pre>
+      <div class="tagrow"><span class="chip">標準ライブラリのみ</span><span class="chip">ベンダー未公開のヒューリスティック(ログ確認部分)</span></div>
+      <p class="cap" style="margin-bottom:0"><a class="src" href="node-version-check-notes.md">→ 詳細ノート</a></p>
     </div>
     <div class="card ext">
       <h3>(参考) この区分は他に未実装</h3>
