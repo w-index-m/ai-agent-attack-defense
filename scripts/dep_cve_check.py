@@ -318,7 +318,12 @@ def to_sarif(findings, errors):
             "ruleId": rule_id,
             "level": f["level"],
             "message": {"text": msg},
-            "properties": {"title": title},
+            "properties": {
+                "title": title,
+                # 別の道具（crosscheck_osv_ghsa.py）が、GitHub のアドバイザリと突き合わせるために使う
+                "package": f["name"], "version": f["version"], "ecosystem": f.get("ecosystem"),
+                "fixed": f["fixed"], "osv_ids": f.get("osv_ids", [f["osv_id"]]),
+            },
             "locations": [{
                 "physicalLocation": {
                     "artifactLocation": {"uri": f["manifest"]},
@@ -392,7 +397,7 @@ def main():
             continue
         for vuln in resp.get("vulns", []):
             findings.append({
-                "manifest": manifest, "name": name, "version": version,
+                "manifest": manifest, "name": name, "version": version, "ecosystem": ecosystem,
                 "osv_id": vuln.get("id", "OSV-UNKNOWN"),
                 "cve": cve_alias(vuln),
                 "summary": vuln.get("summary", ""),
