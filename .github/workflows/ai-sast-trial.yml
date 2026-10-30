@@ -1,0 +1,121 @@
+# 試験用: 他人の AI-SAST ツール(local-ai-sast)を、Ollama の小さなモデルで、このリポジトリの
+# 「正解つきの的」(security-scan/sqli-lab/vulnerable_app.py)に、かけて、検出の精度を比べる。
+# - 手動実行(workflow_dispatch)専用。毎回の push では動かさない。ただし、このファイル自身を変更した
+#   PR では、動作確認のために、一度動く(下の pull_request の paths)。
+# - 他人のコードを CI で実行するため、取得するコミットを固定(SHA)し、権限は読み取りだけにしている。
+# - CPU だけの実行環境なので、小さなモデルが前提。結果は、アーティファクトと、ジョブの要約に出る。
+# 詳細: security-scan/ai-sast-trial-notes.md
+name: ai-sast-trial
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Ollama のモデル名(CPU だけなので、小さいものを)"
+        default: "qwen2.5-coder:3b"
+        required: false
+  pull_request:
+    paths:
+      - ".github/workflows/ai-sast-trial.yml"
+      - "security-scan/sqli-lab/compare_sast_ground_truth.py"
+
+permissions:
+  contents: read            # 最小権限。書き込み権限は与えない
+
+concurrency:
+  group: ai-sast-trial-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # sohampatil99/local-ai-sast の、確認したコミット(2026-10-28)。ブランチ名ではなく、コミットで固定する。
+  SAST_REPO: https://github.com/sohampatil99/local-ai-sast
+  SAST_SHA: 67cca210a53e1cc7cf226acae07564fc134667dd
+  MODEL: ${{ inputs.model || 'qwen2.5-coder:3b' }}
+
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: local-ai-sast を、固定したコミットで取得する
+        run: |
+          set -euo pipefail
+          git clone --quiet "$SAST_REPO" /tmp/local-ai-sast
+          git -C /tmp/local-ai-sast checkout --quiet "$SAST_SHA"
+          test "$(git -C /tmp/local-ai-sast rev-parse HEAD)" = "$SAST_SHA"
+          echo "取得したコミット: $(git -C /tmp/local-ai-sast rev-parse HEAD)"
+
+      - name: 依存を入れる(CLI に必要なものだけ。バージョンは、ツールの requirements に合わせる)
+        run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install --quiet httpx "jinja2==3.1.6" "tree-sitter==0.26.0" \
+            "tree-sitter-javascript==0.25.0" "tree-sitter-typescript==0.23.2" \
+            "tree-sitter-java==0.23.5" "tree-sitter-go==0.25.0"
+
+      - name: 的を用意する(vulnerable_app.py だけを、別のフォルダにコピーする)
+        run: |
+          mkdir -p /tmp/target /tmp/out
+          cp security-scan/sqli-lab/vulnerable_app.py /tmp/target/
+
+      - name: ルールだけで、スキャンする(AI なし)
+        run: |
+          set +e
+          cd /tmp/local-ai-sast
+          OLLAMA_URL=http://127.0.0.1:9 /tmp/venv/bin/python -I backend/cli.py scan /tmp/target \
+            --out /tmp/out/rules --format json,sarif 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | tail -20
+          exit 0
+
+      - name: Ollama を起動して、モデルを取得する
+        run: |
+          set +e
+          docker run -d --name ollama -p 127.0.0.1:11434:11434 ollama/ollama:latest
+          for i in $(seq 1 60); do curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && break; sleep 2; done
+          curl -fsS http://127.0.0.1:11434/api/tags >/dev/null 2>&1 && echo "Ollama: 起動した" || echo "::warning::Ollama が起動しませんでした"
+          time docker exec ollama ollama pull "$MODEL" || echo "::warning::モデルの取得に失敗しました: $MODEL"
+          docker exec ollama ollama list
+          exit 0
+
+      - name: AI ありで、スキャンする(--ai と --ai-review)
+        run: |
+          set +e
+          cd /tmp/local-ai-sast
+          start=$(date +%s)
+          OLLAMA_URL=http://127.0.0.1:11434 timeout 35m /tmp/venv/bin/python -I backend/cli.py scan /tmp/target \
+            --ai --ai-review --model "$MODEL" --out /tmp/out/ai --format json,sarif 2>&1 \
+            | sed 's/\x1b\[[0-9;]*m//g' | tail -40
+          rc=${PIPESTATUS[0]}
+          echo "AI ありのスキャン: 終了コード $rc、$(( $(date +%s) - start )) 秒"
+          [ "$rc" -eq 124 ] && echo "::warning::AI ありのスキャンが、時間切れになりました"
+          exit 0
+
+      - name: 正解と比べる(要約に出す)
+        run: |
+          {
+            echo "## AI-SAST の試験: local-ai-sast @ ${SAST_SHA:0:7}、モデル \`$MODEL\`"
+            echo
+            for mode in rules ai; do
+              r=$(ls /tmp/out/$mode/*.json 2>/dev/null | head -1)
+              echo "### $mode"
+              if [ -n "$r" ]; then
+                python3 -I security-scan/sqli-lab/compare_sast_ground_truth.py "$r" security-scan/sqli-lab/vulnerable_app.py
+              else
+                echo "レポートが、できませんでした。"
+              fi
+              echo
+            done
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: 結果を保存する
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-sast-trial
+          path: /tmp/out
+          retention-days: 14
+          if-no-files-found: warn
