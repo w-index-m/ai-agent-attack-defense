@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""診断結果(Semgrep / Trivy / gitleaks / ZAP の JSON)を集計して出力する。
+"""診断結果(Semgrep / Trivy / gitleaks / ZAP / 依存関係の照合(SARIF)の JSON)を集計して出力する。
 
 出力形式(--format):
   markdown  CI の要約(既定)。ジョブサマリに貼れる Markdown。
@@ -86,6 +86,27 @@ def hackingbuddygpt_regression(data):
         yield ("hackingbuddygpt_regression", r.get("severity", "medium"), r.get("title", ""), r.get("location", ""), False)
 
 
+def dep_cve(data):
+    # scripts/dep_cve_check.py の出力(SARIF 2.1.0)。OSV.dev に照合した、依存関係の既知の脆弱性。
+    # SARIF の level → 重大度: error→high / warning→medium / note→low。
+    # dep_cve_check は CRITICAL と HIGH を区別せず error にまとめるため、critical にはならない。
+    # ruleId が "dep_cve_check/error" のものは、脆弱性ではなく「OSV に確認できなかった」
+    # という報告。「脆弱性なし」と取り違えないよう、重大度は info にし、要約で別に数える。
+    m = {"error": "high", "warning": "medium", "note": "low"}
+    for run in (data or {}).get("runs", []):
+        for r in run.get("results", []):
+            loc = ""
+            locs = r.get("locations") or []
+            if locs:
+                loc = locs[0].get("physicalLocation", {}).get("artifactLocation", {}).get("uri", "")
+            text = (r.get("message") or {}).get("text", "")
+            if r.get("ruleId") == "dep_cve_check/error":
+                yield ("dep_cve", "info", text, loc, False)
+                continue
+            title = (r.get("properties") or {}).get("title") or r.get("ruleId", "")
+            yield ("dep_cve", m.get(r.get("level", ""), "medium"), "%s — %s" % (title, text), loc, False)
+
+
 SOURCES = [
     ("semgrep.json", semgrep),
     ("trivy.json", trivy),
@@ -93,6 +114,7 @@ SOURCES = [
     ("zap.json", zap),
     ("sqli_lab.json", sqli_lab),
     ("hackingbuddygpt_regression.json", hackingbuddygpt_regression),
+    ("dep_cve.json", dep_cve),
 ]
 
 
@@ -110,6 +132,9 @@ def render_markdown(found, items):
     for s in ORDER:
         out.append("| %s | %d |" % (LABEL[s], counts[s]))
     out += ["", "秘密情報の検出: %d 件" % secrets, ""]
+    unchecked = sum(1 for i in items if i[0] == "dep_cve" and i[1] == "info")
+    if unchecked:
+        out += ["⚠️ 依存関係の照合で、OSV に確認できなかったものが %d 件あります(「情報」の件数に含まれます。「脆弱性なし」ではありません)。" % unchecked, ""]
     top = [i for i in items if norm_sev(i[1]) in ("critical", "high")][:10]
     if top:
         out.append("### 緊急・高の指摘(先頭 %d 件)" % len(top))

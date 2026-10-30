@@ -69,7 +69,8 @@ jobs:
       # 送るだけで、攻撃はしない。対象のファイルが無ければ、何もせず終わる。
       # 既定では CI を止めない(他の診断と同じ)。止めたいときは、リポジトリ変数
       # DEP_CVE_FAIL を true にする(脆弱性あり=1、確認できなかったものあり=2 で失敗)。
-      # 出力は SARIF(results/dep_cve.json)。「脆弱性トリアージ」ページに読み込める。
+      # 出力は SARIF(results/dep_cve.json)。「脆弱性トリアージ」ページに読み込め、
+      # 下の「集計」ステップ(scripts/summarize.py)の要約と --fail-on にも含まれる。
       - name: 依存関係の既知の脆弱性 (OSV)
         env:
           DEP_CVE_FAIL: ${{ vars.DEP_CVE_FAIL }}
