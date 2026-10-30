@@ -18,6 +18,12 @@
     python3 scripts/ghsa_lookup.py --ghsa GHSA-xjw9-4gw8-4rqx --out report.md
     python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --cve CVE-2026-25592 --out report.md
     python3 scripts/ghsa_lookup.py --ghsa GHSA-xjw9-4gw8-4rqx --json-out raw.json
+    python3 scripts/ghsa_lookup.py --cve-from-sarif results/dep_cve.json --out ghsa_report.md
+
+--cve-from-sarif は、dep_cve_check.py の SARIF に出てくる CVE 番号を、まとめて調べる
+（CI で、検出された脆弱性の詳細レポートを作る用途）。--max で件数を制限する。
+環境変数 GITHUB_TOKEN（または GH_TOKEN）があれば、認証つきで呼ぶ（レート制限が緩くなる。
+トークンは api.github.com にしか送らず、出力にも出さない）。
 
 検証状況: GitHub の公開 Advisories API（https://api.github.com/advisories/...）への
 実通信は、Windows の PC で確認済み（2026-10-30。--ghsa 1件、--cve 2件とも取得
@@ -27,6 +33,8 @@
 """
 import argparse
 import json
+import os
+import re
 import sys
 import time
 import urllib.error
@@ -38,11 +46,15 @@ UA = "ai-agent-attack-defense/ghsa_lookup"
 
 
 def _get(url, timeout):
-    req = urllib.request.Request(url, headers={
+    headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": UA,
         "X-GitHub-Api-Version": "2022-11-28",
-    })
+    }
+    token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+    if token and url.startswith(API_BASE + "/"):  # トークンは GitHub の API にしか送らない
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read().decode("utf-8")), dict(r.headers)
 
@@ -90,6 +102,24 @@ def _cvss(adv):
         v = sevs.get(key)
         if v and v.get("vector_string"):
             add(v.get("score"), v.get("vector_string"))
+    return out
+
+
+_CVE_RE = re.compile(r"^CVE-[0-9]{4}-[0-9]{4,}$")
+
+
+def cves_from_sarif(path):
+    """dep_cve_check.py の SARIF から、CVE 番号（ruleId）を、出てきた順に重複なしで返す。
+    "dep_cve_check/error"（確認できなかった報告）や、CVE でない ID は除く。"""
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    seen, out = set(), []
+    for run in data.get("runs", []):
+        for r in run.get("results", []):
+            rid = r.get("ruleId", "")
+            if _CVE_RE.match(rid) and rid not in seen:
+                seen.add(rid)
+                out.append(rid)
     return out
 
 
@@ -144,13 +174,37 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--ghsa", action="append", default=[], help="GHSA ID（繰り返し指定可）")
     ap.add_argument("--cve", action="append", default=[], help="CVE 番号（繰り返し指定可）")
+    ap.add_argument("--cve-from-sarif", action="append", default=[], metavar="FILE",
+                    help="dep_cve_check.py の SARIF から CVE 番号を読む（繰り返し指定可）")
+    ap.add_argument("--max", type=int, default=0, metavar="N",
+                    help="調べる CVE 番号の上限（--cve-from-sarif 分のみ。0=無制限。超えた分は報告に記す）")
     ap.add_argument("--out", default="ghsa_report.md", help="Markdown の出力先")
     ap.add_argument("--json-out", help="生のレスポンスを JSON でも保存する場合の出力先")
     ap.add_argument("--timeout", type=float, default=TIMEOUT)
     ap.add_argument("--delay", type=float, default=1.0, help="API 呼び出しの間隔（秒）。レート制限への配慮")
     args = ap.parse_args()
 
+    skipped = []
+    from_sarif = 0
+    for path in args.cve_from_sarif:
+        try:
+            found = cves_from_sarif(path)
+        except (OSError, ValueError) as e:
+            print("SARIF を読めなかった: %s（%s）" % (path, e), file=sys.stderr)
+            return 1
+        for c in found:
+            if c in args.cve or c in skipped:
+                continue
+            if args.max and from_sarif >= args.max:
+                skipped.append(c)
+            else:
+                args.cve.append(c)
+                from_sarif += 1
+
     if not args.ghsa and not args.cve:
+        if args.cve_from_sarif:
+            print("SARIF に、調べる CVE 番号がありませんでした。")
+            return 0
         print("--ghsa か --cve を、少なくとも1つ指定してください。", file=sys.stderr)
         return 1
 
@@ -187,6 +241,11 @@ def main():
         for adv in advisories:
             f.write(to_markdown(adv))
             f.write("\n---\n\n")
+        if skipped:
+            f.write("## 件数の上限（--max %d）のため、調べなかったもの\n\n" % args.max)
+            for c in skipped:
+                f.write("- %s\n" % c)
+            f.write("\n")
         if errors:
             f.write("## 取得できなかったもの\n\n")
             for e in errors:
@@ -196,7 +255,7 @@ def main():
         with open(args.json_out, "w", encoding="utf-8") as f:
             json.dump(advisories, f, ensure_ascii=False, indent=2)
 
-    print("取得: %d件 / 失敗: %d件" % (len(advisories), len(errors)))
+    print("取得: %d件 / 失敗: %d件" % (len(advisories), len(errors)) + (" / 上限で未調査: %d件" % len(skipped) if skipped else ""))
     for e in errors:
         print("  ⚠ %s" % e)
     print("出力: %s" % args.out)
