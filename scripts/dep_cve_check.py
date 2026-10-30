@@ -132,6 +132,9 @@ def parse_csproj(path):
                     version = child.text.strip()
         if not name:
             continue
+        # NuGet では、角括弧1つ（[3.1.1]）は「ちょうどその版」を意味する固定。範囲ではない。
+        if version and re.match(r"^\[[^,\]]+\]$", version.strip()):
+            version = version.strip()[1:-1].strip()
         if version and _PLAIN_VERSION.match(version):
             out.append((name, version))
         else:
