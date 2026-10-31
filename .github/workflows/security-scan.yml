@@ -45,10 +45,16 @@ jobs:
         run: mkdir -p results
 
       # --- コードの弱点(SQL インジェクション等) -----------------------------
+      # --config auto は、メトリクスを切った状態(--metrics=off)では使えず、エラーで終わって、何も診断されない
+      # (2026-10-31 に、Actions のログで確認: "Cannot create auto config when metrics are off")。
+      # 公式の標準ルールセット p/default を、明示的に指定する。意図的に脆弱なデモアプリ(sqli-lab の
+      # vulnerable_app.py)は、診断の対象から外す。失敗しても CI は止めないが、結果ファイルができなかったら警告を出す。
       - name: Semgrep
         run: |
           docker run --rm -v "$PWD:/src" -w /src semgrep/semgrep:latest \
-            semgrep scan --config auto --json --output results/semgrep.json --metrics=off || true
+            semgrep scan --config p/default --exclude security-scan/sqli-lab/vulnerable_app.py \
+            --json --output results/semgrep.json --metrics=off || true
+          [ -f results/semgrep.json ] || echo "::warning::Semgrep の結果ファイルができませんでした(診断が実行されていません)"
 
       # --- 部品の既知の脆弱性・設定の不備・秘密情報 -------------------------
       - name: Trivy (脆弱性 / 設定 / 秘密情報)
