@@ -7,6 +7,10 @@ vulnerable_app.py は、11 種類の脆弱性について、脆弱版（/login �
 - 修正版のルートに指摘があれば「誤検知」
 として数える。ルートの範囲は、ast で対象ファイルから求める（行番号が変わっても追従する）。
 
+AI の判定（findings[].ai.verdict）がある場合は、次のように扱う（AI なしのレポートには、影響しない）:
+- verdict が false_positive の指摘は、AI が自分で打ち消したものなので、検出にも誤検知にも数えず、別に一覧する。
+- 脆弱版への指摘が、すべて needs_review（要確認）の場合は、「検出(要確認のみ)」とする（検出には数える）。
+
 読み取り専用：ファイルを読んで、表を出すだけ。ネットワークには出ない。
 
 使い方:
@@ -53,24 +57,40 @@ def main(argv):
     spans = route_spans(target)
     where = lambda line: next((p for a, b, p in spans if a <= line <= b), "(関数の外)")
     findings = json.load(open(report, encoding="utf-8-sig")).get("findings", [])
-    hit = {}
-    for f in findings:
-        hit.setdefault(where(f["line"]), []).append(f["title"])
+    verdict = lambda f: (f.get("ai") or {}).get("verdict") or ""
+    dismissed = [f for f in findings if verdict(f) == "false_positive"]
+    active = [f for f in findings if verdict(f) != "false_positive"]
+    hit = {}  # ルート -> その位置の、打ち消されていない指摘
+    for f in active:
+        hit.setdefault(where(f["line"]), []).append(f)
 
-    rows, detected, missed, fp = [], 0, 0, 0
+    def state(routes):
+        """None=指摘なし / "weak"=すべて要確認 / "strong"=それ以外を含む"""
+        fs = [f for r in routes for f in hit.get(r, [])]
+        if not fs:
+            return None
+        return "weak" if all(verdict(f) == "needs_review" for f in fs) else "strong"
+
+    rows, detected, weak, missed, fp = [], 0, 0, 0, 0
     for kind, vuln, safe in TRUTH:
-        hv = any(r in hit for r in ALIASES.get(vuln, {vuln}))
-        hs = any(r in hit for r in ALIASES.get(safe, {safe}))
-        detected += hv
-        missed += not hv
+        sv = state(ALIASES.get(vuln, {vuln}))
+        hs = state(ALIASES.get(safe, {safe})) is not None
+        detected += sv is not None
+        weak += sv == "weak"
+        missed += sv is None
         fp += hs
-        rows.append("| %s | %s | %s |" % (kind, "検出" if hv else "**見逃し**", "**誤検知**" if hs else "OK"))
+        label = {None: "**見逃し**", "weak": "検出(要確認のみ)", "strong": "検出"}[sv]
+        rows.append("| %s | %s | %s |" % (kind, label, "**誤検知**" if hs else "OK"))
     known = {r for _, v, s in TRUTH for r in ALIASES.get(v, {v}) | ALIASES.get(s, {s})}
-    others = {p: t for p, t in hit.items() if p not in known}
+    others = {p: [f["title"] for f in fs] for p, fs in hit.items() if p not in known}
 
     print("| 脆弱性の種類 | 脆弱版 | 修正版 |\n|---|---|---|")
     print("\n".join(rows))
-    print("\n指摘 %d 件 / 検出 %d/11、見逃し %d/11、修正版の誤検知 %d" % (len(findings), detected, missed, fp))
+    print("\n指摘 %d 件 / 検出 %d/11(うち要確認のみ %d)、見逃し %d/11、修正版の誤検知 %d"
+          % (len(active), detected, weak, missed, fp))
+    if dismissed:
+        print("AI が打ち消した指摘(上の数には含めない) %d 件: %s" % (
+            len(dismissed), "; ".join("%s: %s" % (where(f["line"]), f["title"]) for f in dismissed)))
     if others:
         print("正解の表にない位置の指摘: " + "; ".join("%s: %s" % (p, ", ".join(sorted(set(t)))) for p, t in others.items()))
     return 0
