@@ -121,6 +121,7 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
       <h3>ローカルスキャナーを呼び出す</h3>
       <p class="note">このページ(ブラウザ)から、<b>このリポジトリ自身</b>を対象に、Semgrep・Trivy・gitleaks・netcheck を実際に実行し、結果をそのまま下の一覧に取り込みます。先に<code style="font-family:var(--font-mono)">python3 scripts/local_scan_server.py</code>をローカルで起動してください(Semgrep・Trivy・gitleaksはDocker Desktopが必要。ローカルに各コマンドが入っていればそちらを優先します)。通信は、下で指定したエンドポイント<b>だけ</b>に送られます。</p>
       <p class="note">おすすめの順番(軽い→重い): <b>netcheck</b>(数秒、Docker不要)→ <b>gitleaks</b>(数十秒)→ <b>Trivy</b>(初回はDBダウンロードで1〜2分)→ <b>Semgrep</b>(ルール取得込みで数分、一番重い)。zgrab2は能動スキャナなので、必要な時だけ別途実行してください。</p>
+      <p class="note">結果確認: 本物の結果を取り込む前に「全部消す」を押していない場合、<a href="#h-sum">「2. 全体像」</a>の合計件数が、サンプルデータのまま(合計26件)なら、まだ本物の結果が反映されていません。件数が変化していれば取り込み成功です。</p>
       <details class="cfgwrap">
         <summary>接続設定(初回だけ入力。この端末に保存されます)</summary>
         <div class="cfg">
