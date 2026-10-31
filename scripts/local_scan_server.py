@@ -182,6 +182,116 @@ def scan_netcheck(body):
     return out
 
 
+STRIX_TIMEOUT_SEC = 900  # Strix自体の完走には数分かかりうるため、他のエンドポイントより長め
+
+
+def _port_open(host, port, timeout=0.5):
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    try:
+        return s.connect_ex((host, port)) == 0
+    finally:
+        s.close()
+
+
+def _ensure_background(cmd, cwd, env, host, port, wait_sec=20):
+    """host:port が既に待ち受けていなければ、cmd をバックグラウンドで起動し、
+    待ち受け開始まで待つ(最大 wait_sec 秒)。新規に起動したかどうかを返す。"""
+    if _port_open(host, port):
+        return False
+    subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                      stdin=subprocess.DEVNULL, start_new_session=True)
+    deadline = time.monotonic() + wait_sec
+    while time.monotonic() < deadline:
+        if _port_open(host, port):
+            return True
+        time.sleep(0.5)
+    return True  # 起動は試みた。疎通未確認のまま次に進み、Strix側のエラーに委ねる。
+
+
+def scan_strix(body):
+    """Strix(usestrix/strix)のモックLLMベースPoCを、GUIから起動する。
+
+    能動的にこのリポジトリ自身のsqli-labデモアプリへ攻撃ペイロードを送る(SQLi認証バイパス等)ため、
+    zgrab2と同じ同意フラグ(i_own_these)が無いと一切実行しない。
+
+    対象となるStrixの作業コピーは、このエンドポイント自身がcloneすることはしない(第三者コードの
+    無断取得・パッチ適用を黙って行わないため)。環境変数 STRIX_LOCAL_DIR に、あらかじめ
+    security-scan/strix-local-poc/README.md の手順(clone → パッチ適用 → uv sync)を済ませた
+    Strixの作業コピーのパスを設定しておく必要がある。
+    """
+    body = body or {}
+    if body.get("i_own_these") is not True:
+        return {"error": "拒否: i_own_these(このリポジトリ自身が所有するsqli-labデモアプリへの"
+                          "攻撃実行に同意すること)がtrueである必要があります。"}
+
+    strix_dir = os.environ.get("STRIX_LOCAL_DIR", "").strip()
+    if not strix_dir or not os.path.isdir(strix_dir):
+        return {"error": "STRIX_LOCAL_DIRが設定されていないか、ディレクトリが存在しません。"
+                          "事前にsecurity-scan/strix-local-poc/README.mdの手順("
+                          "git clone https://github.com/usestrix/strix → "
+                          "strix-local-backend.patch等を適用 → uv sync)を済ませ、"
+                          "local_scan_server.pyを起動する前に "
+                          "STRIX_LOCAL_DIR=/path/to/strix を環境変数で指定してください。"}
+    if _which("uv") is None:
+        return {"error": "uvコマンドが見つかりません。https://docs.astral.sh/uv/ を参照してインストールしてください。"}
+
+    vuln_app = os.path.join(REPO_ROOT, "security-scan", "sqli-lab", "vulnerable_app.py")
+    mock_llm = os.path.join(REPO_ROOT, "security-scan", "strix-local-poc", "mock_llm_server.py")
+    if not os.path.exists(vuln_app) or not os.path.exists(mock_llm):
+        return {"error": "sqli-labのvulnerable_app.py、またはstrix-local-pocのmock_llm_server.pyが"
+                          "見つかりません(リポジトリの構成が想定と違います)。"}
+
+    vuln_env = dict(os.environ)
+    vuln_env.setdefault("VULN_APP_HOST", "127.0.0.1")
+    _ensure_background([sys.executable, vuln_app], REPO_ROOT, vuln_env, "127.0.0.1", 5000)
+    _ensure_background([sys.executable, mock_llm, "8899"], REPO_ROOT, dict(os.environ),
+                        "127.0.0.1", 8899)
+
+    if not _port_open("127.0.0.1", 5000) or not _port_open("127.0.0.1", 8899):
+        return {"error": "vulnerable_app.py または mock_llm_server.py の起動を確認できませんでした。"
+                          "手動で起動してから再試行してください(詳細: "
+                          "security-scan/strix-local-poc/README.md)。"}
+
+    strix_env = dict(os.environ)
+    strix_env["STRIX_RUNTIME_BACKEND"] = "local"
+    strix_env["STRIX_LLM"] = "openai/mock-model"
+    strix_env["OPENAI_API_BASE"] = "http://127.0.0.1:8899/v1"
+    strix_env["OPENAI_API_KEY"] = "dummy-mock-key"
+
+    before_runs = set()
+    runs_dir = os.path.join(strix_dir, "strix_runs")
+    if os.path.isdir(runs_dir):
+        before_runs = set(os.listdir(runs_dir))
+
+    cmd = ["uv", "run", "strix", "-n", "-t", "./", "--scan-mode", "quick", "--max-budget", "10"]
+    try:
+        p = subprocess.run(cmd, cwd=strix_dir, env=strix_env, capture_output=True,
+                            timeout=STRIX_TIMEOUT_SEC)
+    except subprocess.TimeoutExpired:
+        return {"error": "Strixの実行がタイムアウトしました(%d秒)。" % STRIX_TIMEOUT_SEC}
+    except FileNotFoundError as e:
+        return {"error": "Strixの実行に失敗しました: %s" % e}
+
+    if not os.path.isdir(runs_dir):
+        return {"error": "strix_runsディレクトリが作成されませんでした(Strixが完走しなかった可能性があります)。",
+                "returncode": p.returncode, "stderr": p.stderr.decode("utf-8", "replace")[-2000:]}
+    after_runs = set(os.listdir(runs_dir))
+    new_runs = sorted(after_runs - before_runs) or sorted(after_runs)
+    if not new_runs:
+        return {"error": "Strixの実行結果(strix_runs配下)が見つかりませんでした。",
+                "returncode": p.returncode, "stderr": p.stderr.decode("utf-8", "replace")[-2000:]}
+    run_id = new_runs[-1]
+    sarif_path = os.path.join(runs_dir, run_id, "findings.sarif")
+    if not os.path.exists(sarif_path):
+        return {"error": "findings.sarifが見つかりませんでした(run_id=%s)。"
+                          "脆弱性が検出されなかった可能性があります。" % run_id,
+                "returncode": p.returncode}
+    with open(sarif_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
 def scan_zgrab2(body):
     """能動スキャナ。scripts/zgrab2_guard.py と同じ同意フラグが無いと一切実行しない。
     zgrab2 本体が入っていない場合は、その旨を明確なエラーで返す(黙ってスキップしない)。"""
@@ -238,6 +348,7 @@ ROUTES = {
     "/scan/gitleaks": lambda body: scan_gitleaks(),
     "/scan/netcheck": lambda body: scan_netcheck(body),
     "/scan/zgrab2": lambda body: scan_zgrab2(body),
+    "/scan/strix": lambda body: scan_strix(body),
 }
 
 _LOCK = threading.Lock()  # 一度に1つのスキャンだけ(同じツールの結果ファイルを使い回すため)
