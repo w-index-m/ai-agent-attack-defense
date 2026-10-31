@@ -1,0 +1,78 @@
+# 試験用: dep_cve_check.py(OSV に照合)と crosscheck_osv_ghsa.py(OSV の修正版を、GitHub の
+# Advisories API の修正版と突き合わせる)を、実際の OSV・GitHub のデータで動かして確かめる。
+# - 手動実行(workflow_dispatch)専用。このファイル、または対象のスクリプトを変更した PR では、
+#   動作確認のために、一度動く。
+# - 入力は、意図的に古い(脆弱な)版を書いた小さなファイル(requirements.txt、go.sum、
+#   packages.lock.json)。このリポジトリ自身の依存関係ではない。
+# - 読み取り専用の公開 API を呼ぶだけ。GITHUB_TOKEN で認証して呼ぶ(未認証よりレート制限が緩い)。
+# 詳細: security-scan/dep-cve-check-notes.md の「OSV の結果を GitHub のアドバイザリと突き合わせる」
+name: crosscheck-trial
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/crosscheck-trial.yml"
+      - "scripts/crosscheck_osv_ghsa.py"
+      - "scripts/dep_cve_check.py"
+      - "scripts/ghsa_lookup.py"
+
+permissions:
+  contents: read            # 最小権限。書き込み権限は与えない
+
+concurrency:
+  group: crosscheck-trial-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  crosscheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 試験用の入力を作る(意図的に古い版)
+        run: |
+          mkdir -p /tmp/in /tmp/out
+          printf 'jinja2==2.10\nrequests==2.19.0\n' > /tmp/in/requirements.txt
+          printf 'golang.org/x/text v0.3.6 h1:aaa=\ngolang.org/x/text v0.3.6/go.mod h1:bbb=\n' > /tmp/in/go.sum
+          python3 -c "import json;json.dump({'version':1,'dependencies':{'net8.0':{'Newtonsoft.Json':{'type':'Direct','requested':'[12.0.1, )','resolved':'12.0.1','contentHash':'x'}}}},open('/tmp/in/packages.lock.json','w'))"
+
+      - name: OSV に照合する(dep_cve_check.py)
+        run: |
+          set +e
+          python3 -I scripts/dep_cve_check.py \
+            --requirements /tmp/in/requirements.txt \
+            --go-sum /tmp/in/go.sum \
+            --nuget-lock /tmp/in/packages.lock.json \
+            --out /tmp/out/dep.sarif 2>&1 | tee /tmp/out/dep_cve_check.log
+          echo "dep_cve_check の終了コード: ${PIPESTATUS[0]}(1=既知の脆弱性あり、2=確認できなかったものあり)"
+          exit 0
+
+      - name: GHSA と突き合わせる(crosscheck_osv_ghsa.py)
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          {
+            echo "## OSV と GHSA の突き合わせ(実データ)"
+            echo
+            python3 -I scripts/crosscheck_osv_ghsa.py /tmp/out/dep.sarif --out /tmp/out/crosscheck.md
+            rc=$?
+            echo
+            echo "crosscheck の終了コード: $rc(0=すべて一致、1=一致しないもの・突き合わせられないものがある)"
+          } 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: 結果を保存する
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crosscheck-trial
+          path: /tmp/out
+          retention-days: 14
+          if-no-files-found: warn

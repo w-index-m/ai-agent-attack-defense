@@ -14,10 +14,15 @@ on:
         description: "Ollama のモデル名(CPU だけなので、小さいものを)"
         default: "qwen2.5-coder:3b"
         required: false
+      runs:
+        description: "AI ありのスキャンを、何回繰り返すか(1〜10)。LLM の出力は毎回変わるので、複数回で分布を見る"
+        default: "1"
+        required: false
   pull_request:
     paths:
       - ".github/workflows/ai-sast-trial.yml"
       - "security-scan/sqli-lab/compare_sast_ground_truth.py"
+      - "security-scan/sqli-lab/aggregate_sast_runs.py"
 
 permissions:
   contents: read            # 最小権限。書き込み権限は与えない
@@ -31,11 +36,12 @@ env:
   SAST_REPO: https://github.com/sohampatil99/local-ai-sast
   SAST_SHA: 67cca210a53e1cc7cf226acae07564fc134667dd
   MODEL: ${{ inputs.model || 'qwen2.5-coder:3b' }}
+  RUNS: ${{ inputs.runs || '1' }}
 
 jobs:
   trial:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
 
@@ -81,34 +87,57 @@ jobs:
           docker exec ollama ollama list
           exit 0
 
-      - name: AI ありで、スキャンする(--ai と --ai-review)
+      - name: AI ありで、スキャンする(--ai と --ai-review)を、RUNS 回繰り返す
         run: |
           set +e
+          case "$RUNS" in
+            [1-9]|10) ;;
+            *) echo "::error::runs は 1〜10 の整数にしてください(指定: $RUNS)"; exit 1 ;;
+          esac
           cd /tmp/local-ai-sast
-          start=$(date +%s)
-          OLLAMA_URL=http://127.0.0.1:11434 timeout 35m /tmp/venv/bin/python -I backend/cli.py scan /tmp/target \
-            --ai --ai-review --model "$MODEL" --out /tmp/out/ai --format json,sarif 2>&1 \
-            | sed 's/\x1b\[[0-9;]*m//g' | tail -40
-          rc=${PIPESTATUS[0]}
-          echo "AI ありのスキャン: 終了コード $rc、$(( $(date +%s) - start )) 秒"
-          [ "$rc" -eq 124 ] && echo "::warning::AI ありのスキャンが、時間切れになりました"
+          for i in $(seq 1 "$RUNS"); do
+            echo "=== AI ありのスキャン $i / $RUNS ==="
+            # local-ai-sast は、LLM の応答を backend/data/llm_cache.json に保存して再利用する。消さないと、
+            # 2 回目以降は 1 回目の応答の再利用になり、独立した実行にならない(ばらつきを測れない)。
+            rm -f /tmp/local-ai-sast/backend/data/llm_cache.json
+            start=$(date +%s)
+            OLLAMA_URL=http://127.0.0.1:11434 timeout 35m /tmp/venv/bin/python -I backend/cli.py scan /tmp/target \
+              --ai --ai-review --model "$MODEL" --out /tmp/out/ai-$i --format json,sarif 2>&1 \
+              | sed 's/\x1b\[[0-9;]*m//g' | tail -25
+            rc=${PIPESTATUS[0]}
+            echo "AI ありのスキャン $i: 終了コード $rc、$(( $(date +%s) - start )) 秒"
+            [ "$rc" -eq 124 ] && echo "::warning::AI ありのスキャン $i が、時間切れになりました"
+          done
           exit 0
 
       - name: 正解と比べる(要約に出す)
         run: |
           {
-            echo "## AI-SAST の試験: local-ai-sast @ ${SAST_SHA:0:7}、モデル \`$MODEL\`"
+            echo "## AI-SAST の試験: local-ai-sast @ ${SAST_SHA:0:7}、モデル \`$MODEL\`、AI ありを $RUNS 回"
             echo
-            for mode in rules ai; do
-              r=$(ls /tmp/out/$mode/*.json 2>/dev/null | head -1)
-              echo "### $mode"
+            r=$(ls /tmp/out/rules/*.json 2>/dev/null | head -1)
+            echo "### ルールだけ(AI なし)"
+            if [ -n "$r" ]; then
+              python3 -I security-scan/sqli-lab/compare_sast_ground_truth.py "$r" security-scan/sqli-lab/vulnerable_app.py
+            else
+              echo "レポートが、できませんでした。"
+            fi
+            echo
+            reports=()
+            for i in $(seq 1 "$RUNS"); do
+              r=$(ls /tmp/out/ai-$i/*.json 2>/dev/null | head -1)
+              [ -n "$r" ] && reports+=("$r")
+              echo "### AI あり $i 回目"
               if [ -n "$r" ]; then
                 python3 -I security-scan/sqli-lab/compare_sast_ground_truth.py "$r" security-scan/sqli-lab/vulnerable_app.py
               else
-                echo "レポートが、できませんでした。"
+                echo "レポートが、できませんでした(時間切れなど)。"
               fi
               echo
             done
+            if [ "${#reports[@]}" -ge 2 ]; then
+              python3 -I security-scan/sqli-lab/aggregate_sast_runs.py security-scan/sqli-lab/vulnerable_app.py "${reports[@]}"
+            fi
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: 結果を保存する
