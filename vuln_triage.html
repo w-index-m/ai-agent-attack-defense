@@ -53,6 +53,8 @@ input[type=file]{font:inherit;max-width:100%}
 .src{display:flex;flex-wrap:wrap;gap:6px}
 .src .tag{background:var(--surface2);border:1px solid var(--line);font-weight:500}
 .err{color:var(--crit);font-weight:500}
+.ok{color:var(--accent);font-weight:500}
+.busy{color:var(--muted)}
 .sevbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
 .sevcell{border-radius:4px;padding:8px 12px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
 .sevcell b{font-family:var(--font-mono);font-size:22px;font-weight:500}
@@ -118,6 +120,8 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
     <div class="panel">
       <h3>ローカルスキャナーを呼び出す</h3>
       <p class="note">このページ(ブラウザ)から、<b>このリポジトリ自身</b>を対象に、Semgrep・Trivy・gitleaks・netcheck を実際に実行し、結果をそのまま下の一覧に取り込みます。先に<code style="font-family:var(--font-mono)">python3 scripts/local_scan_server.py</code>をローカルで起動してください(Semgrep・Trivy・gitleaksはDocker Desktopが必要。ローカルに各コマンドが入っていればそちらを優先します)。通信は、下で指定したエンドポイント<b>だけ</b>に送られます。</p>
+      <p class="note">おすすめの順番(軽い→重い): <b>netcheck</b>(数秒、Docker不要)→ <b>gitleaks</b>(数十秒)→ <b>Trivy</b>(初回はDBダウンロードで1〜2分)→ <b>Semgrep</b>(ルール取得込みで数分、一番重い)。zgrab2は能動スキャナなので、必要な時だけ別途実行してください。</p>
+      <p class="note">結果確認: 本物の結果を取り込む前に「全部消す」を押していない場合、<a href="#h-sum">「2. 全体像」</a>の合計件数が、サンプルデータのまま(合計26件)なら、まだ本物の結果が反映されていません。件数が変化していれば取り込み成功です。</p>
       <details class="cfgwrap">
         <summary>接続設定(初回だけ入力。この端末に保存されます)</summary>
         <div class="cfg">
@@ -717,27 +721,32 @@ function llmContext(){
     document.querySelectorAll("#scan-buttons button[data-tool]").forEach(function(b){b.disabled=d});
     $("zg-run").disabled=d;
   }
+  function setScanStatus(text,kind){
+    var el=$("scan-status");
+    el.textContent=text;
+    el.className="note"+(kind?(" "+kind):"");
+  }
   async function callScan(path,body,label){
-    if(scanRunning){$("scan-status").textContent="他のスキャンが実行中です。終わるまでお待ちください。";return}
+    if(scanRunning){setScanStatus("他のスキャンが実行中です。終わるまでお待ちください。","err");return}
     var base=($("scan-url").value||"").trim().replace(/\/+$/,"");
-    if(!base){$("scan-status").textContent="エンドポイントを入力してください。";return}
+    if(!base){setScanStatus("エンドポイントを入力してください。","err");return}
     scanRunning=true;setScanButtonsDisabled(true);
     var startedAt=Date.now();
     var timer=setInterval(function(){
       var s=Math.round((Date.now()-startedAt)/1000);
-      $("scan-status").textContent=label+" を実行中…("+s+"秒経過。数十秒〜数分かかることがあります)";
+      setScanStatus(label+" を実行中…("+s+"秒経過。数十秒〜数分かかることがあります)","busy");
     },1000);
-    $("scan-status").textContent=label+" を実行中…(0秒経過)";
+    setScanStatus(label+" を実行中…(0秒経過)","busy");
     try{
       var r=await fetch(base+path,{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify(body||{})});
       var j=await r.json();
       if(!r.ok||(j&&j.error)){throw new Error((j&&j.error)||("HTTP "+r.status))}
       var msg=addJson(JSON.stringify(j),label+"(ローカルスキャナー)");
-      $("scan-status").textContent=msg||(label+" を取り込みました。");
+      setScanStatus("✅ "+(msg||(label+" を取り込みました。")),"ok");
     }catch(err){
-      $("scan-status").textContent="エラー: "+(err&&err.message?err.message:err)+
-        " (確認: ①local_scan_server.pyが起動しているか ②エンドポイントURL ③必要なツール/Dockerが入っているか)";
+      setScanStatus("❌ エラー: "+(err&&err.message?err.message:err)+
+        " (確認: ①local_scan_server.pyが起動しているか ②エンドポイントURL ③必要なツール/Dockerが入っているか)","err");
     }finally{
       clearInterval(timer);scanRunning=false;setScanButtonsDisabled(false);
     }
@@ -752,8 +761,8 @@ function llmContext(){
   $("zg-run").addEventListener("click",function(){
     var targets=($("zg-targets").value||"").trim();
     var consent=$("zg-consent").checked;
-    if(!consent){$("scan-status").textContent="対象への許可の確認(チェックボックス)が必要です。";return}
-    if(!targets){$("scan-status").textContent="zgrab2の対象を入力してください。";return}
+    if(!consent){setScanStatus("対象への許可の確認(チェックボックス)が必要です。","err");return}
+    if(!targets){setScanStatus("zgrab2の対象を入力してください。","err");return}
     callScan("/scan/zgrab2",{targets:targets,i_own_these:true},"zgrab2");
   });
 })();
