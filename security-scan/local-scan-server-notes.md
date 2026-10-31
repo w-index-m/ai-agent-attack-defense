@@ -4,7 +4,7 @@ English summary: see the bottom of this file.
 
 `vuln_triage.html`の「1. 診断結果を取り込む」は、これまで他で生成したJSONを貼り付ける/ファイルを選ぶ
 だけだった。これに、**このリポジトリ自身**を対象に、既存の診断ツール(Semgrep・Trivy・gitleaks・
-netcheck・zgrab2)をブラウザから直接呼び出すボタンを追加した。
+netcheck・zgrab2・Strix)をブラウザから直接呼び出すボタンを追加した。
 
 仕組みは、既存の「5. 自前LLMに質問する」機能（ブラウザから`http://localhost:11434`に直接fetchする）
 と同じパターン。`vuln_triage.html`自体は静的なページ(バックエンドを持たない)なので、ローカルで
@@ -25,9 +25,12 @@ POSTする。
 | `POST /scan/gitleaks` | `gitleaks detect --report-format=json --exit-code=0`（CIと同じ） | ローカルに`gitleaks`があればそれを優先、無ければDocker |
 | `POST /scan/netcheck` | `netcheck/netcheck.py`の設定・許可範囲判定・スキャンロジックをそのまま再利用（サーバーは別途立てず、同期的にジョブを実行） | 対象は既定で`127.0.0.1`。リクエストで変えられるが、netcheck自身の許可範囲（`netcheck/config.json`）を超えることはできない |
 | `POST /scan/zgrab2` | `scripts/zgrab2_guard.py`と同じ許可範囲判定を通した後、`zgrab2`本体を実行 | ボディに`i_own_these: true`が無いと一切実行しない。`zgrab2`本体が未インストールなら、その旨を明確なエラーで返す |
+| `POST /scan/strix` | [usestrix/strix](https://github.com/usestrix/strix)のモックLLM版PoC(`strix-local-poc/`)を実行し、生成された`findings.sarif`を返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`STRIX_LOCAL_DIR`に、事前にclone・パッチ適用・`uv sync`済みのStrix作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneやパッチ適用は行わない)。対象はこのリポジトリ自身の`sqli-lab`デモアプリに固定 |
 
 どのツールも、生のJSON出力をそのまま返す（加工しない）。ページ側は、既存の`addJson()`（貼り付け/
-ファイル読み込みと同じ関数）にそのまま渡すので、解析ロジックは一本化されている。
+ファイル読み込みと同じ関数）にそのまま渡すので、解析ロジックは一本化されている。`strix`が返す
+`findings.sarif`も、既存のSARIF解析ロジック(サンプルの`report.sarif`と同じコードパス)でそのまま
+読める。
 
 ## 使い方
 
@@ -41,6 +44,13 @@ python3 scripts/local_scan_server.py --port 9000
 
 zgrab2だけ、対象(IP/CIDR/ホスト名)の入力と、「自社が管理している、または書面で許可を得た対象」
 というチェックボックスの明示が必要。
+
+Strixを使うには、事前に[`strix-local-poc/README.md`](strix-local-poc/README.md)の手順(clone・
+パッチ適用・`uv sync`)を済ませた作業コピーが必要。そのパスを`STRIX_LOCAL_DIR`環境変数に設定した
+状態で`local_scan_server.py`を起動すること。「sqli-labデモアプリへの攻撃実行に同意する」チェック
+ボックスの明示も必要(実際にSQLi認証バイパス等のペイロードを、このリポジトリ自身のデモアプリに
+送る能動的な操作のため)。`vulnerable_app.py`・`mock_llm_server.py`は、まだ起動していなければ
+エンドポイント自身が自動で起動する。
 
 ## 検証の状態（正直に）
 
@@ -58,6 +68,20 @@ zgrab2だけ、対象(IP/CIDR/ホスト名)の入力と、「自社が管理し�
   経路は実際に確認できた。
 - **trivy・gitleaksエンドポイント**: このサンドボックスにはDockerデーモンが無く（`docker info`が
   失敗する）、`trivy`・`gitleaks`バイナリも入っていないため、実行自体を試せなかった。
+- **strixエンドポイント**: `uv`はこのサンドボックスに入っていたが、`https://github.com/usestrix/strix`
+  へのネットワークアクセスがこの環境のネットワークポリシーで拒否された(他の外部ホストと同じ理由)ため、
+  Strix本体のclone・完全なエンドツーエンドの実行は**試せなかった**。代わりに以下を個別に確認した:
+  - `i_own_these`無しでの拒否、`STRIX_LOCAL_DIR`未設定時の明確なエラーメッセージ、を`curl`と
+    実際のブラウザ(Playwright)経由の両方で確認。
+  - Strixが依存する補助サーバー2つ(`security-scan/sqli-lab/vulnerable_app.py`、
+    `security-scan/strix-local-poc/mock_llm_server.py`)が、単体ではこのサンドボックスで正常に
+    起動・応答することを確認(前者はSQLi認証バイパスの実通信、後者はモック応答)。これはStrixの
+    実行エンドポイントが内部で自動起動を試みる、まさにその2つのコンポーネント。
+  - コードレビューで、サブプロセスのタイムアウト・`strix_runs`配下の新規run検出・`findings.sarif`
+    読み取りのロジックを確認。vuln_triage.htmlの既存SARIFパーサー(`parseOne()`のsarif分岐)が
+    期待するフィールド(`version`・`runs[].tool.driver.name`・`results[].ruleId/message/locations/level`)
+    と、標準SARIF 2.1.0形式(`strix-local-backend-notes.md`の検証5で確認済みのStrix出力と同じ形式)が
+    一致することも確認済み。
 
 ### 実機(Windows PC、Docker Desktop)での検証(2026-10-31)
 
@@ -96,14 +120,22 @@ Trivy以外はすべて実機で正常動作を確認済み。Trivyのみ、お�
 ## English summary
 
 Adds `scripts/local_scan_server.py`, a small localhost-only companion HTTP server that lets
-`vuln_triage.html` (a static, backend-less page) trigger Semgrep, Trivy, gitleaks, netcheck and
-zgrab2 directly from the browser — the same pattern the page's existing "ask your own LLM" panel
-already uses against a local Ollama instance. Scope is fixed to this repository's own working tree
-(no arbitrary path from the request). Semgrep/Trivy/gitleaks mirror the exact commands used in
-`.github/workflows/security-scan.yml`. netcheck reuses `netcheck/netcheck.py`'s own config and
-allowed-range logic unchanged. zgrab2 requires an explicit `i_own_these: true` consent flag and is
-routed through the same allow-range filtering as `scripts/zgrab2_guard.py`, and returns a clear
-error if the `zgrab2` binary isn't installed rather than silently no-op'ing.
+`vuln_triage.html` (a static, backend-less page) trigger Semgrep, Trivy, gitleaks, netcheck,
+zgrab2 and Strix directly from the browser — the same pattern the page's existing "ask your own
+LLM" panel already uses against a local Ollama instance. Scope is fixed to this repository's own
+working tree (no arbitrary path from the request). Semgrep/Trivy/gitleaks mirror the exact
+commands used in `.github/workflows/security-scan.yml`. netcheck reuses `netcheck/netcheck.py`'s
+own config and allowed-range logic unchanged. zgrab2 requires an explicit `i_own_these: true`
+consent flag and is routed through the same allow-range filtering as `scripts/zgrab2_guard.py`,
+and returns a clear error if the `zgrab2` binary isn't installed rather than silently no-op'ing.
+Strix requires the same `i_own_these: true` consent (it actively sends attack payloads, such as a
+SQLi auth-bypass, at this repo's own `sqli-lab` demo app) plus a pre-prepared Strix checkout named
+by the `STRIX_LOCAL_DIR` environment variable — this endpoint deliberately does not clone or patch
+the third-party `usestrix/strix` repo itself; that one-time setup stays a manual step documented in
+`strix-local-poc/README.md`. When run, it auto-starts `vulnerable_app.py` and `mock_llm_server.py`
+if they aren't already listening, runs Strix's existing mock-LLM PoC end to end, and returns the
+contents of the resulting `findings.sarif` — which `vuln_triage.html` already knows how to parse
+natively (same code path as the sample `report.sarif`), so no new frontend parsing was needed.
 
 Verified in this sandbox: the netcheck endpoint end-to-end, via a real headless-browser click on
 `vuln_triage.html` against a live server (correct scan, correct ingestion, no console errors); CORS
@@ -131,3 +163,20 @@ it were success (fixed); and the classifier matched category keywords against th
 so a file under `security-scan/sqli-lab/` was mislabeled as a SQL-injection finding purely because
 of the substring "sqli" in the folder name (fixed by classifying on rule ID / title / detail only,
 not the path).
+
+### Strix endpoint (added this session)
+
+`uv` was present in this sandbox, but network access to `https://github.com/usestrix/strix` was
+denied by this environment's network policy (same as several other external hosts blocked earlier
+this session), so a full end-to-end Strix run — cloning the repo, applying the patches, `uv sync`,
+and actually executing the mock-LLM PoC — could **not** be exercised here. What was verified
+instead: the `i_own_these`-required rejection and the clear "`STRIX_LOCAL_DIR` not configured"
+error, both via `curl` and via a real browser click (Playwright) on `vuln_triage.html`; that the
+two helper processes the endpoint auto-starts (`vulnerable_app.py` and `mock_llm_server.py`) each
+still start and respond correctly on their own in this sandbox, exactly as this session's earlier
+history already established; and, by code review, that the subprocess timeout / new-run detection
+/ `findings.sarif` read logic is sound, and that the SARIF shape it returns matches what
+`vuln_triage.html`'s existing SARIF parser expects (same `version`/`runs[].tool.driver.name`/
+`results[].ruleId|message|locations|level` shape already confirmed for Strix's real output in
+`strix-local-backend-notes.md`'s 検証5). Full verification needs a machine that can actually reach
+GitHub to prepare a patched Strix checkout.

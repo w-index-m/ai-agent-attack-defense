@@ -51,6 +51,29 @@ export OPENAI_API_KEY="dummy-mock-key"
 uv run strix -n -t ./ --scan-mode quick --max-budget 10
 ```
 
+## `vuln_triage.html`のGUIボタンから起動する(`scripts/local_scan_server.py`経由)
+
+上記3c)の手順(clone・パッチ適用・`uv sync`)を済ませたStrixの作業コピーがあれば、ブラウザの
+`vuln_triage.html`から「Strixを実行」ボタンで直接起動できる。詳細は
+[`../local-scan-server-notes.md`](../local-scan-server-notes.md)参照。
+
+```bash
+# 事前準備(初回だけ、上記3c)と同じ)
+git clone https://github.com/usestrix/strix /path/to/strix
+cd /path/to/strix
+git apply /path/to/strix-local-backend.patch
+uv sync
+
+# local_scan_server.py を起動する前に、作業コピーのパスを指定
+export STRIX_LOCAL_DIR=/path/to/strix
+python3 scripts/local_scan_server.py
+```
+
+`vulnerable_app.py`・`mock_llm_server.py`はまだ起動していなければ、`/scan/strix`エンドポイント
+自身が自動で起動する(手動で先に立ち上げておく必要はない)。GUI側は、能動的にこのリポジトリ自身の
+`sqli-lab`デモアプリへ攻撃ペイロードを送ることへの同意チェックボックスを明示的に要求する。結果は
+`findings.sarif`として返り、`vuln_triage.html`の既存SARIF取り込みにそのまま乗る。
+
 ## 要点（詳細は設計メモ）
 
 - `local` バックエンドは SDK 同梱の `UnixLocalSandboxClient` を使い、ホスト上で直接実行。

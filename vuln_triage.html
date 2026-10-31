@@ -151,6 +151,12 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
         <div class="row" style="margin-top:6px"><button type="button" id="zg-run">zgrab2を実行</button></div>
         <p class="note">zgrab2 は実際に対象へ接続する能動スキャナです。許可を得た対象だけに使ってください。<a class="src" href="security-scan/zgrab2-notes.md">→ 詳細ノート</a></p>
       </details>
+      <details class="cfgwrap">
+        <summary>Strix(自律型ペネトレーションAIエージェント。モックLLM版)</summary>
+        <p class="note">このリポジトリ自身の<code style="font-family:var(--font-mono)">security-scan/sqli-lab</code>デモアプリ(自分が所有する使い捨て対象)に対して、実際にSQLi認証バイパス等の攻撃ペイロードを送ります。LLMは台本どおりに動くモック(実APIキー不要・コスト$0)ですが、ツール実行・レポート生成は本物です。事前に<a class="src" href="security-scan/strix-local-poc/README.md">strix-local-poc/README.md</a>の手順(clone・パッチ適用・uv sync)を済ませ、<code style="font-family:var(--font-mono)">STRIX_LOCAL_DIR</code>環境変数を設定した状態で<code style="font-family:var(--font-mono)">local_scan_server.py</code>を起動しておく必要があります。</p>
+        <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="strix-consent"> このリポジトリ自身が所有するsqli-labデモアプリへの攻撃実行(SQLi認証バイパス等)に同意します。</label>
+        <div class="row" style="margin-top:6px"><button type="button" id="strix-run">Strixを実行(数分かかることがあります)</button></div>
+      </details>
       <p class="note">詳細: <a class="src" href="security-scan/local-scan-server-notes.md">local-scan-server-notes.md</a></p>
     </div>
     <div class="panel">
@@ -733,6 +739,7 @@ function llmContext(){
     document.querySelectorAll("#scan-buttons button[data-tool]").forEach(function(b){b.disabled=d});
     $("zg-run").disabled=d;
     $("nc-run").disabled=d;
+    $("strix-run").disabled=d;
   }
   function setScanStatus(text,kind){
     var el=$("scan-status");
@@ -787,6 +794,11 @@ function llmContext(){
     if(!consent){setScanStatus("対象への許可の確認(チェックボックス)が必要です。","err");return}
     if(!targets){setScanStatus("zgrab2の対象を入力してください。","err");return}
     callScan("/scan/zgrab2",{targets:targets,i_own_these:true},"zgrab2");
+  });
+  $("strix-run").addEventListener("click",function(){
+    var consent=$("strix-consent").checked;
+    if(!consent){setScanStatus("sqli-labデモアプリへの攻撃実行への同意(チェックボックス)が必要です。","err");return}
+    callScan("/scan/strix",{i_own_these:true},"Strix");
   });
 })();
 
