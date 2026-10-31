@@ -94,7 +94,7 @@ This repository covers it through management-plane exposure checks (ports 902 / 
 | OS update checks (Windows) | ⚠️ Verified only with stubs that mimic the output. **Not yet run on a real host** |
 | Dependency CVE checks (`dep_cve_check.py`/`ghsa_lookup.py`) | ✅ Verified against the real OSV.dev and GitHub Advisories APIs (14 of 16 real results had matching fixed versions between OSV and GHSA) |
 | Agent-framework bug hunting | ✅ Found and verified a real dead-code bug in hackingBuddyGPT (`api_base` ignored, reproduced 5x, CI regression canary added). Strix, Cairn, CAI and PentestGPT checked the same way — clean negative results |
-| Local-LLM question panel | ⚠️ Verified only with a mock server. **Not yet verified with a real Ollama (qwen2.5:1.5b)** |
+| Local-LLM question panel | ✅ Verified against a real Ollama (native Windows install, qwen2.5:1.5b): sent a question from `vuln_triage.html` and got a coherent, structured answer back |
 | Effectiveness of the detection rules | ⚠️ Not validated against a real attack environment (needs an authorized lab) |
 | Attack tools (Strix, Cairn, Hermes, ARTEX) | ✅ Analysis only. No attacks run against real targets |
 
