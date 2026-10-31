@@ -116,6 +116,33 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
   <section aria-labelledby="h-in">
     <h2 id="h-in">1. 診断結果を取り込む</h2>
     <div class="panel">
+      <h3>ローカルスキャナーを呼び出す</h3>
+      <p class="note">このページ(ブラウザ)から、<b>このリポジトリ自身</b>を対象に、Semgrep・Trivy・gitleaks・netcheck を実際に実行し、結果をそのまま下の一覧に取り込みます。先に<code style="font-family:var(--font-mono)">python3 scripts/local_scan_server.py</code>をローカルで起動してください(Semgrep・Trivy・gitleaksはDocker Desktopが必要。ローカルに各コマンドが入っていればそちらを優先します)。通信は、下で指定したエンドポイント<b>だけ</b>に送られます。</p>
+      <details class="cfgwrap">
+        <summary>接続設定(初回だけ入力。この端末に保存されます)</summary>
+        <div class="cfg">
+          <label>エンドポイント<input class="f" id="scan-url" placeholder="http://localhost:8766"></label>
+        </div>
+      </details>
+      <div class="row" id="scan-buttons">
+        <button type="button" data-tool="semgrep">Semgrepを実行</button>
+        <button type="button" data-tool="trivy">Trivyを実行</button>
+        <button type="button" data-tool="gitleaks">gitleaksを実行</button>
+        <button type="button" data-tool="netcheck">netcheckを実行(127.0.0.1)</button>
+      </div>
+      <div id="scan-status" class="note" role="status"></div>
+      <details class="cfgwrap">
+        <summary>zgrab2(能動スキャナ。許可を得た対象だけ)</summary>
+        <div class="cfg">
+          <label>対象(IP / CIDR / ホスト名。改行・カンマ区切り)<input class="f" id="zg-targets" placeholder="127.0.0.1"></label>
+        </div>
+        <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="zg-consent"> 入力した対象は、自社が管理している、または書面で許可を得たものです。</label>
+        <div class="row" style="margin-top:6px"><button type="button" id="zg-run">zgrab2を実行</button></div>
+        <p class="note">zgrab2 は実際に対象へ接続する能動スキャナです。許可を得た対象だけに使ってください。<a class="src" href="security-scan/zgrab2-notes.md">→ 詳細ノート</a></p>
+      </details>
+      <p class="note">詳細: <a class="src" href="security-scan/local-scan-server-notes.md">local-scan-server-notes.md</a></p>
+    </div>
+    <div class="panel">
       <label for="paste" class="note">JSON を貼り付けるか、ファイルを選びます。ツールの種類(Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2)は自動で判別します。複数回の取り込みは合算されますが、同じ内容を二重に取り込もうとすると警告して追加しません。</label>
       <textarea id="paste" placeholder='例: semgrep --json / trivy fs --format json / gitleaks detect --report-format json / *.sarif / netcheck の保存 JSON / zgrab2 の出力(1 行 1 ターゲットの JSON Lines)'></textarea>
       <div class="row">
@@ -673,6 +700,48 @@ function llmContext(){
   }
   $("llm-ask").addEventListener("click",ask);
   $("llm-q").addEventListener("keydown",function(e){if((e.metaKey||e.ctrlKey)&&e.key==="Enter")ask()});
+})();
+
+(function(){
+  /* ローカルスキャナー(scripts/local_scan_server.py)を呼び出し、結果をそのまま addJson() に流す。
+     parseOne() は JSON.parse 済みのオブジェクト/配列の形で各ツールを自動判別するので、
+     サーバーが返す生のJSONをそのまま JSON.stringify して渡すだけでよい(解析ロジックは共通)。 */
+  var LS={url:"vt-scan-url"};
+  function load(id,k,def){try{var v=localStorage.getItem(k);$(id).value=(v!=null?v:def||"")}catch(e){$(id).value=def||""}}
+  function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+  load("scan-url",LS.url,"http://localhost:8766");
+  $("scan-url").addEventListener("change",function(){save(LS.url,$("scan-url").value.trim())});
+
+  async function callScan(path,body,label){
+    var base=($("scan-url").value||"").trim().replace(/\/+$/,"");
+    if(!base){$("scan-status").textContent="エンドポイントを入力してください。";return}
+    $("scan-status").textContent=label+" を実行中…(数十秒〜数分かかることがあります)";
+    try{
+      var r=await fetch(base+path,{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(body||{})});
+      var j=await r.json();
+      if(!r.ok||(j&&j.error)){throw new Error((j&&j.error)||("HTTP "+r.status))}
+      var msg=addJson(JSON.stringify(j),label+"(ローカルスキャナー)");
+      $("scan-status").textContent=msg||(label+" を取り込みました。");
+    }catch(err){
+      $("scan-status").textContent="エラー: "+(err&&err.message?err.message:err)+
+        " (確認: ①local_scan_server.pyが起動しているか ②エンドポイントURL ③必要なツール/Dockerが入っているか)";
+    }
+  }
+  document.querySelectorAll("#scan-buttons button[data-tool]").forEach(function(btn){
+    btn.addEventListener("click",function(){
+      var tool=btn.getAttribute("data-tool");
+      var body=tool==="netcheck"?{targets:"127.0.0.1",ports:"standard"}:{};
+      callScan("/scan/"+tool,body,btn.textContent);
+    });
+  });
+  $("zg-run").addEventListener("click",function(){
+    var targets=($("zg-targets").value||"").trim();
+    var consent=$("zg-consent").checked;
+    if(!consent){$("scan-status").textContent="対象への許可の確認(チェックボックス)が必要です。";return}
+    if(!targets){$("scan-status").textContent="zgrab2の対象を入力してください。";return}
+    callScan("/scan/zgrab2",{targets:targets,i_own_these:true},"zgrab2");
+  });
 })();
 
 function loadSample(){
