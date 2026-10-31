@@ -26,11 +26,26 @@ POSTする。
 | `POST /scan/netcheck` | `netcheck/netcheck.py`の設定・許可範囲判定・スキャンロジックをそのまま再利用（サーバーは別途立てず、同期的にジョブを実行） | 対象は既定で`127.0.0.1`。リクエストで変えられるが、netcheck自身の許可範囲（`netcheck/config.json`）を超えることはできない |
 | `POST /scan/zgrab2` | `scripts/zgrab2_guard.py`と同じ許可範囲判定を通した後、`zgrab2`本体を実行 | ボディに`i_own_these: true`が無いと一切実行しない。`zgrab2`本体が未インストールなら、その旨を明確なエラーで返す |
 | `POST /scan/strix` | [usestrix/strix](https://github.com/usestrix/strix)のモックLLM版PoC(`strix-local-poc/`)を実行し、生成された`findings.sarif`を返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`STRIX_LOCAL_DIR`に、事前にclone・パッチ適用・`uv sync`済みのStrix作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneやパッチ適用は行わない)。対象はこのリポジトリ自身の`sqli-lab`デモアプリに固定 |
+| `POST /scan/cairn` | [oritera/Cairn](https://github.com/oritera/Cairn)を、Dockerワーカー・LLMを使わず`CairnClient`で直接駆動し(`cairn-lab/run_real_scan.py`)、実際にSQLi認証バイパスを再現してCairnのFactとして記録、エクスポートしたFactをSARIF形式に変換して返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`CAIRN_LOCAL_DIR`に、事前にclone・`uv sync --project cairn`済みのCairn作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneは行わない)。対象はこのリポジトリ自身の`sqli-lab`デモアプリに固定。Cairnの実ディスパッチャ(`cairn dispatch`)は使わない(下記「なぜディスパッチャを使わないか」参照) |
 
 どのツールも、生のJSON出力をそのまま返す（加工しない）。ページ側は、既存の`addJson()`（貼り付け/
 ファイル読み込みと同じ関数）にそのまま渡すので、解析ロジックは一本化されている。`strix`が返す
-`findings.sarif`も、既存のSARIF解析ロジック(サンプルの`report.sarif`と同じコードパス)でそのまま
-読める。
+`findings.sarif`も、`cairn`が変換して返すSARIF相当のJSONも、既存のSARIF解析ロジック(サンプルの
+`report.sarif`と同じコードパス)でそのまま読める。
+
+### なぜCairnはディスパッチャ(`cairn dispatch`)を使わないか
+
+Cairnの実ディスパッチャ(Docker workerコンテナ + LLM)は、workerの応答がCairn独自のJSONスキーマ
+(`{"accepted": true, ...}`等)に従うことを要求している。台本によるプレーンテキスト応答(Strixの
+モックLLMと同じ発想)ではこのスキーマに合わず、「JSON解析失敗」としてタスクが`completed`扱いに
+ならず無限リトライになることが、`cairn-authorized-lab-runbook.md`§6.5で既に判明している
+(クラッシュや危険な動作ではないが、確実に完了しない)。
+
+そのため`/scan/cairn`は、ディスパッチャ/ワーカー/LLM層を一切経由せず、PR #89の
+`handoff_recheck_test.py`と同じ手法(`CairnClient`でサーバーAPIを直接呼ぶ)を踏襲しつつ、
+テスト用マーカー文字列の代わりに**実際のcurlによるSQLi認証バイパス**(Strixの
+`mock_llm_server.py`で使っているのと同じペイロード)を実行し、その結果をFactとして記録する
+(`cairn-lab/run_real_scan.py`)。
 
 ## 使い方
 
@@ -83,6 +98,20 @@ Strixを使うには、事前に[`strix-local-poc/README.md`](strix-local-poc/RE
     と、標準SARIF 2.1.0形式(`strix-local-backend-notes.md`の検証5で確認済みのStrix出力と同じ形式)が
     一致することも確認済み。
 
+- **cairnエンドポイント**: ✅ **このサンドボックス内で、完全なエンドツーエンド実機確認ができた**
+  (Strix/Semgrep/Trivy/gitleaksと異なり、必要な外部リソースが全てこのサンドボックスに既に揃って
+  いたため)。手順:
+  1. `/home/user/oritera/cairn`(このセッションの過去の作業で既にclone・`uv sync`済みのCairn
+     作業コピー)を`CAIRN_LOCAL_DIR`に設定。
+  2. サーバーをクリーンな状態(`vulnerable_app.py`・`cairn serve`とも未起動)から起動し、
+     `curl -X POST /scan/cairn -d '{"i_own_these":true}'`を実行。両プロセスが自動起動され、
+     実際にSQLi認証バイパス(`curl 'http://127.0.0.1:5000/login?username=admin%27%20--&password=x'`)が
+     再現され、`Login OK. ... Rows: [(3, 'admin', 1)]`という本物のレスポンスがCairnのFact
+     (`f001`)として記録され、正しい形のSARIF JSONが返ることを確認した。
+  3. Playwright(実ブラウザ)で`vuln_triage.html`を開き、「全部消す」→Cairnの同意チェックボックス→
+     「Cairnを実行」ボタンをクリックする、実際の利用フローも確認。✅成功表示、「2. 全体像」が
+     正しく1件(中・連鎖1「SQLインジェクション」に該当)に再描画されることまで確認した。
+
 ### 実機(Windows PC、Docker Desktop)での検証(2026-10-31)
 
 ユーザー自身のWindows PCで、`python3 scripts/local_scan_server.py`を起動し、`vuln_triage.html`から
@@ -121,7 +150,7 @@ Trivy以外はすべて実機で正常動作を確認済み。Trivyのみ、お�
 
 Adds `scripts/local_scan_server.py`, a small localhost-only companion HTTP server that lets
 `vuln_triage.html` (a static, backend-less page) trigger Semgrep, Trivy, gitleaks, netcheck,
-zgrab2 and Strix directly from the browser — the same pattern the page's existing "ask your own
+zgrab2, Strix and Cairn directly from the browser — the same pattern the page's existing "ask your own
 LLM" panel already uses against a local Ollama instance. Scope is fixed to this repository's own
 working tree (no arbitrary path from the request). Semgrep/Trivy/gitleaks mirror the exact
 commands used in `.github/workflows/security-scan.yml`. netcheck reuses `netcheck/netcheck.py`'s
@@ -137,12 +166,29 @@ if they aren't already listening, runs Strix's existing mock-LLM PoC end to end,
 contents of the resulting `findings.sarif` — which `vuln_triage.html` already knows how to parse
 natively (same code path as the sample `report.sarif`), so no new frontend parsing was needed.
 
+Cairn requires the same `i_own_these: true` consent plus a pre-prepared checkout named by
+`CAIRN_LOCAL_DIR` (same no-auto-clone policy as Strix). Unlike Strix, Cairn's real dispatcher
+(Docker worker containers driven by an LLM) expects worker responses in Cairn's own JSON schema,
+which a scripted plaintext mock response doesn't satisfy — tasks fail to parse and retry forever
+instead of completing (documented in `cairn-authorized-lab-runbook.md` §6.5). So `/scan/cairn`
+skips the dispatcher/worker/LLM layer entirely and drives Cairn's own server API directly via
+`CairnClient`, the same technique PR #89's `handoff_recheck_test.py` already proved safe and
+reliable in a sandbox like this one — except instead of a synthetic test marker, it actually
+re-runs the real SQLi auth-bypass curl request against `sqli-lab`'s demo app and records the real
+result as a Cairn Fact (`cairn-lab/run_real_scan.py`). Cairn has no SARIF-shaped output of its
+own, so the endpoint converts each recorded Fact into a minimal SARIF 2.1.0 result, reusing the
+exact same frontend ingestion path as Strix.
+
 Verified in this sandbox: the netcheck endpoint end-to-end, via a real headless-browser click on
 `vuln_triage.html` against a live server (correct scan, correct ingestion, no console errors); CORS
-preflight; the zgrab2 consent gate and its missing-binary error path. Not verified in this sandbox:
+preflight; the zgrab2 consent gate and its missing-binary error path. **The Cairn endpoint was
+verified fully end-to-end**, including the real HTTP call and a real headless-browser click,
+because this sandbox already had a prepared Cairn checkout on disk from earlier work this session
+(no network access to `github.com/oritera/Cairn` was needed). Not verified in this sandbox:
 Semgrep's success path (the sandbox's own semgrep install is broken, which did let us confirm the
-error-handling path instead), and Trivy/gitleaks/zgrab2's actual execution (no Docker daemon, no
-local binaries available here).
+error-handling path instead), Trivy/gitleaks's actual execution (no Docker daemon, no local
+binaries available here), and Strix's success path (`github.com/usestrix/strix` is blocked by this
+sandbox's network policy, so no prepared checkout could be obtained here).
 
 ### Real-machine verification (Windows PC with Docker Desktop, 2026-10-31)
 

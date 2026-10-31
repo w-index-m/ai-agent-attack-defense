@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """local_scan_server: vuln_triage.html から、このリポジトリ自身を対象に、既存の診断ツール
-(Semgrep・Trivy・gitleaks・netcheck・zgrab2)を実際に呼び出すための、ローカル専用の補助サーバー。
+(Semgrep・Trivy・gitleaks・netcheck・zgrab2・Strix・Cairn)を実際に呼び出すための、
+ローカル専用の補助サーバー。
 
 設計方針（確認専用。このリポジトリの方針そのまま）:
   - 127.0.0.1 だけで待ち受ける。外部からは届かない。
@@ -292,6 +293,114 @@ def scan_strix(body):
         return json.load(f)
 
 
+CAIRN_SERVE_PORT = 8010  # このエンドポイント専用。他で手動起動したcairn serveと衝突しないよう固定ポート
+CAIRN_TIMEOUT_SEC = 120  # LLMもDockerも使わない単発シナリオなので、Strixより短い既定値で十分
+
+
+def scan_cairn(body):
+    """Cairn(oritera/Cairn)を、GUIから起動する。
+
+    能動的にこのリポジトリ自身のsqli-labデモアプリへ攻撃ペイロードを送る(SQLi認証バイパス)ため、
+    zgrab2/Strixと同じ同意フラグ(i_own_these)が無いと一切実行しない。
+
+    Cairnの実ディスパッチャ(cairn dispatch、Docker workerコンテナ+LLM)は、workerの応答が
+    Cairn独自のJSONスキーマに従うことを要求しており、台本によるプレーンテキスト応答では
+    「JSON解析失敗」としてタスクが完了せず無限リトライになることが既に分かっている
+    (cairn-authorized-lab-runbook.md §6.5)。このため、このエンドポイントはdispatch/worker/LLMを
+    一切使わず、Cairn自身のサーバーAPI(CairnClient)を、PR #89のhandoff_recheck_test.pyと同じ
+    手法で直接呼び出す(security-scan/cairn-lab/run_real_scan.py)。実際にcurlでSQLi認証バイパスを
+    再現し、その結果をCairnのFactとして記録する。
+
+    対象となるCairnの作業コピーは、このエンドポイント自身がcloneすることはしない。環境変数
+    CAIRN_LOCAL_DIR に、あらかじめ security-scan/cairn-lab/cairn-authorized-lab-runbook.md の
+    手順(git clone https://github.com/oritera/Cairn → uv sync --project cairn)を済ませた
+    Cairnの作業コピーのパスを設定しておく必要がある。
+    """
+    body = body or {}
+    if body.get("i_own_these") is not True:
+        return {"error": "拒否: i_own_these(このリポジトリ自身が所有するsqli-labデモアプリへの"
+                          "攻撃実行に同意すること)がtrueである必要があります。"}
+
+    cairn_dir = os.environ.get("CAIRN_LOCAL_DIR", "").strip()
+    if not cairn_dir or not os.path.isdir(cairn_dir):
+        return {"error": "CAIRN_LOCAL_DIRが設定されていないか、ディレクトリが存在しません。"
+                          "事前にsecurity-scan/cairn-lab/cairn-authorized-lab-runbook.mdの手順("
+                          "git clone https://github.com/oritera/Cairn → uv sync --project cairn)を"
+                          "済ませ、local_scan_server.pyを起動する前に "
+                          "CAIRN_LOCAL_DIR=/path/to/Cairn を環境変数で指定してください。"}
+    if _which("uv") is None:
+        return {"error": "uvコマンドが見つかりません。https://docs.astral.sh/uv/ を参照してインストールしてください。"}
+
+    cairn_src = os.path.join(cairn_dir, "cairn", "src")
+    if not os.path.isdir(cairn_src):
+        return {"error": "CAIRN_LOCAL_DIR配下にcairn/srcが見つかりません"
+                          "(CAIRN_LOCAL_DIRは、Cairnリポジトリのルート(cairn/サブディレクトリを"
+                          "含む)を指定してください)。"}
+
+    vuln_app = os.path.join(REPO_ROOT, "security-scan", "sqli-lab", "vulnerable_app.py")
+    run_script = os.path.join(HERE, "..", "security-scan", "cairn-lab", "run_real_scan.py")
+    if not os.path.exists(vuln_app) or not os.path.exists(run_script):
+        return {"error": "sqli-labのvulnerable_app.py、またはcairn-lab/run_real_scan.pyが"
+                          "見つかりません(リポジトリの構成が想定と違います)。"}
+
+    vuln_env = dict(os.environ)
+    vuln_env.setdefault("VULN_APP_HOST", "127.0.0.1")
+    _ensure_background([sys.executable, vuln_app], REPO_ROOT, vuln_env, "127.0.0.1", 5000)
+
+    cairn_env = dict(os.environ)
+    cairn_env.setdefault("UV_DEFAULT_INDEX", "https://pypi.org/simple")
+    _ensure_background(
+        ["uv", "run", "--project", "cairn", "cairn", "serve", "--host", "127.0.0.1",
+         "--port", str(CAIRN_SERVE_PORT)],
+        cairn_dir, cairn_env, "127.0.0.1", CAIRN_SERVE_PORT, wait_sec=30)
+
+    if not _port_open("127.0.0.1", 5000) or not _port_open("127.0.0.1", CAIRN_SERVE_PORT):
+        return {"error": "vulnerable_app.py または cairn serve の起動を確認できませんでした。"
+                          "手動で起動してから再試行してください(詳細: "
+                          "security-scan/cairn-lab/cairn-authorized-lab-runbook.md)。"}
+
+    cmd = [sys.executable, run_script, "--cairn-src", cairn_src,
+           "--base-url", "http://127.0.0.1:%d" % CAIRN_SERVE_PORT,
+           "--target", "http://127.0.0.1:5000"]
+    try:
+        p = subprocess.run(cmd, capture_output=True, timeout=CAIRN_TIMEOUT_SEC)
+    except subprocess.TimeoutExpired:
+        return {"error": "Cairnの実行がタイムアウトしました(%d秒)。" % CAIRN_TIMEOUT_SEC}
+    if p.returncode != 0:
+        return {"error": "Cairnの実行に失敗しました。",
+                "returncode": p.returncode, "stderr": p.stderr.decode("utf-8", "replace")[-2000:]}
+
+    try:
+        import yaml
+    except ImportError:
+        return {"error": "PyYAMLが見つかりません(Cairnの出力(YAML)を読むために必要です)。"
+                          "pip install pyyaml を実行してください。"}
+    try:
+        parsed = yaml.safe_load(p.stdout.decode("utf-8", "replace"))
+    except Exception as e:
+        return {"error": "Cairnの出力(YAML)の解析に失敗しました: %s" % e}
+
+    facts = (parsed or {}).get("facts") or []
+    results = []
+    for fact in facts:
+        fid = fact.get("id", "")
+        if fid in ("origin", "goal"):
+            continue  # origin/goalは入力そのものであり、発見(Fact)ではない
+        results.append({
+            "ruleId": "cairn-finding",
+            "level": "warning",
+            "message": {"text": fact.get("description", "")},
+            "locations": [{"physicalLocation": {
+                "artifactLocation": {"uri": "security-scan/sqli-lab/vulnerable_app.py"}}}],
+            "properties": {"title": "Cairn: " + fid},
+        })
+    return {
+        "version": "2.1.0",
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "runs": [{"tool": {"driver": {"name": "Cairn"}}, "results": results}],
+    }
+
+
 def scan_zgrab2(body):
     """能動スキャナ。scripts/zgrab2_guard.py と同じ同意フラグが無いと一切実行しない。
     zgrab2 本体が入っていない場合は、その旨を明確なエラーで返す(黙ってスキップしない)。"""
@@ -349,6 +458,7 @@ ROUTES = {
     "/scan/netcheck": lambda body: scan_netcheck(body),
     "/scan/zgrab2": lambda body: scan_zgrab2(body),
     "/scan/strix": lambda body: scan_strix(body),
+    "/scan/cairn": lambda body: scan_cairn(body),
 }
 
 _LOCK = threading.Lock()  # 一度に1つのスキャンだけ(同じツールの結果ファイルを使い回すため)

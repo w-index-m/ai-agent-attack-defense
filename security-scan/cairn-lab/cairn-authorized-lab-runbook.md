@@ -299,6 +299,30 @@ stdout_preview: Mock run complete: no real analysis was performed.
 > 以上はすべて、**実標的への攻撃を一切伴わない**、モックLLMによる配線確認である。本物の
 > exploitationの実行は、引き続きこのsandboxでは行わない。
 
+## 7. `vuln_triage.html`のGUIボタンから実行する(`scripts/local_scan_server.py`)
+
+Strix([`strix-local-poc/`](../strix-local-poc/README.md))と同じパターンで、Cairnも
+`vuln_triage.html`の「ローカルスキャナーを呼び出す」からボタン1つで起動できる。ただし§6.5の
+制約により、実ディスパッチャ(Docker worker + LLM)ではなく、PR #89の`handoff_recheck_test.py`と
+同じ`CairnClient`直接駆動の手法で、実際のSQLi認証バイパスを再現してFactとして記録する
+([`run_real_scan.py`](run_real_scan.py))。
+
+一回だけの準備:
+```bash
+git clone https://github.com/oritera/Cairn
+cd Cairn
+UV_DEFAULT_INDEX="https://pypi.org/simple" uv sync --project cairn
+```
+
+その後、`local_scan_server.py`を起動する前に、clone先のパス(`cairn/`サブディレクトリを含む
+リポジトリルート)を環境変数で指定する:
+```bash
+export CAIRN_LOCAL_DIR=/path/to/Cairn
+python3 scripts/local_scan_server.py
+```
+
+詳細・検証状況は[`../local-scan-server-notes.md`](../local-scan-server-notes.md)参照。
+
 ## 参考（リポジトリ内）
 - `dispatch.example.yaml` — container モードの完全な設定例
 - `dispatch.local.example.yaml` — local モード（ホスト実行、CLI 再利用）
