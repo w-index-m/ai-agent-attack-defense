@@ -553,7 +553,10 @@ function parseOne(json){
 
 function classify(f){
   if(f.cve) return CVE_RULE;
-  var hay=f.ruleId+" "+f.title+" "+f.detail+" "+f.loc;
+  /* 分類は、指摘の内容(ルールID・タイトル・詳細)だけで行う。ファイルパス(loc)は含めない。
+     例: security-scan/sqli-lab/ のようなフォルダ名に "sqli" が含まれているだけで、
+     無関係な指摘(avoid-pickle 等)がSQLインジェクション扱いになってしまう誤判定を防ぐため。 */
+  var hay=f.ruleId+" "+f.title+" "+f.detail;
   for(var i=0;i<RULES.length;i++){ if(RULES[i].re.test(hay)) return RULES[i]; }
   if(f.secret) return RULES.filter(function(r){return r.id==="secret"})[0];
   return FALLBACK;
