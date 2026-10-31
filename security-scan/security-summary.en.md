@@ -71,7 +71,7 @@ This repository covers it through management-plane exposure checks (ports 902 / 
 | Kind | Content | Document |
 |---|---|---|
 | Audit | netcheck (exposure), Semgrep / Trivy / gitleaks (CI), zgrab2 ingestion and guard | [`zgrab2-notes.md`](zgrab2-notes.md) |
-| Triage | `vuln_triage.html` (prioritization, with a local-LLM question panel) | [`../README.md`](../README.md) |
+| Triage | `vuln_triage.html` (prioritization, a local-LLM question panel, and a button-driven scan launcher via `local_scan_server.py`) | [`../README.md`](../README.md), [`local-scan-server-notes.md`](local-scan-server-notes.md) |
 | Fix assistance | `patch_suggest.py` (produces diffs; each is applied only after a human confirms) | [`patch-suggest-notes.md`](patch-suggest-notes.md) |
 | OS update checks | Two scripts, Linux (RHEL) and Windows (check-only, SARIF output) | [`os-patch-check-notes.md`](os-patch-check-notes.md) |
 | Dependency CVE checks | `dep_cve_check.py` (requirements/npm/NuGet/poetry/uv/go against OSV.dev), `ghsa_lookup.py`, and `crosscheck_osv_ghsa.py` to cross-check both | [`dep-cve-check-notes.md`](dep-cve-check-notes.md) |
@@ -95,6 +95,7 @@ This repository covers it through management-plane exposure checks (ports 902 / 
 | Dependency CVE checks (`dep_cve_check.py`/`ghsa_lookup.py`) | ✅ Verified against the real OSV.dev and GitHub Advisories APIs (14 of 16 real results had matching fixed versions between OSV and GHSA) |
 | Agent-framework bug hunting | ✅ Found and verified a real dead-code bug in hackingBuddyGPT (`api_base` ignored, reproduced 5x, CI regression canary added). Strix, Cairn, CAI and PentestGPT checked the same way — clean negative results |
 | Local-LLM question panel | ✅ Verified against a real Ollama (native Windows install, qwen2.5:1.5b): sent a question from `vuln_triage.html` and got a coherent, structured answer back |
+| Local scanner launcher (`local_scan_server.py`) | ✅ Verified on a Windows PC with Docker Desktop. Semgrep, gitleaks and netcheck ran successfully (real findings); zgrab2 correctly reported its binary as missing. Real-machine testing found and fixed 4 genuine bugs (double-click double-scanning, the overview never re-rendering, success/failure shown backwards, and classification matching on file paths). Trivy not yet confirmed |
 | Effectiveness of the detection rules | ⚠️ Not validated against a real attack environment (needs an authorized lab) |
 | Attack tools (Strix, Cairn, Hermes, ARTEX) | ✅ Analysis only. No attacks run against real targets |
 
