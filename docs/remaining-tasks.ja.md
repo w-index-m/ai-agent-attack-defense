@@ -1,0 +1,70 @@
+# 残タスク一覧
+
+2026-10-31 時点。今日までの作業(`dep_cve_check.py` / `ghsa_lookup.py` の実通信の検証、NuGet・poetry・uv・Go への対応、
+CI への組み込み、AI-SAST の試験、PentestGPT の実機の準備)から、**残っていること**を、1か所に集めたもの。
+各項目に、「何が分かっていて、何が分かっていないか」を書く。完了したら、消すか、「完了」に移す。
+
+> 更新のしかた: 作業を終えたら、この表を直して、PR に含める。長い説明は、各ノート(`security-scan/*-notes.md`)に書く。
+
+## 1. 進行中(結果待ち)
+
+| 項目 | 状態 | 次にやること |
+|---|---|---|
+| **PR #104** | 未マージ。`crosscheck-trial`、`ai-sast-trial` の複数回実行、集計スクリプト、診断の出力、この文書を含む | Actions の結果を見てから、マージ |
+| **AI-SAST を 5 回繰り返す実行**(`qwen2.5-coder:3b`) | 実行中(2026-10-31 02:27 から。1 回 4〜7 分の見込み) | 完了後、要約の分布(種類ごとの検出回数、AI が本物を打ち消した回数)を、`ai-sast-trial-notes.md` に追記 |
+| **`crosscheck-trial` の再実行**(診断の出力つき) | 実行中 | 突き合わせ不可の 2 件の、GHSA 側の記載(パッケージ名)を読む |
+
+## 2. 調査が必要(原因が分かっていない)
+
+| 項目 | 分かっていること | 分かっていないこと |
+|---|---|---|
+| **突き合わせ不可の 2 件**(`golang.org/x/text` の `CVE-2026-56851`、`CVE-2026-56852`) | 実データで、16 件中 14 件が一致。この 2 件は、OSV の修正版(0.41.0、0.39.0)があるが、GHSA に「このパッケージの記載が無い」と判定された | GHSA 側で、どんなパッケージ名・エコシステムで載っているか。GHSA に記載自体が無いのか、名前が違うのか |
+| **AI-SAST の精度** | 3B のモデルで、2 回の実行。検出は 5〜6/11、誤検知は 1〜2。AI が本物の脆弱性を打ち消した回もあった | 5 回の分布(進行中)。7B のモデルで、ばらつきが減るか |
+
+## 3. PC なしで、できること(自動で進められる)
+
+| 項目 | 内容 | 優先度 |
+|---|---|---|
+| **Semgrep の CI の修正** | `security-scan` で、Semgrep が `Cannot create auto config when metrics are off` で失敗していて、`|| true` で隠れている。診断が 1 つ抜けている | 高(小さな修正) |
+| **Dockerfile の指摘** | CI の Trivy が、「イメージのユーザーが root」を、高の重大度で 2 件報告(`Dockerfile`、`security-scan/cairn-lab/worker-mock.Dockerfile`) | 中 |
+| **GitHub Actions の更新** | `actions/checkout@v4` などが Node.js 20 を使っており、廃止予定の警告が出ている | 低 |
+| **`crosscheck` の CI への組み込み** | 今は手動の試験用ワークフローだけ。`dep_cve_check` の後に、自動で突き合わせるか | 低(要検討) |
+| **`go.mod` への対応** | `go.sum` は、使われない古い版も含むため、誤検知が出る。`go.mod` のほうが、実際の版に近い | 低(要検討) |
+| **`php2shell` の件** | PHP 8.1 以前の「公式の修正版なし」の記載を、php.net のアドバイザリで裏取りしていない(`sqli-lab/README.ja.md` 126 行目) | 低 |
+| **`security-summary.ja.md` の「次にやること」の同期** | この文書と、内容が重なる。どちらを正とするか決める | 低 |
+
+## 4. あなたの PC が必要
+
+| 項目 | 内容 |
+|---|---|
+| **ポートを変えたラボの起動** | `VULN_APP_PORT=15000 VULN_INTERNAL_PORT=15001 python3 vulnerable_app.py` が、ミラーモードの WSL で起動するか。Windows 側の 5000/5001 は、Datadog Agent と見られるプロセスが使っている(プロセス名 `agent` で、実行ファイルの場所は、権限の問題で未確認) |
+| **PentestGPT(従来型)の実行** | WSL から Ollama には届いた(`Sessions initialized.` まで確認)。的(`127.0.0.1` のラボ)を渡して、実際にタスクを受けて、提案を返すところは、未確認 |
+| **自分のプロジェクトへの適用** | `pip freeze > requirements.txt` などで、実際の依存関係を書き出し、`dep_cve_check.py` にかける |
+| **PC の `main` を最新にする** | `git checkout main` と `git pull`(PC の `main` は、古いまま) |
+| **一時ファイルの削除** | `req_test.txt`、`*.sarif`、`g*.md`、`packages.lock.json` など(リポジトリには入れていない) |
+
+## 5. 判断が必要(あなたの決定待ち)
+
+- PR #104 に、無関係な変更が、複数まとまっている(突き合わせの道具、ラボのポート、PentestGPT の記録、AI-SAST の試験、
+  文書)。**分けるか、このままマージするか。**
+- `local-ai-sast` には `LICENSE` が無い。**今後も試験に使うか**(取り込みや再配布はしない方針)。
+- パワポの作成(誰向けか、何枚か)。
+
+## 6. 検証の状態(まだ「未確認」のもの)
+
+| 項目 | 未確認の内容 |
+|---|---|
+| 返った CVE の中身 | 14 件は、GHSA と修正版が一致(実データ)。それ以外の項目(説明文、影響範囲)の、個別の突き合わせは未実施 |
+| Semgrep | CI で動いていないため、このリポジトリの Semgrep の結果は、まだ無い |
+
+## 完了したこと(参考)
+
+- `dep_cve_check.py` / `ghsa_lookup.py` の実通信の検証、終了コード 2、CVE 単位のまとめ、コミットハッシュの短縮
+- NuGet(`.csproj`、`packages.lock.json`)、`poetry.lock`、`uv.lock`、`go.sum` への対応(`uv`・`poetry`・`go`・`dotnet` が
+  生成した実物の 4 形式を、PC で OSV にかけて確認済み)
+- CI への組み込み(依存関係の照合、CVE の詳細、`summarize.py` の要約)
+- `crosscheck_osv_ghsa.py`(OSV の修正版を GHSA と突き合わせる)と、実データでの確認(16 件中 14 件が一致)
+- `sqli-lab` のポートを、環境変数で変えられるようにした
+- AI-SAST の試験用ワークフロー、比較スクリプト、集計スクリプト
+- PentestGPT を、実機の WSL2 + Ollama で起動する記録
+- 作り方のまとめ(`docs/how-we-built-this.ja.md`)
