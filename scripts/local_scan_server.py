@@ -234,6 +234,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def handle_one_request(self):
+        try:
+            super().handle_one_request()
+        except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
+            # ブラウザ側が先に接続を切った場合(タブの再読み込み・クローズ等)。
+            # サーバー側の不具合ではないので、トレースバックは出さず黙って無視する。
+            pass
+
     def _cors_origin(self):
         origin = self.headers.get("Origin", "")
         if origin.startswith(ALLOWED_ORIGIN_PREFIXES) or origin == "null":
