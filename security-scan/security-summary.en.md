@@ -74,9 +74,12 @@ This repository covers it through management-plane exposure checks (ports 902 / 
 | Triage | `vuln_triage.html` (prioritization, with a local-LLM question panel) | [`../README.md`](../README.md) |
 | Fix assistance | `patch_suggest.py` (produces diffs; each is applied only after a human confirms) | [`patch-suggest-notes.md`](patch-suggest-notes.md) |
 | OS update checks | Two scripts, Linux (RHEL) and Windows (check-only, SARIF output) | [`os-patch-check-notes.md`](os-patch-check-notes.md) |
-| Detection | R1–R8 rules (Sigma, Falco, Elastic, Datadog) | [`detections/README.md`](detections/README.md) |
+| Dependency CVE checks | `dep_cve_check.py` (requirements/npm/NuGet/poetry/uv/go against OSV.dev), `ghsa_lookup.py`, and `crosscheck_osv_ghsa.py` to cross-check both | [`dep-cve-check-notes.md`](dep-cve-check-notes.md) |
+| Per-CVE host checks | R13–R26 (eMudhra, PHP2Shell, BIND 9, F5 BIG-IP APM, Node2Shell, Infinity Core, CVE-2026-98432, etc.). Full table in the README | [`README.md`](README.md#currently-supported-vulnerability-scans-real-cves) |
+| Detection | R1–R26 rules (Sigma, Falco, Elastic, Datadog) | [`detections/README.md`](detections/README.md) |
 | Defense docs | Defense playbook, the four-layer overview, glossary | [`defense-playbook.en.md`](defense-playbook.en.md), [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md), [`glossary.ja.md`](glossary.ja.md) |
 | Analysis | Strix and Cairn local verification, ARTEX static analysis, defense notes | [`defense-detection-notes.en.md`](defense-detection-notes.en.md) |
+| Agent-framework bug hunting | Verified Strix, Cairn, CAI, PentestGPT and hackingBuddyGPT with a mock LLM. Found a real dead-code bug in hackingBuddyGPT (`api_base` ignored) and wired a CI regression canary for it | [`mock-llm-framework-bug-hunting.md`](mock-llm-framework-bug-hunting.md) |
 
 ---
 
@@ -85,9 +88,12 @@ This repository covers it through management-plane exposure checks (ports 902 / 
 | Item | Status |
 |---|---|
 | Tool syntax and the consistency check (CI) | ✅ Verified |
-| netcheck and zgrab2 ingestion | ✅ Verified with sample data and mocks |
+| netcheck and zgrab2 ingestion | ✅ Verified with sample data and mocks. `zgrab2_guard.py`'s filtering logic verified live (its design needs no zgrab2 binary to test) |
 | `patch_suggest.py` | ✅ Generate → review → apply verified in a temporary repo with a mock LLM |
-| OS update checks (RHEL, Windows) | ⚠️ Verified only with stubs that mimic the output. **Not yet run on real hosts** |
+| OS update checks (RHEL) | ⚠️ Ran against Red Hat's free UBI container, but discovered **UBI's free repos carry no security-advisory (updateinfo) metadata at all, so the check reports 0 findings even when real package updates exist**. Needs a subscribed RHEL host, or a free RHEL-compatible distro that does ship updateinfo (Rocky/AlmaLinux) — in progress |
+| OS update checks (Windows) | ⚠️ Verified only with stubs that mimic the output. **Not yet run on a real host** |
+| Dependency CVE checks (`dep_cve_check.py`/`ghsa_lookup.py`) | ✅ Verified against the real OSV.dev and GitHub Advisories APIs (14 of 16 real results had matching fixed versions between OSV and GHSA) |
+| Agent-framework bug hunting | ✅ Found and verified a real dead-code bug in hackingBuddyGPT (`api_base` ignored, reproduced 5x, CI regression canary added). Strix, Cairn, CAI and PentestGPT checked the same way — clean negative results |
 | Local-LLM question panel | ⚠️ Verified only with a mock server. **Not yet verified with a real Ollama (qwen2.5:1.5b)** |
 | Effectiveness of the detection rules | ⚠️ Not validated against a real attack environment (needs an authorized lab) |
 | Attack tools (Strix, Cairn, Hermes, ARTEX) | ✅ Analysis only. No attacks run against real targets |
