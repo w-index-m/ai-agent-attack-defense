@@ -132,8 +132,15 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
         <button type="button" data-tool="semgrep">Semgrepを実行</button>
         <button type="button" data-tool="trivy">Trivyを実行</button>
         <button type="button" data-tool="gitleaks">gitleaksを実行</button>
-        <button type="button" data-tool="netcheck">netcheckを実行(127.0.0.1)</button>
       </div>
+      <details class="cfgwrap">
+        <summary>netcheck(対象を指定できます。既定は127.0.0.1自身)</summary>
+        <div class="cfg">
+          <label>対象(IP / CIDR / ホスト名。改行・カンマ区切り)<input class="f" id="nc-targets" placeholder="127.0.0.1"></label>
+        </div>
+        <p class="note" style="margin-top:6px">自宅LAN内の他の端末(例: <code style="font-family:var(--font-mono)">192.168.1.0/24</code>)も、<code style="font-family:var(--font-mono)">netcheck/config.json</code>の許可範囲(既定で127.0.0.0/8・10.0.0.0/8・172.16.0.0/12・192.168.0.0/16)内であれば対象にできます。自分が管理している機器だけにしてください。</p>
+        <div class="row" style="margin-top:6px"><button type="button" data-tool="netcheck" id="nc-run">netcheckを実行</button></div>
+      </details>
       <div id="scan-status" class="note" role="status"></div>
       <details class="cfgwrap">
         <summary>zgrab2(能動スキャナ。許可を得た対象だけ)</summary>
@@ -710,16 +717,19 @@ function llmContext(){
   /* ローカルスキャナー(scripts/local_scan_server.py)を呼び出し、結果をそのまま addJson() に流す。
      parseOne() は JSON.parse 済みのオブジェクト/配列の形で各ツールを自動判別するので、
      サーバーが返す生のJSONをそのまま JSON.stringify して渡すだけでよい(解析ロジックは共通)。 */
-  var LS={url:"vt-scan-url"};
+  var LS={url:"vt-scan-url",ncTargets:"vt-nc-targets"};
   function load(id,k,def){try{var v=localStorage.getItem(k);$(id).value=(v!=null?v:def||"")}catch(e){$(id).value=def||""}}
   function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
   load("scan-url",LS.url,"http://localhost:8766");
   $("scan-url").addEventListener("change",function(){save(LS.url,$("scan-url").value.trim())});
+  load("nc-targets",LS.ncTargets,"127.0.0.1");
+  $("nc-targets").addEventListener("change",function(){save(LS.ncTargets,$("nc-targets").value.trim())});
 
   var scanRunning=false;
   function setScanButtonsDisabled(d){
     document.querySelectorAll("#scan-buttons button[data-tool]").forEach(function(b){b.disabled=d});
     $("zg-run").disabled=d;
+    $("nc-run").disabled=d;
   }
   function setScanStatus(text,kind){
     var el=$("scan-status");
@@ -747,8 +757,9 @@ function llmContext(){
         setScanStatus("⚠️ "+skipMsg,"err");
       }else{
         renderAll();
-        setScanStatus("✅ "+label+" を取り込みました。(全体像に反映済み)","ok");
-        setMsg(label+"(ローカルスキャナー)の結果を取り込みました。",false);
+        var extra=(j&&j.truncated_note)?(" ⚠️ "+j.truncated_note):"";
+        setScanStatus("✅ "+label+" を取り込みました。(全体像に反映済み)"+extra,j.truncated?"err":"ok");
+        setMsg(label+"(ローカルスキャナー)の結果を取り込みました。"+extra,!!j.truncated);
       }
     }catch(err){
       setScanStatus("❌ エラー: "+(err&&err.message?err.message:err)+
@@ -760,9 +771,12 @@ function llmContext(){
   document.querySelectorAll("#scan-buttons button[data-tool]").forEach(function(btn){
     btn.addEventListener("click",function(){
       var tool=btn.getAttribute("data-tool");
-      var body=tool==="netcheck"?{targets:"127.0.0.1",ports:"standard"}:{};
-      callScan("/scan/"+tool,body,btn.textContent);
+      callScan("/scan/"+tool,{},btn.textContent);
     });
+  });
+  $("nc-run").addEventListener("click",function(){
+    var targets=($("nc-targets").value||"").trim()||"127.0.0.1";
+    callScan("/scan/netcheck",{targets:targets,ports:"standard"},"netcheckを実行("+targets+")");
   });
   $("zg-run").addEventListener("click",function(){
     var targets=($("zg-targets").value||"").trim();

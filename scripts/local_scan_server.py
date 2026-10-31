@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
@@ -161,10 +162,24 @@ def scan_netcheck(body):
     ports = nc.EXTENDED_PORTS if (body or {}).get("ports") == "extended" else nc.STANDARD_PORTS
     admin = bool((body or {}).get("admin", True))
     results = []
+    deadline = time.monotonic() + TIMEOUT_SEC
+    truncated = False
     for name, ip in targets:
+        if time.monotonic() >= deadline:
+            # 対象が多すぎて(ポート数×対象数)、このHTTPリクエスト1回の枠内で終わらない場合は
+            # ここで打ち切り、取れた分だけ返す(無期限にサーバーを占有しない)。範囲を絞って
+            # 再実行するか、対象を1台ずつ指定することを勧める。
+            truncated = True
+            break
         results.append(nc.check_host(name, ip, ports, cfg, admin, lambda: None))
-    return {"id": "local-scan", "status": "done", "sqli_note": getattr(nc, "SQLI_NOTE", ""),
-            "results": results}
+    out = {"id": "local-scan", "status": "done", "sqli_note": getattr(nc, "SQLI_NOTE", ""),
+           "results": results}
+    if truncated:
+        out["truncated"] = True
+        out["truncated_note"] = ("対象が多すぎて制限時間(%d秒)内に終わらなかったため、%d/%d台で打ち切りました。"
+                                  "範囲を絞るか、対象を1台ずつ指定してください。"
+                                  % (TIMEOUT_SEC, len(results), len(targets)))
+    return out
 
 
 def scan_zgrab2(body):
