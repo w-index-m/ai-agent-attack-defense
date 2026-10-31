@@ -90,7 +90,7 @@ This repository covers it through management-plane exposure checks (ports 902 / 
 | Tool syntax and the consistency check (CI) | ✅ Verified |
 | netcheck and zgrab2 ingestion | ✅ Verified with sample data and mocks. `zgrab2_guard.py`'s filtering logic verified live (its design needs no zgrab2 binary to test) |
 | `patch_suggest.py` | ✅ Generate → review → apply verified in a temporary repo with a mock LLM |
-| OS update checks (RHEL) | ⚠️ Ran against Red Hat's free UBI container, but discovered **UBI's free repos carry no security-advisory (updateinfo) metadata at all, so the check reports 0 findings even when real package updates exist**. Needs a subscribed RHEL host, or a free RHEL-compatible distro that does ship updateinfo (Rocky/AlmaLinux) — in progress |
+| OS update checks (RHEL) | ✅ Verified against a real Rocky Linux 9 container (free, no registration, redistributes RHEL's own errata as-is). `dnf updateinfo list security` returned 73 `RLSA-` advisories, and the script correctly detected the same 73. (Also confirmed Red Hat's free UBI repos carry no security-advisory metadata at all, so they can't be used for this check. A genuinely subscribed RHEL host is still untested.) |
 | OS update checks (Windows) | ⚠️ Verified only with stubs that mimic the output. **Not yet run on a real host** |
 | Dependency CVE checks (`dep_cve_check.py`/`ghsa_lookup.py`) | ✅ Verified against the real OSV.dev and GitHub Advisories APIs (14 of 16 real results had matching fixed versions between OSV and GHSA) |
 | Agent-framework bug hunting | ✅ Found and verified a real dead-code bug in hackingBuddyGPT (`api_base` ignored, reproduced 5x, CI regression canary added). Strix, Cairn, CAI and PentestGPT checked the same way — clean negative results |

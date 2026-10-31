@@ -89,7 +89,7 @@ AI エージェントに限らず、このような既知の重大な脆弱性�
 | ツールの構文・整合性チェック（CI） | ✅ 確認済み |
 | netcheck、zgrab2 の取り込み | ✅ サンプルデータとモックで確認。`zgrab2_guard.py` のフィルタリングロジックは実行確認済み（zgrab2 本体は未インストールでも検証可能な設計） |
 | `patch_suggest.py` | ✅ 一時的なリポジトリとモック LLM で、生成→確認→適用を確認 |
-| OS 更新の確認（RHEL） | ⚠️ Red Hat の無料 UBI コンテナで実行はできたが、**UBI の無料リポジトリにはセキュリティ分類メタデータ（updateinfo）が無く、実パッケージ更新があっても常に 0 件と出る**ことが判明。正しく検証するには、サブスクリプション登録済みの RHEL か、Rocky/AlmaLinux のような無料でも updateinfo を持つ RHEL 互換ディストロが必要（確認中） |
+| OS 更新の確認（RHEL） | ✅ Rocky Linux 9（無料・登録不要、RHELのエラータをそのまま再配布）の実機コンテナで検証済み。`dnf updateinfo list security`が返した73件の`RLSA-`アドバイザリを、本スクリプトも同じ73件、正しく検出した。（Red HatのUBIは無料リポジトリにセキュリティ分類メタデータが無く検証に使えないことも判明。サブスクリプション登録済みRHELそのものでの確認はまだ） |
 | OS 更新の確認（Windows） | ⚠️ 出力形式を模したスタブでのみ確認。**実機では未実行** |
 | 依存関係の既知脆弱性確認（`dep_cve_check.py`／`ghsa_lookup.py`） | ✅ 実際の OSV.dev／GitHub Advisories API に通信して確認済み（実データ 16 件中 14 件で、OSV と GHSA の修正版が一致） |
 | エージェントフレームワークのバグ探し | ✅ hackingBuddyGPT で実在のデッドコードバグ（`api_base` が無視される）を発見・5 回再現・CI 回帰カナリア化。Strix・Cairn・CAI・PentestGPT は同手法で検証、バグ無し（クリーンな陰性結果） |

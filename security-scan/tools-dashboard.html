@@ -159,14 +159,14 @@ python3 scripts/ghsa_lookup.py --cve CVE-2026-26030 --out report.md</code></pre>
   <p class="note">管理している機器の更新状況・カーネルバージョンを読み取るだけ。更新の適用や設定変更は一切しない。</p>
   <div class="grid c2">
     <div class="card g2">
-      <h3>os_patch_check_linux.py / _windows.py <span class="badge b-untested">実機では未検証</span> <span class="chip llm-no">LLM: なし</span></h3>
+      <h3>os_patch_check_linux.py <span class="badge b-verified">Rocky Linux 9で実行確認済み</span> / _windows.py <span class="badge b-untested">実機では未検証</span> <span class="chip llm-no">LLM: なし</span></h3>
       <p class="path"><code>scripts/os_patch_check_linux.py</code> / <code>scripts/os_patch_check_windows.py</code></p>
       <p class="cap">Linux(RHEL系、<code>dnf updateinfo list security</code>)と Windows
         (<code>Get-HotFix</code>、<code>--windows-pending</code>でWindows Update APIも)の
         未適用/適用済み更新を確認。出力は SARIF 2.1.0。</p>
       <pre><code>python3 scripts/os_patch_check_linux.py --out os_patch.sarif
 python scripts/os_patch_check_windows.py --windows-pending --out os_patch.sarif</code></pre>
-      <div class="tagrow"><span class="chip">標準ライブラリのみ</span></div>
+      <div class="tagrow"><span class="chip">標準ライブラリのみ</span><span class="chip">Rocky Linux 9で73件のRLSAアドバイザリを正しく検出(Red Hat公式UBIは無料リポジトリにセキュリティ分類メタデータが無く検証不可と判明)。Windowsは引き続き未検証</span></div>
       <p class="cap" style="margin-bottom:0"><a class="src" href="os-patch-check-notes.md">→ 詳細ノート</a></p>
     </div>
     <div class="card g2">
