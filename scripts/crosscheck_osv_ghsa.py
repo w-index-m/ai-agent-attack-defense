@@ -79,6 +79,16 @@ def ghsa_fixed(advisories, ecosystem, package):
     return fixed if found else None
 
 
+def ghsa_packages(advisories):
+    """GHSA 側に載っている（エコシステム/パッケージ名）の一覧。「突き合わせ不可」の原因を切り分けるための診断用。"""
+    out = set()
+    for adv in advisories:
+        for v in adv.get("vulnerabilities") or []:
+            pkg = v.get("package") or {}
+            out.add("%s/%s" % (pkg.get("ecosystem", "?"), pkg.get("name", "?")))
+    return sorted(out)
+
+
 def judge(osv_fixed, ghsa_set, advisories):
     if not advisories:
         return "GHSA に無い", ""
@@ -123,6 +133,8 @@ def main():
             continue
         g = ghsa_fixed(advs, eco, pkg)
         status, note = judge(osv_fixed, g, advs)
+        if status == "突き合わせ不可":
+            note += "（GHSA 側の記載: %s）" % (", ".join(ghsa_packages(advs)) or "パッケージの記載なし")
         rows.append((cve, pkg, ver, status, note, osv_fixed, g or set()))
 
     fmt = lambda s: ", ".join(sorted(s)) or "(無し)"
