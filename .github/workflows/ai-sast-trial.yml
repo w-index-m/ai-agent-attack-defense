@@ -97,6 +97,9 @@ jobs:
           cd /tmp/local-ai-sast
           for i in $(seq 1 "$RUNS"); do
             echo "=== AI ありのスキャン $i / $RUNS ==="
+            # local-ai-sast は、LLM の応答を backend/data/llm_cache.json に保存して再利用する。消さないと、
+            # 2 回目以降は 1 回目の応答の再利用になり、独立した実行にならない(ばらつきを測れない)。
+            rm -f /tmp/local-ai-sast/backend/data/llm_cache.json
             start=$(date +%s)
             OLLAMA_URL=http://127.0.0.1:11434 timeout 35m /tmp/venv/bin/python -I backend/cli.py scan /tmp/target \
               --ai --ai-review --model "$MODEL" --out /tmp/out/ai-$i --format json,sarif 2>&1 \
