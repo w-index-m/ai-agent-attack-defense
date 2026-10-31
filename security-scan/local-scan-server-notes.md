@@ -44,6 +44,8 @@ zgrab2だけ、対象(IP/CIDR/ホスト名)の入力と、「自社が管理し�
 
 ## 検証の状態（正直に）
 
+### サンドボックス内での検証
+
 - **netcheckエンドポイント**: このリポジトリのサンドボックス内で、実際にサーバーを起動し、実際の
   ブラウザ(Playwright/Chromium)で`vuln_triage.html`を開いて「netcheckを実行」ボタンを押すところまで
   実機確認した。`127.0.0.1`に対して正しくスキャンが走り（開いているポート0件）、結果がトリアージ
@@ -53,15 +55,39 @@ zgrab2だけ、対象(IP/CIDR/ホスト名)の入力と、「自社が管理し�
 - **semgrepエンドポイント**: このサンドボックスにインストールされているsemgrepは、依存パッケージの
   競合（`opentelemetry`関連のImportError）で壊れており、実行自体ができなかった。このおかげで
   「ツールが失敗したときにスタックトレースではなく明確なJSONエラーを返す」というエラーハンドリング
-  経路は実際に確認できたが、**正常系（実際にSemgrepが指摘を返すケース）は未確認**。
+  経路は実際に確認できた。
 - **trivy・gitleaksエンドポイント**: このサンドボックスにはDockerデーモンが無く（`docker info`が
-  失敗する）、`trivy`・`gitleaks`バイナリも入っていないため、**実行自体を試せていない**。CIの
-  コマンドをそのまま転記しているのでロジックは正しいはずだが、未検証。
-- **zgrab2エンドポイント**: 本リポジトリでzgrab2本体を使った実行は一度も無い（`zgrab2-notes.md`に
-  既出）。今回も、許可範囲チェック・同意ゲートまでは確認できたが、`zgrab2`本体そのものの実行は
-  未検証。
+  失敗する）、`trivy`・`gitleaks`バイナリも入っていないため、実行自体を試せなかった。
 
-実際に使うには、Docker Desktop・各ツール・`zgrab2`本体を入れた環境(お手元のPC)での確認が必要。
+### 実機(Windows PC、Docker Desktop)での検証(2026-10-31)
+
+ユーザー自身のWindows PCで、`python3 scripts/local_scan_server.py`を起動し、`vuln_triage.html`から
+全ボタンを実際に押して確認した。
+
+- **Semgrepエンドポイント**: ✅ 実行成功。11件の指摘を取り込み、「2. 全体像」に正しく反映された。
+- **gitleaksエンドポイント**: ✅ 実行成功。結果が正しく取り込まれた。
+- **netcheckエンドポイント**: ✅ 実行成功。実際に`127.0.0.1`上で3件の本物の露出(Ollama API
+  11434番ポート・SMB 445番ポート・ポート80のバナー情報)を検出。対象入力欄(LAN内の他端末も指定可能)
+  も実機確認済み。
+- **zgrab2エンドポイント**: ✅ 設計どおり、本体未インストールの明確なエラーを確認(実機でも未インストール)。
+- **Trivyエンドポイント**: 未確認(ボタンは押せる状態だが、結果の報告は無し)。
+
+### この過程で実機から見つかり、修正したバグ
+
+いずれも「動いているように見えるが、実は正しく動いていない」種類の不具合で、サンドボックスの
+Playwright確認だけでは気づけなかった。実機でのクリック操作によって初めて見つかった。
+
+1. **二重クリックで2つのスキャンが並行実行される**: ボタンに無効化処理が無く、連打すると同じ結果が
+   二重に取り込まれる可能性があった。実行中は全ボタンを無効化するよう修正。
+2. **「2. 全体像」が更新されない**: ローカルスキャナー経由の取り込みが`renderAll()`を呼んでおらず、
+   内部データには追加されていても画面上の集計に一切反映されていなかった。
+3. **`addJson()`の戻り値の意味を取り違え**: 空文字=成功・文字列あり=失敗/スキップ、という契約なのに
+   常に✅成功として表示していた。
+4. **分類ロジックがファイルパスも判定材料にしていた**: `security-scan/sqli-lab/`というフォルダ名の
+   "sqli"という部分文字列だけで、無関係な指摘(`avoid-pickle`)がSQLインジェクション判定にマッチして
+   いた。ファイルパスを分類対象から除外して修正。
+
+Trivy以外はすべて実機で正常動作を確認済み。Trivyのみ、お手元での確認がまだ無い。
 
 > 確認・検知の設計に限定。攻撃の実行手順や安全機構の回避方法は含めない。
 
@@ -84,5 +110,24 @@ Verified in this sandbox: the netcheck endpoint end-to-end, via a real headless-
 preflight; the zgrab2 consent gate and its missing-binary error path. Not verified in this sandbox:
 Semgrep's success path (the sandbox's own semgrep install is broken, which did let us confirm the
 error-handling path instead), and Trivy/gitleaks/zgrab2's actual execution (no Docker daemon, no
-local binaries available here). Full verification needs a machine with Docker and/or these tools
-installed.
+local binaries available here).
+
+### Real-machine verification (Windows PC with Docker Desktop, 2026-10-31)
+
+The user ran every button against their own machine. Semgrep (✅, 11 real findings, correctly
+reflected in the overview), gitleaks (✅), netcheck (✅, found 3 genuine exposures on their own
+`127.0.0.1`: an open Ollama API on 11434, SMB on 445, and a version banner on port 80; the new
+per-request target field for scanning other LAN hosts was also exercised), and zgrab2 (✅, correctly
+reported the binary as not installed, same as this sandbox). Trivy's button exists but no result was
+reported back.
+
+This real-machine testing surfaced four genuine bugs no sandbox Playwright run had caught, since
+each one only shows up when a human actually clicks through the flow twice or reads the resulting
+numbers critically: double-clicking a scan button could run two scans concurrently and double-count
+results (fixed: buttons disable while a scan is in flight); the local-scan ingestion path never
+called `renderAll()`, so the overview counts silently never updated even on a successful import
+(fixed); `addJson()`'s return value was read backwards, showing a skip/error message with a ✅ as if
+it were success (fixed); and the classifier matched category keywords against the full file path,
+so a file under `security-scan/sqli-lab/` was mislabeled as a SQL-injection finding purely because
+of the substring "sqli" in the folder name (fixed by classifying on rule ID / title / detail only,
+not the path).

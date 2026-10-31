@@ -70,7 +70,7 @@ AI エージェントに限らず、このような既知の重大な脆弱性�
 | 種類 | 内容 | 文書 |
 |---|---|---|
 | 点検 | netcheck（露出確認）、Semgrep・Trivy・gitleaks（CI）、zgrab2 の取り込みとガード | [`zgrab2-notes.md`](zgrab2-notes.md) |
-| トリアージ | `vuln_triage.html`（優先度づけ、ローカル LLM への質問機能つき） | [`../README.md`](../README.md) |
+| トリアージ | `vuln_triage.html`（優先度づけ、ローカル LLM への質問機能つき、`local_scan_server.py`経由でブラウザから直接スキャンを実行する機能つき） | [`../README.md`](../README.md)、[`local-scan-server-notes.md`](local-scan-server-notes.md) |
 | 修正支援 | `patch_suggest.py`（diff を作る。適用は1件ずつ人が確認） | [`patch-suggest-notes.md`](patch-suggest-notes.md) |
 | OS 更新の確認 | RHEL 用・Windows 用の2スクリプト（確認専用、SARIF で出力） | [`os-patch-check-notes.md`](os-patch-check-notes.md) |
 | 依存関係の既知脆弱性確認 | `dep_cve_check.py`（requirements/npm/NuGet/poetry/uv/go を OSV.dev に照合）、`ghsa_lookup.py`、両者を突き合わせる `crosscheck_osv_ghsa.py` | [`dep-cve-check-notes.md`](dep-cve-check-notes.md) |
@@ -94,6 +94,7 @@ AI エージェントに限らず、このような既知の重大な脆弱性�
 | 依存関係の既知脆弱性確認（`dep_cve_check.py`／`ghsa_lookup.py`） | ✅ 実際の OSV.dev／GitHub Advisories API に通信して確認済み（実データ 16 件中 14 件で、OSV と GHSA の修正版が一致） |
 | エージェントフレームワークのバグ探し | ✅ hackingBuddyGPT で実在のデッドコードバグ（`api_base` が無視される）を発見・5 回再現・CI 回帰カナリア化。Strix・Cairn・CAI・PentestGPT は同手法で検証、バグ無し（クリーンな陰性結果） |
 | ローカル LLM への質問機能 | ✅ 実機の Ollama（Windows・ネイティブインストール、qwen2.5:1.5b）に対して`vuln_triage.html`から実際に質問を送り、構造化された回答が返ることを確認済み |
+| ローカルスキャナー呼び出し機能(`local_scan_server.py`) | ✅ Windows PC(Docker Desktop)で実機確認。Semgrep・gitleaks・netcheckは実行成功(本物の指摘を取得)、zgrab2は未インストール時の明確なエラーを確認。実機テストで4件の実在バグ(二重クリック・全体像の再描画漏れ・成功/失敗判定の取り違え・ファイルパスでの誤分類)を発見・修正済み。Trivyのみ未確認 |
 | 検知ルールの実効性 | ⚠️ 実際の攻撃環境での検証はしていない（認可ラボが必要） |
 | 攻撃ツール（Strix・Cairn・Hermes・ARTEX） | ✅ 解析のみ。実対象への攻撃は行っていない |
 
