@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import ipaddress
+import os
 import re
 import socket
 import sys
@@ -294,9 +295,11 @@ def detect_mass_assignment(resp: requests.Response, baseline: requests.Response,
 
 SSRF_SECRET_MARKER = "INTERNAL-SECRET-KEY-DO-NOT-EXPOSE"
 
+# Must match vulnerable_app.py's VULN_INTERNAL_PORT (default 5001).
+_INTERNAL_PORT = os.environ.get("VULN_INTERNAL_PORT", "5001")
 SSRF_PAYLOADS = [
-    "http://127.0.0.1:5001/latest/meta-data/secret-key",
-    "http://localhost:5001/latest/meta-data/secret-key",
+    "http://127.0.0.1:%s/latest/meta-data/secret-key" % _INTERNAL_PORT,
+    "http://localhost:%s/latest/meta-data/secret-key" % _INTERNAL_PORT,
 ]
 
 

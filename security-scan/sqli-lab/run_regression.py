@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import time
@@ -38,7 +39,7 @@ import requests
 from auto_vuln_scanner import VULN_CLASSES, scan
 from session_vuln_check import CLASSES
 
-BASE_URL = "http://127.0.0.1:5000"
+BASE_URL = "http://127.0.0.1:%s" % os.environ.get("VULN_APP_PORT", "5000")
 
 # (class_name, vulnerable_path, vulnerable_base_params, safe_path, safe_base_params, fuzz_param)
 SCANNER_CASES = [

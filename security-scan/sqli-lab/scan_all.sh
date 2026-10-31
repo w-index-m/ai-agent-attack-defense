@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-BASE_URL="${1:-http://127.0.0.1:5000}"
+BASE_URL="${1:-http://127.0.0.1:${VULN_APP_PORT:-5000}}"
 
 run() {
   local label="$1"

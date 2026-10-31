@@ -21,6 +21,12 @@ import threading
 from urllib.parse import urlparse
 
 import requests
+
+# Ports are overridable so the lab can run on a host where 5000/5001 are taken
+# (e.g. WSL2 mirrored networking shares ports with Windows services). Defaults are
+# unchanged. Use the same values for the scanners (VULN_APP_PORT / VULN_INTERNAL_PORT).
+APP_PORT = int(os.environ.get("VULN_APP_PORT", "5000"))
+INTERNAL_PORT = int(os.environ.get("VULN_INTERNAL_PORT", "5001"))
 from flask import Flask, request, session
 from markupsafe import escape
 
@@ -357,7 +363,7 @@ def _run_internal_only_service() -> None:
     def secret() -> tuple[str, int]:
         return "INTERNAL-SECRET-KEY-DO-NOT-EXPOSE", 200
 
-    internal_app.run(host="127.0.0.1", port=5001, use_reloader=False)
+    internal_app.run(host="127.0.0.1", port=INTERNAL_PORT, use_reloader=False)
 
 
 def _resolves_to_private_or_loopback(host: str) -> bool:
@@ -445,4 +451,4 @@ if __name__ == "__main__":
     # The internal-only service above always stays on 127.0.0.1 -- that is the
     # SSRF demo's whole premise (unreachable except from this process itself).
     bind_host = os.environ.get("VULN_APP_HOST", "127.0.0.1")
-    app.run(host=bind_host, port=5000)
+    app.run(host=bind_host, port=APP_PORT)
