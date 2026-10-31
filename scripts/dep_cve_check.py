@@ -119,9 +119,18 @@ def parse_csproj(path):
     """.csproj の <PackageReference> から、版が単一の値で固定されているものだけを
     (name, version) で返す。範囲（[1.0,2.0)）、浮動版（1.*）、MSBuild 変数（$(X)）は、
     実際に使われる版が分からないためスキップし、stderr に出す。
-    正確な版が必要なら packages.lock.json（RestorePackagesWithLockFile）を使うこと。"""
+    正確な版が必要なら packages.lock.json（RestorePackagesWithLockFile）を使うこと。
+
+    安全のため、DTD（<!DOCTYPE / <!ENTITY）を含むファイルは、読まずにスキップする。標準ライブラリの
+    xml.etree は、エンティティの展開による攻撃（メモリを使い尽くす）に弱く、.csproj は、他人のリポジトリの
+    ファイルでもあり、CI が自動で読むため。.csproj に DTD は不要。"""
     out = []
-    for el in ET.parse(path).iter():
+    with open(path, "rb") as f:
+        raw = f.read()
+    if re.search(rb"<!\s*(DOCTYPE|ENTITY)", raw, re.IGNORECASE):
+        print("%s: DTD（DOCTYPE / ENTITY）を含むため、安全のためスキップ" % path, file=sys.stderr)
+        return out
+    for el in ET.fromstring(raw).iter():  # nosemgrep: python.lang.security.use-defused-xml-parse.use-defused-xml-parse  (DTD は、上で除いてある)
         if el.tag.rsplit("}", 1)[-1] != "PackageReference":
             continue
         name = el.get("Include") or el.get("Update")

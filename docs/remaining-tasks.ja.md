@@ -25,7 +25,8 @@ CI への組み込み、AI-SAST の試験、PentestGPT の実機の準備)から
 
 | 項目 | 内容 | 優先度 |
 |---|---|---|
-| **Semgrep の CI の修正** | `security-scan` で、Semgrep が `Cannot create auto config when metrics are off` で失敗していて、`|| true` で隠れている。診断が 1 つ抜けている | 高(小さな修正) |
+| ~~Semgrep の CI の修正~~ | **完了**(2026-10-31)。`--config p/default` を明示して、209 ファイルに 501 ルールを実行(13 件の指摘)。結果ファイルができないときは警告を出す。直後に、`dep_cve_check.py` の XML の読み取りの問題が見つかり、直した | 完了 |
+| **Semgrep の残りの指摘の確認** | 13 件のうち、緊急・高は 2 件(`dep_cve_check.py` の XML は修正済み。`worker-mock.Dockerfile` の root ユーザーは、Trivy と同じ指摘)。中 11 件の中身は、まだ見ていない | 中 |
 | **Dockerfile の指摘** | CI の Trivy が、「イメージのユーザーが root」を、高の重大度で 2 件報告(`Dockerfile`、`security-scan/cairn-lab/worker-mock.Dockerfile`) | 中 |
 | **GitHub Actions の更新** | `actions/checkout@v4` などが Node.js 20 を使っており、廃止予定の警告が出ている | 低 |
 | **`crosscheck` の CI への組み込み** | 今は手動の試験用ワークフローだけ。`dep_cve_check` の後に、自動で突き合わせるか | 低(要検討) |
