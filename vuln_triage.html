@@ -742,8 +742,14 @@ function llmContext(){
         body:JSON.stringify(body||{})});
       var j=await r.json();
       if(!r.ok||(j&&j.error)){throw new Error((j&&j.error)||("HTTP "+r.status))}
-      var msg=addJson(JSON.stringify(j),label+"(ローカルスキャナー)");
-      setScanStatus("✅ "+(msg||(label+" を取り込みました。")),"ok");
+      var skipMsg=addJson(JSON.stringify(j),label+"(ローカルスキャナー)");
+      if(skipMsg){
+        setScanStatus("⚠️ "+skipMsg,"err");
+      }else{
+        renderAll();
+        setScanStatus("✅ "+label+" を取り込みました。(全体像に反映済み)","ok");
+        setMsg(label+"(ローカルスキャナー)の結果を取り込みました。",false);
+      }
     }catch(err){
       setScanStatus("❌ エラー: "+(err&&err.message?err.message:err)+
         " (確認: ①local_scan_server.pyが起動しているか ②エンドポイントURL ③必要なツール/Dockerが入っているか)","err");
