@@ -49,11 +49,15 @@ def route_spans(path):
     return sorted(spans)
 
 
-def main(argv):
-    if len(argv) != 3:
-        print(__doc__)
-        return 2
-    report, target = argv[1], argv[2]
+def evaluate(report, target):
+    """1つのレポートを、正解と比べる。
+
+    戻り値: dict
+      per_class: [(種類, 脆弱版の状態, 修正版に指摘が出たか, 脆弱版の指摘を AI が打ち消したか)]
+                 脆弱版の状態は None(見逃し) / "weak"(すべて要確認) / "strong"
+      active, dismissed: 打ち消されていない指摘 / AI が打ち消した指摘
+      others: 正解の表にない位置の指摘
+    """
     spans = route_spans(target)
     where = lambda line: next((p for a, b, p in spans if a <= line <= b), "(関数の外)")
     findings = json.load(open(report, encoding="utf-8-sig")).get("findings", [])
@@ -63,6 +67,7 @@ def main(argv):
     hit = {}  # ルート -> その位置の、打ち消されていない指摘
     for f in active:
         hit.setdefault(where(f["line"]), []).append(f)
+    dismissed_at = {where(f["line"]) for f in dismissed}
 
     def state(routes):
         """None=指摘なし / "weak"=すべて要確認 / "strong"=それ以外を含む"""
@@ -71,28 +76,38 @@ def main(argv):
             return None
         return "weak" if all(verdict(f) == "needs_review" for f in fs) else "strong"
 
-    rows, detected, weak, missed, fp = [], 0, 0, 0, 0
+    per_class = []
     for kind, vuln, safe in TRUTH:
-        sv = state(ALIASES.get(vuln, {vuln}))
-        hs = state(ALIASES.get(safe, {safe})) is not None
+        vroutes, sroutes = ALIASES.get(vuln, {vuln}), ALIASES.get(safe, {safe})
+        per_class.append((kind, state(vroutes), state(sroutes) is not None, bool(vroutes & dismissed_at)))
+    known = {r for _, v, s in TRUTH for r in ALIASES.get(v, {v}) | ALIASES.get(s, {s})}
+    others = {p: [f["title"] for f in fs] for p, fs in hit.items() if p not in known}
+    return {"per_class": per_class, "active": active, "dismissed": dismissed, "others": others, "where": where}
+
+
+def main(argv):
+    if len(argv) != 3:
+        print(__doc__)
+        return 2
+    r = evaluate(argv[1], argv[2])
+    rows, detected, weak, missed, fp = [], 0, 0, 0, 0
+    for kind, sv, hs, _ in r["per_class"]:
         detected += sv is not None
         weak += sv == "weak"
         missed += sv is None
         fp += hs
         label = {None: "**見逃し**", "weak": "検出(要確認のみ)", "strong": "検出"}[sv]
         rows.append("| %s | %s | %s |" % (kind, label, "**誤検知**" if hs else "OK"))
-    known = {r for _, v, s in TRUTH for r in ALIASES.get(v, {v}) | ALIASES.get(s, {s})}
-    others = {p: [f["title"] for f in fs] for p, fs in hit.items() if p not in known}
 
     print("| 脆弱性の種類 | 脆弱版 | 修正版 |\n|---|---|---|")
     print("\n".join(rows))
     print("\n指摘 %d 件 / 検出 %d/11(うち要確認のみ %d)、見逃し %d/11、修正版の誤検知 %d"
-          % (len(active), detected, weak, missed, fp))
-    if dismissed:
+          % (len(r["active"]), detected, weak, missed, fp))
+    if r["dismissed"]:
         print("AI が打ち消した指摘(上の数には含めない) %d 件: %s" % (
-            len(dismissed), "; ".join("%s: %s" % (where(f["line"]), f["title"]) for f in dismissed)))
-    if others:
-        print("正解の表にない位置の指摘: " + "; ".join("%s: %s" % (p, ", ".join(sorted(set(t)))) for p, t in others.items()))
+            len(r["dismissed"]), "; ".join("%s: %s" % (r["where"](f["line"]), f["title"]) for f in r["dismissed"])))
+    if r["others"]:
+        print("正解の表にない位置の指摘: " + "; ".join("%s: %s" % (p, ", ".join(sorted(set(t)))) for p, t in r["others"].items()))
     return 0
 
 
