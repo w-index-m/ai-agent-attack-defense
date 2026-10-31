@@ -712,10 +712,22 @@ function llmContext(){
   load("scan-url",LS.url,"http://localhost:8766");
   $("scan-url").addEventListener("change",function(){save(LS.url,$("scan-url").value.trim())});
 
+  var scanRunning=false;
+  function setScanButtonsDisabled(d){
+    document.querySelectorAll("#scan-buttons button[data-tool]").forEach(function(b){b.disabled=d});
+    $("zg-run").disabled=d;
+  }
   async function callScan(path,body,label){
+    if(scanRunning){$("scan-status").textContent="他のスキャンが実行中です。終わるまでお待ちください。";return}
     var base=($("scan-url").value||"").trim().replace(/\/+$/,"");
     if(!base){$("scan-status").textContent="エンドポイントを入力してください。";return}
-    $("scan-status").textContent=label+" を実行中…(数十秒〜数分かかることがあります)";
+    scanRunning=true;setScanButtonsDisabled(true);
+    var startedAt=Date.now();
+    var timer=setInterval(function(){
+      var s=Math.round((Date.now()-startedAt)/1000);
+      $("scan-status").textContent=label+" を実行中…("+s+"秒経過。数十秒〜数分かかることがあります)";
+    },1000);
+    $("scan-status").textContent=label+" を実行中…(0秒経過)";
     try{
       var r=await fetch(base+path,{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify(body||{})});
@@ -726,6 +738,8 @@ function llmContext(){
     }catch(err){
       $("scan-status").textContent="エラー: "+(err&&err.message?err.message:err)+
         " (確認: ①local_scan_server.pyが起動しているか ②エンドポイントURL ③必要なツール/Dockerが入っているか)";
+    }finally{
+      clearInterval(timer);scanRunning=false;setScanButtonsDisabled(false);
     }
   }
   document.querySelectorAll("#scan-buttons button[data-tool]").forEach(function(btn){
