@@ -146,6 +146,21 @@ host:portを差し込めるよう、第2引数で受け取るように変更し�
 実機確認(このサンドボックス内): Playwrightで「拡張」を選んでnetcheckを実行し、ステータス表示・
 取り込みラベルに「拡張」が反映されること、`#sources`に重複なく1件のみ追加されることを確認した。
 
+zgrab2の`module`選択については、このサンドボックスで`go install
+github.com/zmap/zgrab2/cmd/zgrab2@latest`によりzgrab2本体をビルドし(ユーザー実機にインストール
+したわけではない。このコンテナ内だけの動作確認目的)、PATHを通した状態で`local_scan_server.py`を
+起動して確認した:
+- `module`省略時(既定`http`)・`module: "ssh"`明示時の両方で、`/scan/zgrab2`に渡したモジュールが
+  実際に`zgrab2 http`/`zgrab2 ssh`として実行され、対象ポート(80/22)も正しく切り替わることを
+  `curl`で直接確認。
+- GUI(`vuln_triage.html`)から、対象IP欄・同意チェックボックス・モジュール欄(`http`)を入力して
+  `#zg-run`をクリックし、ステータス・`#sources`のラベルに選んだモジュール名(`http`)が反映される
+  ことをPlaywrightで確認。
+- zgrab2本体はこのリポジトリに含まれないため、**ユーザー自身の実機では別途`go install
+  github.com/zmap/zgrab2/cmd/zgrab2@latest`(または同リポジトリをclone・ビルド)が必要**。
+
+### 実機(Windows PC、Docker Desktop)での検証(2026-10-31)
+
 ユーザー自身のWindows PCで、`python3 scripts/local_scan_server.py`を起動し、`vuln_triage.html`から
 全ボタンを実際に押して確認した。
 
