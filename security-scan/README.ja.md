@@ -15,6 +15,46 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
   脆弱性チェックを試したい人向けの入口。netcheckでの棚卸し → DVWA/Juice Shopでの練習 →
   Strix+ローカルLLMでの自動診断、という一連の流れと手順リンクをまとめたもの。
 
+## 進捗と残タスク（2026-11-01 時点）
+
+### 進捗（今回のセッションで完了・マージ済み）
+
+- **`vuln_triage.html`のローカルスキャナー呼び出し機能**(`scripts/local_scan_server.py`、
+  詳細は[`local-scan-server-notes.md`](local-scan-server-notes.md)): ブラウザのボタンから
+  このリポジトリ自身を対象に、確認専用ツールも能動ツールも実行できるようになった。
+  - ✅ 実機(Windows PC、Docker Desktop)で動作確認済み: Semgrep・gitleaks・netcheck・Cairn
+  - ✅ サンドボックス内で完全なエンドツーエンド確認済み: netcheck、Cairn(本物のSQLi認証
+    バイパスをCairn経由で検知→SARIF変換→取り込みまで確認)
+  - ⚠️ 設計・エラーパスのみ確認、実行自体は未確認: Strix(`usestrix/strix`へのネットワーク
+    到達がこのサンドボックスでは不可だったため)、Trivy(お手元PCでの実行報告がまだ無い)
+  - ❌ 未着手: Hermes・PentestGPT・hackingBuddyGPT
+- **実機テストで見つかり修正した`vuln_triage.html`のバグ4件**: 二重クリックでの並行実行、
+  「2. 全体像」の再描画漏れ、成功/失敗判定の取り違え、ファイルパスでの誤分類(詳細は
+  [`local-scan-server-notes.md`](local-scan-server-notes.md)参照)
+- **R13〜R26の脆弱性スキャン**: 実機検証完了(詳細は下の一覧表)。CVE-2026-98432(R26)を新規追加
+- **Rocky Linux実機で`os_patch_check_linux.py`を検証**: UBIでは検証不能(セキュリティ分類
+  メタデータが無い)という発見も記録([`os-patch-check-notes.md`](os-patch-check-notes.md)参照)
+- **ローカルLLM質問機能**(`vuln_triage.html`): 実機のOllama(qwen2.5:1.5b)で検証済み
+- **モックLLMでのエージェントフレームワーク・バグ探し**: Strix・Cairn・CAI・PentestGPT・
+  hackingBuddyGPTを検証。hackingBuddyGPTで実在のデッドコードバグを発見しCI回帰カナリア化
+  ([`mock-llm-framework-bug-hunting.md`](mock-llm-framework-bug-hunting.md)参照)
+- **依存関係の既知脆弱性確認**(`dep_cve_check.py`/`ghsa_lookup.py`): 実OSV.dev/GHSA APIで
+  検証済み(16件中14件一致)
+
+### 残タスク
+
+| 項目 | 状態 | 次にやること |
+|---|---|---|
+| Hermes・PentestGPT・hackingBuddyGPTのGUIボタン化 | 未着手 | Strix/Cairnと同じパターンで`local_scan_server.py`に追加 |
+| StrixのGUIボタン、実機でのフル動作確認 | 未確認 | `usestrix/strix`へ到達できる環境(お手元PC等)で`STRIX_LOCAL_DIR`を設定して確認 |
+| TrivyのGUIボタン、実機での動作確認 | 未確認 | お手元のDocker Desktop環境で「Trivyを実行」を押して結果を確認 |
+| OS更新確認(Windows) | 未確認 | お手元のWindows PCで`os_patch_check_windows.py`を実行 |
+| OS更新確認(RHEL、本物のサブスクリプション版) | 未確認(Rocky Linuxでは確認済み) | 本物のサブスクリプション登録済みRHELがあれば確認(必須ではない) |
+| hackingBuddyGPTのバグ報告(GitHub Issue) | 未投稿 | 権限の都合でこのセッションからは投稿できず、下書きを渡し済み。ご自身で投稿するか、権限設定を変更して再依頼 |
+| モックLLMをGemini無料APIへのプロキシにする件 | 未着手 | 環境のネットワーク設定に`GEMINI_API_KEY`等を追加し、新しいセッションで試す |
+
+> 更新のしかた: 作業を終えたら、この表を直す。長い説明は各`*-notes.md`に書く。
+
 ## 現在対応している脆弱性スキャン（実在CVE）一覧
 
 本リポジトリが**特定の実在CVE/脆弱性**に対して現在確認できるものの早見表(R1〜R12・R20のような、
