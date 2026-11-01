@@ -96,6 +96,25 @@ go install github.com/zmap/zgrab2/cmd/zgrab2@latest
 起動し結果を返すことを確認した(サンドボックス内での動作確認。[`local-scan-server-notes.md`](local-scan-server-notes.md)
 参照)。
 
+### 軽量な代替: `scripts/http_lite_banner.py`(2026-11-01)
+
+zgrab2本体(Go製)のビルドができない/したくない環境向けに、HTTP/HTTPSへのGETとステータスコード・
+応答ヘッダの記録だけを、Python標準ライブラリ(`http.client`/`ssl`)だけで行う軽量な代替を追加した。
+zgrab2の完全な置き換えではない(SSH・TLS詳細・SMB・制御系プロトコルなどは非対応)。
+
+- 出力形式を意図的にzgrab2の`http`モジュールと互換にしてあるため、`vuln_triage.html`側の取り込み
+  ロジック(zgrab2として自動判別、バージョン露出・EOLバージョン・CSP欠如などの指摘生成)をそのまま
+  再利用できる(新しい解析コードは追加していない)。
+- 既定で対象の80番(HTTP)・443番(HTTPS、証明書検証なし)の両方にGETを送る。
+- zgrab2と同じ許可範囲判定(`netcheck`と共通)・同意フラグ(`--i-own-these`)が必要。
+
+```bash
+printf '192.168.1.10\n' | python3 scripts/http_lite_banner.py --i-own-these > httplite.jsonl
+# → httplite.jsonl を vuln_triage.html に貼る/選ぶ(zgrab2として自動判別される)
+```
+
+GUIからは「HTTPバナー取得(軽量・zgrab2不要)」ボタンで実行できる(`/scan/httplite`)。
+
 ## 4. 防御の観点での位置づけ（R1–R7 / ③）
 
 - **守る側から見た zgrab2**: 外部からの `zgrab2` 的な接続（短時間に多数のポートへ、同じ手順でバナーを取りに来る動き）は、
