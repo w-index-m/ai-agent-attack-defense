@@ -25,6 +25,7 @@ POSTする。
 | `POST /scan/gitleaks` | `gitleaks detect --report-format=json --exit-code=0`（CIと同じ） | ローカルに`gitleaks`があればそれを優先、無ければDocker |
 | `POST /scan/netcheck` | `netcheck/netcheck.py`の設定・許可範囲判定・スキャンロジックをそのまま再利用（サーバーは別途立てず、同期的にジョブを実行） | 対象は既定で`127.0.0.1`。リクエストで変えられるが、netcheck自身の許可範囲（`netcheck/config.json`）を超えることはできない。`ports`（`"standard"`既定／`"extended"`）はGUIの「netcheckのポート範囲」セレクトから選べる |
 | `POST /scan/zgrab2` | `scripts/zgrab2_guard.py`と同じ許可範囲判定を通した後、`zgrab2`本体を実行 | ボディに`i_own_these: true`が無いと一切実行しない。`zgrab2`本体が未インストールなら、その旨を明確なエラーで返す。`zgrab2`自体はこのリポジトリに含まれない別のOSS（[zmap/zgrab2](https://github.com/zmap/zgrab2)）で、`pull`しただけでは入らず、別途ビルド・PATHへの配置が必要。`module`（既定`"http"`。`ssh`・`tls`・`ftp`など）はGUIの「zgrab2のモジュール」欄から選べる |
+| `POST /scan/httplite` | `scripts/http_lite_banner.py`(zgrab2が無くても使える軽量な代替)で、対象の80番(HTTP)・443番(HTTPS、証明書検証なし)へGETを送る | ボディに`i_own_these: true`が無いと一切実行しない。許可範囲判定はnetcheck/zgrab2と同じ。Python標準ライブラリのみで動き、外部バイナリ不要。出力はzgrab2の`http`モジュールと互換の形式で返すため、GUI側はzgrab2として自動判別する(SSH/TLS詳細など他プロトコルは非対応) |
 | `POST /scan/strix` | [usestrix/strix](https://github.com/usestrix/strix)のモックLLM版PoC(`strix-local-poc/`)を実行し、生成された`findings.sarif`を返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`STRIX_LOCAL_DIR`に、事前にclone・パッチ適用・`uv sync`済みのStrix作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneやパッチ適用は行わない)。対象(`targets`、既定`127.0.0.1`)は、netcheck/zgrab2と同じ許可範囲判定(`netcheck/config.json`)を通した1台のみ指定可。既定(127.0.0.1)の場合だけこのリポジトリ自身の`sqli-lab`デモアプリを自動起動し、それ以外を指定した場合は対象側であらかじめ同等のアプリを起動しておく必要がある |
 | `POST /scan/cairn` | [oritera/Cairn](https://github.com/oritera/Cairn)を、Dockerワーカー・LLMを使わず`CairnClient`で直接駆動し(`cairn-lab/run_real_scan.py`)、実際にSQLi認証バイパスを再現してCairnのFactとして記録、エクスポートしたFactをSARIF形式に変換して返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`CAIRN_LOCAL_DIR`に、事前にclone・`uv sync --project cairn`済みのCairn作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneは行わない)。対象(`targets`、既定`127.0.0.1`)はStrixと同じ許可範囲判定・1台のみ。Cairnの実ディスパッチャ(`cairn dispatch`)は使わない(下記「なぜディスパッチャを使わないか」参照) |
 
@@ -133,6 +134,27 @@ host:portを差し込めるよう、第2引数で受け取るように変更し�
 - 範囲内だが到達不能なアドレス(`10.255.255.254`)を指定した場合、明確な接続エラーが返ることを確認。
 - Strix側は、`STRIX_LOCAL_DIR`が引き続き未設定のため(ネットワーク制限)、対象の文字列置換ロジック
   単体の検証(`sys.argv`を差し替えてモジュールを実行し、生成される攻撃コマンド文字列を確認)のみ。
+
+### zgrab2の軽量な代替(`/scan/httplite`)を追加(2026-11-01)
+
+zgrab2本体(Go製)のビルドが使えない/したくない環境向けに、`scripts/http_lite_banner.py`(標準
+ライブラリのみ、外部バイナリ不要)で、対象の80番(HTTP)・443番(HTTPS、証明書検証なし)へのGETと
+応答ヘッダの記録だけを行う軽量な代替を追加した。zgrab2の完全な置き換えではなく(SSH・TLS詳細・SMB・
+制御系プロトコルなどは非対応)、出力形式を意図的にzgrab2の`http`モジュールと互換にすることで、
+`vuln_triage.html`側の取り込みロジック(zgrab2として自動判別、バージョン露出・EOLバージョン・CSP
+欠如などの指摘生成)をそのまま再利用し、新しい解析コードは追加していない。GUIには「HTTPバナー取得
+(軽量・zgrab2不要)」ボタンを追加した(対象IP・同意チェックボックスは既存の共通欄を再利用)。
+
+実機確認(このサンドボックス内):
+- `grab()`単体で、既存のsqli-labデモアプリ(127.0.0.1:5000、平文HTTP)へのGETが成功し、zgrab2の
+  実際の出力と同じ構造(`server`・`content_type`などスネークケースのヘッダ、`status_code`)が返る
+  ことを確認。
+- 自己署名証明書を使った簡易HTTPSサーバーを立て、TLS経路(証明書検証なし)でも成功することを確認。
+- 平文ポートへTLSで接続した場合、`ssl.SSLError`が`OSError`のサブクラスであるため当初
+  `connection-timeout`と誤分類していたバグを発見・修正し(`protocol-error`に変更)、再確認した。
+- `/scan/httplite`エンドポイント(`curl`)・GUIのボタン操作(Playwright)の両方で、対象への接続拒否
+  (ポート80/443が閉じている場合)が正しくエラーとして扱われ(`#sources`に「未成功2件は対象外」)、
+  二重発火等の不具合がないことを確認。
 
 ### netcheckのポート範囲・zgrab2のモジュールをGUIから選べるように変更(2026-11-01)
 

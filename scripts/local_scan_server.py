@@ -446,6 +446,37 @@ def scan_cairn(body):
     }
 
 
+def scan_httplite(body):
+    """zgrab2本体が無くても使える、HTTP/HTTPSバナー取得だけの軽量な代替(scripts/http_lite_banner.py)。
+    zgrab2と同じ同意フラグ(i_own_these)・許可範囲判定が無いと一切実行しない。出力はzgrab2のhttp
+    モジュールと互換の形式で返すため、GUI側の取り込みロジック(zgrab2として自動判別)をそのまま
+    再利用できる。"""
+    body = body or {}
+    if body.get("i_own_these") is not True:
+        return {"error": "拒否: i_own_these(自社が管理している、または書面で許可を得た対象であること)が"
+                          "trueである必要があります。"}
+    targets_text = str(body.get("targets", "") or "")
+    if not targets_text.strip():
+        return {"error": "対象を入力してください。"}
+    nc = _load_module(os.path.join(REPO_ROOT, "netcheck", "netcheck.py"), "netcheck_local_for_httplite")
+    cfg = nc.load_config()
+    try:
+        ok, refused = nc.expand_targets(targets_text, cfg)
+    except nc.TooMany as e:
+        return {"error": str(e)}
+    if refused:
+        return {"error": "許可した範囲の外、または解釈できない対象があります。何も実行しません。",
+                "refused": refused}
+    if not ok:
+        return {"error": "対象がありません。"}
+    hlb = _load_module(os.path.join(HERE, "http_lite_banner.py"), "http_lite_banner_local")
+    rows = []
+    for name, ip in ok:
+        host = name if name != ip else None
+        rows.extend(hlb.grab_target(ip, host=host, timeout=5.0))
+    return rows
+
+
 def scan_zgrab2(body):
     """能動スキャナ。scripts/zgrab2_guard.py と同じ同意フラグが無いと一切実行しない。
     zgrab2 本体が入っていない場合は、その旨を明確なエラーで返す(黙ってスキップしない)。"""
@@ -502,6 +533,7 @@ ROUTES = {
     "/scan/gitleaks": lambda body: scan_gitleaks(),
     "/scan/netcheck": lambda body: scan_netcheck(body),
     "/scan/zgrab2": lambda body: scan_zgrab2(body),
+    "/scan/httplite": lambda body: scan_httplite(body),
     "/scan/strix": lambda body: scan_strix(body),
     "/scan/cairn": lambda body: scan_cairn(body),
 }
