@@ -130,7 +130,10 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
       </details>
       <div class="cfg">
         <label>対象(IP。netcheck・zgrab2・Strix・Cairnで共通。既定は127.0.0.1自身。1台のみ)<input class="f" id="target-ip" placeholder="127.0.0.1"></label>
+        <label>netcheckのポート範囲<select class="f" id="nc-ports"><option value="standard">標準(既定)</option><option value="extended">拡張(時間がかかります)</option></select></label>
+        <label>zgrab2のモジュール<input class="f" id="zg-module" list="zg-modules" placeholder="http"></label>
       </div>
+      <datalist id="zg-modules"><option value="http"><option value="https"><option value="ssh"><option value="tls"><option value="ftp"><option value="smtp"><option value="smb"><option value="banner"></datalist>
       <p class="note" style="margin-top:6px">自宅LAN内の他の端末(例: <code style="font-family:var(--font-mono)">192.168.1.5</code>)も、<code style="font-family:var(--font-mono)">netcheck/config.json</code>の許可範囲(既定で127.0.0.0/8・10.0.0.0/8・172.16.0.0/12・192.168.0.0/16)内であれば対象にできます。127.0.0.1以外を指定した場合、Strix/Cairnは対象アプリを自動起動しないので、対象側で先に起動しておいてください。</p>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="target-consent"> 入力した対象は、自社が管理している、または書面で許可を得たものです(zgrab2・Strix・Cairnの実行に必要。netcheckには不要)。</label>
       <div class="row" id="scan-buttons" style="margin-top:6px">
@@ -712,13 +715,17 @@ function llmContext(){
   /* ローカルスキャナー(scripts/local_scan_server.py)を呼び出し、結果をそのまま addJson() に流す。
      parseOne() は JSON.parse 済みのオブジェクト/配列の形で各ツールを自動判別するので、
      サーバーが返す生のJSONをそのまま JSON.stringify して渡すだけでよい(解析ロジックは共通)。 */
-  var LS={url:"vt-scan-url",targetIp:"vt-target-ip"};
+  var LS={url:"vt-scan-url",targetIp:"vt-target-ip",ncPorts:"vt-nc-ports",zgModule:"vt-zg-module"};
   function load(id,k,def){try{var v=localStorage.getItem(k);$(id).value=(v!=null?v:def||"")}catch(e){$(id).value=def||""}}
   function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
   load("scan-url",LS.url,"http://localhost:8766");
   $("scan-url").addEventListener("change",function(){save(LS.url,$("scan-url").value.trim())});
   load("target-ip",LS.targetIp,"127.0.0.1");
   $("target-ip").addEventListener("change",function(){save(LS.targetIp,$("target-ip").value.trim())});
+  load("nc-ports",LS.ncPorts,"standard");
+  $("nc-ports").addEventListener("change",function(){save(LS.ncPorts,$("nc-ports").value)});
+  load("zg-module",LS.zgModule,"http");
+  $("zg-module").addEventListener("change",function(){save(LS.zgModule,$("zg-module").value.trim())});
 
   var scanRunning=false;
   function setScanButtonsDisabled(d){
@@ -770,13 +777,15 @@ function llmContext(){
   });
   $("nc-run").addEventListener("click",function(){
     var targets=targetValue();
-    callScan("/scan/netcheck",{targets:targets,ports:"standard"},"netcheckを実行("+targets+")");
+    var ports=$("nc-ports").value||"standard";
+    callScan("/scan/netcheck",{targets:targets,ports:ports},"netcheckを実行("+targets+"・"+(ports==="extended"?"拡張":"標準")+")");
   });
   $("zg-run").addEventListener("click",function(){
     var targets=targetValue();
     var consent=$("target-consent").checked;
     if(!consent){setScanStatus("対象への許可の確認(チェックボックス)が必要です。","err");return}
-    callScan("/scan/zgrab2",{targets:targets,i_own_these:true},"zgrab2("+targets+")");
+    var module=($("zg-module").value||"").trim()||"http";
+    callScan("/scan/zgrab2",{targets:targets,i_own_these:true,module:module},"zgrab2("+targets+"・"+module+")");
   });
   $("strix-run").addEventListener("click",function(){
     var targets=targetValue();
