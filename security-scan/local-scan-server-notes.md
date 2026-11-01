@@ -23,8 +23,8 @@ POSTする。
 | `POST /scan/semgrep` | `semgrep scan --config p/default --exclude security-scan/sqli-lab/vulnerable_app.py --json`（CIの`.github/workflows/security-scan.yml`と同じコマンド） | ローカルに`semgrep`があればそれを優先、無ければDocker |
 | `POST /scan/trivy` | `trivy fs --scanners vuln,misconfig,secret --format json .`（CIと同じ） | ローカルに`trivy`があればそれを優先、無ければDocker |
 | `POST /scan/gitleaks` | `gitleaks detect --report-format=json --exit-code=0`（CIと同じ） | ローカルに`gitleaks`があればそれを優先、無ければDocker |
-| `POST /scan/netcheck` | `netcheck/netcheck.py`の設定・許可範囲判定・スキャンロジックをそのまま再利用（サーバーは別途立てず、同期的にジョブを実行） | 対象は既定で`127.0.0.1`。リクエストで変えられるが、netcheck自身の許可範囲（`netcheck/config.json`）を超えることはできない |
-| `POST /scan/zgrab2` | `scripts/zgrab2_guard.py`と同じ許可範囲判定を通した後、`zgrab2`本体を実行 | ボディに`i_own_these: true`が無いと一切実行しない。`zgrab2`本体が未インストールなら、その旨を明確なエラーで返す |
+| `POST /scan/netcheck` | `netcheck/netcheck.py`の設定・許可範囲判定・スキャンロジックをそのまま再利用（サーバーは別途立てず、同期的にジョブを実行） | 対象は既定で`127.0.0.1`。リクエストで変えられるが、netcheck自身の許可範囲（`netcheck/config.json`）を超えることはできない。`ports`（`"standard"`既定／`"extended"`）はGUIの「netcheckのポート範囲」セレクトから選べる |
+| `POST /scan/zgrab2` | `scripts/zgrab2_guard.py`と同じ許可範囲判定を通した後、`zgrab2`本体を実行 | ボディに`i_own_these: true`が無いと一切実行しない。`zgrab2`本体が未インストールなら、その旨を明確なエラーで返す。`zgrab2`自体はこのリポジトリに含まれない別のOSS（[zmap/zgrab2](https://github.com/zmap/zgrab2)）で、`pull`しただけでは入らず、別途ビルド・PATHへの配置が必要。`module`（既定`"http"`。`ssh`・`tls`・`ftp`など）はGUIの「zgrab2のモジュール」欄から選べる |
 | `POST /scan/strix` | [usestrix/strix](https://github.com/usestrix/strix)のモックLLM版PoC(`strix-local-poc/`)を実行し、生成された`findings.sarif`を返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`STRIX_LOCAL_DIR`に、事前にclone・パッチ適用・`uv sync`済みのStrix作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneやパッチ適用は行わない)。対象(`targets`、既定`127.0.0.1`)は、netcheck/zgrab2と同じ許可範囲判定(`netcheck/config.json`)を通した1台のみ指定可。既定(127.0.0.1)の場合だけこのリポジトリ自身の`sqli-lab`デモアプリを自動起動し、それ以外を指定した場合は対象側であらかじめ同等のアプリを起動しておく必要がある |
 | `POST /scan/cairn` | [oritera/Cairn](https://github.com/oritera/Cairn)を、Dockerワーカー・LLMを使わず`CairnClient`で直接駆動し(`cairn-lab/run_real_scan.py`)、実際にSQLi認証バイパスを再現してCairnのFactとして記録、エクスポートしたFactをSARIF形式に変換して返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`CAIRN_LOCAL_DIR`に、事前にclone・`uv sync --project cairn`済みのCairn作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneは行わない)。対象(`targets`、既定`127.0.0.1`)はStrixと同じ許可範囲判定・1台のみ。Cairnの実ディスパッチャ(`cairn dispatch`)は使わない(下記「なぜディスパッチャを使わないか」参照) |
 
@@ -134,7 +134,17 @@ host:portを差し込めるよう、第2引数で受け取るように変更し�
 - Strix側は、`STRIX_LOCAL_DIR`が引き続き未設定のため(ネットワーク制限)、対象の文字列置換ロジック
   単体の検証(`sys.argv`を差し替えてモジュールを実行し、生成される攻撃コマンド文字列を確認)のみ。
 
-### 実機(Windows PC、Docker Desktop)での検証(2026-10-31)
+### netcheckのポート範囲・zgrab2のモジュールをGUIから選べるように変更(2026-11-01)
+
+`scan_netcheck()`の`ports`パラメータ(`"standard"`/`"extended"`)と`scan_zgrab2()`の`module`
+パラメータ(既定`"http"`)は、サーバー側には元々実装されていたが、GUIからは固定値しか送っていな
+かった。対象(IP)欄の隣に、netcheckのポート範囲セレクト(標準/拡張)と、zgrab2のモジュール入力欄
+(datalistで`http`・`https`・`ssh`・`tls`・`ftp`・`smtp`・`smb`・`banner`を候補表示)を追加し、
+それぞれ選んだ値をリクエストボディに含めるようにした。両方ともlocalStorageに保存され、次回以降は
+前回選んだ値が復元される。
+
+実機確認(このサンドボックス内): Playwrightで「拡張」を選んでnetcheckを実行し、ステータス表示・
+取り込みラベルに「拡張」が反映されること、`#sources`に重複なく1件のみ追加されることを確認した。
 
 ユーザー自身のWindows PCで、`python3 scripts/local_scan_server.py`を起動し、`vuln_triage.html`から
 全ボタンを実際に押して確認した。
