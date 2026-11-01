@@ -79,6 +79,23 @@ printf '192.168.1.10\n192.168.1.0/28\n' \
 # → zgrab2.jsonl を vuln_triage.html に貼る／選ぶ
 ```
 
+### zgrab2 本体の入手(2026-11-01)
+
+zgrab2 は本リポジトリに含まれない別の OSS（Go 製）です。`git pull` しただけでは入らず、Go ツール
+チェーンで別途ビルド・PATH への配置が必要です。
+
+```bash
+go install github.com/zmap/zgrab2/cmd/zgrab2@latest
+# → $(go env GOPATH)/bin/zgrab2（既定は ~/go/bin/zgrab2）にバイナリができる。PATH に通しておく。
+```
+
+`scripts/local_scan_server.py` の `/scan/zgrab2` は、`shutil.which("zgrab2")` で PATH 上の本体を
+検出して実行する(未インストールなら明確なエラーを返す、黙ってスキップしない設計)。上記コマンドで
+実際にビルドし、`http`/`ssh` モジュールを指定した `/scan/zgrab2` 呼び出し、および `vuln_triage.html`
+の GUI(対象 IP・同意チェックボックス・モジュール欄)からのボタン操作の両方で、実際に zgrab2 本体が
+起動し結果を返すことを確認した(サンドボックス内での動作確認。[`local-scan-server-notes.md`](local-scan-server-notes.md)
+参照)。
+
 ## 4. 防御の観点での位置づけ（R1–R7 / ③）
 
 - **守る側から見た zgrab2**: 外部からの `zgrab2` 的な接続（短時間に多数のポートへ、同じ手順でバナーを取りに来る動き）は、
