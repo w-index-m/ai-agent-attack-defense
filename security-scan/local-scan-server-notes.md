@@ -183,6 +183,25 @@ PostgreSQL/TLS詳細/MongoDB/MSSQL/Oracleに対応(2026-11-01)
 - `/scan/multiproto`エンドポイント(`curl`)・GUIのボタン操作(Playwright)の両方で、一連の
   動作に不具合がないことを確認。
 
+**追記(2026-11-01、本物のサーバーでの再確認)**: 上記は簡易サーバー(バナー文字列のみ模倣)での
+確認だったため、「本物のOpenSSH/vsftpd/Postfix/MySQLでも動くか」との指摘を受け、このサンドボックス
+に実際の`openssh-server`・`vsftpd`・`postfix`・`mariadb-server`(`apt-get install`)を導入して
+再確認した(いずれも非特権ポートで、既存ポートと衝突しないよう個別起動):
+- **OpenSSH**(`sshd -p 2022`): `SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.20`を正しく取得、
+  software抽出も`OpenSSH_9.6p1`で正しい。
+- **vsftpd**(`listen_port=2021`、匿名ログイン許可): `220 (vsFTPd 3.0.5)`を正しく取得。
+  (最初、匿名/ローカルログイン両方を無効にした設定で試したところ`500 OOPS: ...`が返ってきたが、
+  これはvsftpd側の仕様どおりの挙動で、本スクリプトの不具合ではない。匿名ログインを許可する設定に
+  直して通常の220バナーを確認した。)
+- **Postfix**(`master.cf`に非特権ポート2525のsmtpdを追加): `220 vm ESMTP Postfix (Ubuntu)`を
+  正しく取得。
+- **MariaDB**(`mariadbd --port=3307`、MySQL互換): 初期ハンドシェイクパケットから
+  `5.5.5-10.11.14-MariaDB-0ubuntu0.24.04.1`を正しく抽出(先頭の`5.5.5-`は、MariaDBが古いMySQL
+  クライアントとの互換性のために付ける実際の仕様どおりの表記で、抽出バグではない)。
+- `/scan/multiproto`エンドポイント・GUI(Playwright、MariaDB相手)の両方で、本物のサーバーに対する
+  一連の動作(「データベース/キャッシュが直接届く」指摘の生成まで)を再確認した。
+- 確認後、導入した4サービスはすべて停止した(このリポジトリの常設インフラではなく、今回の検証限り)。
+
 ### zgrab2の軽量な代替(`/scan/httplite`)を追加(2026-11-01)
 
 zgrab2本体(Go製)のビルドが使えない/したくない環境向けに、`scripts/http_lite_banner.py`(標準
