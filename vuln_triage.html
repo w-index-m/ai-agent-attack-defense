@@ -147,9 +147,18 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
           <option value="mysql">mysql(バナー)</option>
           <option value="postgres">postgres(TLS対応確認のみ)</option>
           <option value="tls">tls(バージョン・証明書期限)</option>
-          <option value="mongodb">mongodb(接続確認のみ)</option>
-          <option value="mssql">mssql(接続確認のみ)</option>
-          <option value="oracle">oracle(接続確認のみ)</option>
+          <option value="mongodb">mongodb(hello応答の簡易抽出)</option>
+          <option value="mssql">mssql(PRELOGINでバージョン取得・実機未検証)</option>
+          <option value="oracle">oracle(TNS応答タイプ確認・実機未検証)</option>
+          <option value="smb">smb(SMB2 Negotiate)</option>
+          <option value="rdp">rdp(選択セキュリティプロトコル確認)</option>
+          <option value="snmp">snmp(sysDescr取得、UDP)</option>
+          <option value="mqtt">mqtt(CONNECT/CONNACK)</option>
+          <option value="amqp">amqp(Connection.Startの簡易抽出)</option>
+          <option value="ipp">ipp(印刷サービスの応答確認)</option>
+          <option value="socks5">socks5(認証方式ネゴシエーション)</option>
+          <option value="pptp">pptp(SCCRQ応答確認・実機未検証)</option>
+          <option value="modbus">modbus(読み取り専用コマンドのみ)</option>
         </select></label>
         <label>ポート(空欄で既定値)<input class="f" id="mp-port" placeholder="例: 22" inputmode="numeric"></label>
       </div>
@@ -165,7 +174,7 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
         <button type="button" id="cairn-run">Cairnを実行</button>
       </div>
       <div id="scan-status" class="note" role="status"></div>
-      <p class="note">Semgrep・Trivy・gitleaks=このリポジトリ自身のコードを確認(対象欄は使いません)。netcheck=対象への受動的なポート確認。zgrab2=対象への能動スキャナ(バナー取得、<a class="src" href="security-scan/zgrab2-notes.md">詳細ノート</a>)。HTTPバナー取得(軽量)=zgrab2本体が無くても使える代替。ポート80(HTTP)・443(HTTPS)へのGETだけをPython標準ライブラリで行い、結果はzgrab2互換として取り込む(SSH/TLS詳細など他プロトコルは非対応)。追加プロトコルを確認(軽量)=同じくzgrab2不要で、SSH/FTP/Telnet/SMTP/Redis/Memcached/MySQLのバナー取得、PostgreSQLのTLS対応確認、TLSのバージョン・証明書期限確認ができる。MongoDB/MSSQL/OracleはTCP接続の可否だけの確認(プロトコルのハンドシェイクは未実装)。Strix・Cairn=自律型ペネトレーションAIエージェント(モックLLM版。既定で<code style="font-family:var(--font-mono)">sqli-lab</code>デモアプリへSQLi認証バイパスを実行)。Strixは事前に<a class="src" href="security-scan/strix-local-poc/README.md">strix-local-poc/README.md</a>の手順+<code style="font-family:var(--font-mono)">STRIX_LOCAL_DIR</code>環境変数の設定が必要。Cairnは事前に<a class="src" href="security-scan/cairn-lab/cairn-authorized-lab-runbook.md">cairn-authorized-lab-runbook.md</a>の手順+<code style="font-family:var(--font-mono)">CAIRN_LOCAL_DIR</code>環境変数の設定が必要。詳細: <a class="src" href="security-scan/local-scan-server-notes.md">local-scan-server-notes.md</a></p>
+      <p class="note">Semgrep・Trivy・gitleaks=このリポジトリ自身のコードを確認(対象欄は使いません)。netcheck=対象への受動的なポート確認。zgrab2=対象への能動スキャナ(バナー取得、<a class="src" href="security-scan/zgrab2-notes.md">詳細ノート</a>)。HTTPバナー取得(軽量)=zgrab2本体が無くても使える代替。ポート80(HTTP)・443(HTTPS)へのGETだけをPython標準ライブラリで行い、結果はzgrab2互換として取り込む(SSH/TLS詳細など他プロトコルは非対応)。追加プロトコルを確認(軽量)=同じくzgrab2不要で、SSH/FTP/Telnet/SMTP/MySQL/SMBのバナー・応答取得、Redis/Memcached/SOCKS5/MQTTの最小限コマンド送信、PostgreSQL/RDPのプロトコルネゴシエーション確認、TLSのバージョン・証明書期限確認、SNMP(UDP、sysDescr取得)、AMQP/MongoDBの応答の簡易抽出、IPP(印刷サービス)、Modbus(読み取り専用コマンドのみ)ができる。MSSQL/Oracle/PPTPはプロトコル仕様どおり実装したが、このサンドボックスに実機が無く自作の模擬応答での自己テストのみ(実機と異なる可能性あり)。制御系(OT/ICS)はModbus以外(DNP3/BACnet/Siemens等)は、実機が無く誤判定リスクが高いため非対応。Strix・Cairn=自律型ペネトレーションAIエージェント(モックLLM版。既定で<code style="font-family:var(--font-mono)">sqli-lab</code>デモアプリへSQLi認証バイパスを実行)。Strixは事前に<a class="src" href="security-scan/strix-local-poc/README.md">strix-local-poc/README.md</a>の手順+<code style="font-family:var(--font-mono)">STRIX_LOCAL_DIR</code>環境変数の設定が必要。Cairnは事前に<a class="src" href="security-scan/cairn-lab/cairn-authorized-lab-runbook.md">cairn-authorized-lab-runbook.md</a>の手順+<code style="font-family:var(--font-mono)">CAIRN_LOCAL_DIR</code>環境変数の設定が必要。詳細: <a class="src" href="security-scan/local-scan-server-notes.md">local-scan-server-notes.md</a></p>
     </div>
     <div class="panel">
       <label for="paste" class="note">JSON を貼り付けるか、ファイルを選びます。ツールの種類(Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2)は自動で判別します。複数回の取り込みは合算されますが、同じ内容を二重に取り込もうとすると警告して追加しません。</label>

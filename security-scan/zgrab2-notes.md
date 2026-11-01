@@ -128,7 +128,23 @@ HTTP/HTTPS以外のプロトコルについても、`scripts/multi_proto_lite.py
 | `memcached` | `version`コマンドを送り応答を確認 |
 | `postgres` | `SSLRequest`(8バイトの定型パケット)を送り、`S`/`N`の1バイト応答でTLS対応の有無だけを見る(libpqが実際に使う手順。認証もクエリも行わない) |
 | `tls` | Pythonの`ssl`モジュールで実際にハンドシェイクし、プロトコルバージョンを記録。証明書の有効期限は`cryptography`パッケージがあれば読み取る(無ければ省略) |
-| `mongodb` / `mssql` / `oracle` | プロトコル固有のハンドシェイクは実装していない。TCP接続の可否だけを確認し、結果にも明示する(バイナリプロトコルが複雑なうえ、検証手段がこの環境に無いため) |
+| `smb` | SMB2 Negotiate Requestを送り、サーバーが選んだdialect(プロトコルバージョン)を見る |
+| `rdp` | X.224/RDP Negotiation Requestを送り、サーバーが選んだセキュリティプロトコル(TLS/CredSSP等)を見る |
+| `snmp` | SNMP v2cのGetRequestで`sysDescr.0`を読み取り専用で取得(UDP、コミュニティ名`public`固定) |
+| `mqtt` | CONNECTパケットを送りCONNACKの戻りコードを見る |
+| `amqp` | プロトコルヘッダを送り、Connection.Start応答から印字可能な文字列を簡易抽出(フィールドテーブルの完全なデコードはしない) |
+| `ipp` | CUPS-Get-Printers要求を送り、HTTP/IPPの応答コードだけを見る(印刷ジョブの投入はしない) |
+| `socks5` | バージョン・認証方式のネゴシエーションだけを行う(実際の中継は行わない) |
+| `modbus` | Read Holding Registers(ファンクションコード0x03、読み取り専用)を先頭1レジスタだけ要求する。OT/ICSは誤判定・機器への影響リスクが相対的に高いため、Modbus以外(DNP3/BACnet/Siemens等)は実装していない |
+| `mongodb` | OP_MSGで`hello`コマンドを送り、応答から印字可能な文字列を簡易抽出(BSONの完全なデコードはしない) |
+| `mssql` | TDSのPRELOGINパケットを送り、サーバーバージョンを取得(TLSへの昇格はしない) |
+| `oracle` | TNSのCONNECTパケットを送り、応答のパケット種別(ACCEPT/REFUSE等)を見る |
+| `pptp` | Start-Control-Connection-Requestを送り、応答のコントロールメッセージ種別を見る(VPNトンネルは確立しない) |
+
+`mongodb`/`smb`/`rdp`/`snmp`/`mqtt`/`amqp`/`ipp`/`socks5`/`modbus`は、実際のサーバー(samba・xrdp・
+net-snmp・mosquitto・rabbitmq-server・cups・dante-server、MongoDB/Modbusは自作の模擬応答)で動作
+確認済み。`mssql`/`oracle`/`pptp`は、このサンドボックスに実機(本物のSQL Server/Oracle Database/
+PPTPサーバー)が無く、自作の模擬応答での自己テストのみ(実機での結果と異なる可能性がある)。
 
 ```bash
 printf '192.168.1.10\n' | python3 scripts/multi_proto_lite.py --module ssh --i-own-these

@@ -26,7 +26,7 @@ POSTする。
 | `POST /scan/netcheck` | `netcheck/netcheck.py`の設定・許可範囲判定・スキャンロジックをそのまま再利用（サーバーは別途立てず、同期的にジョブを実行） | 対象は既定で`127.0.0.1`。リクエストで変えられるが、netcheck自身の許可範囲（`netcheck/config.json`）を超えることはできない。`ports`（`"standard"`既定／`"extended"`）はGUIの「netcheckのポート範囲」セレクトから選べる |
 | `POST /scan/zgrab2` | `scripts/zgrab2_guard.py`と同じ許可範囲判定を通した後、`zgrab2`本体を実行 | ボディに`i_own_these: true`が無いと一切実行しない。`zgrab2`本体が未インストールなら、その旨を明確なエラーで返す。`zgrab2`自体はこのリポジトリに含まれない別のOSS（[zmap/zgrab2](https://github.com/zmap/zgrab2)）で、`pull`しただけでは入らず、別途ビルド・PATHへの配置が必要。`module`（既定`"http"`。`ssh`・`tls`・`ftp`など）はGUIの「zgrab2のモジュール」欄から選べる |
 | `POST /scan/httplite` | `scripts/http_lite_banner.py`(zgrab2が無くても使える軽量な代替)で、対象の80番(HTTP)・443番(HTTPS、証明書検証なし)へGETを送る | ボディに`i_own_these: true`が無いと一切実行しない。許可範囲判定はnetcheck/zgrab2と同じ。Python標準ライブラリのみで動き、外部バイナリ不要。出力はzgrab2の`http`モジュールと互換の形式で返すため、GUI側はzgrab2として自動判別する(SSH/TLS詳細など他プロトコルは非対応) |
-| `POST /scan/multiproto` | `scripts/multi_proto_lite.py`(zgrab2が無くても使える軽量な代替)で、`module`で指定したプロトコル(ssh/ftp/telnet/smtp/redis/memcached/mysql/postgres/tls/mongodb/mssql/oracle)へ接続する | ボディに`i_own_these: true`が無いと一切実行しない。許可範囲判定はnetcheck/zgrab2と同じ。`port`省略時はモジュールごとの既定ポート。Python標準ライブラリのみで動く(TLSの証明書有効期限だけは`cryptography`パッケージが無いと省略される)。mongodb/mssql/oracleはTCP接続の可否だけの確認(プロトコルのハンドシェイクは未実装、結果に明示)。出力はzgrab2の各モジュールと互換の形式で返すため、GUI側はzgrab2として自動判別する |
+| `POST /scan/multiproto` | `scripts/multi_proto_lite.py`(zgrab2が無くても使える軽量な代替)で、`module`で指定したプロトコル(ssh/ftp/telnet/smtp/redis/memcached/mysql/postgres/tls/mongodb/mssql/oracle/smb/rdp/snmp/mqtt/amqp/ipp/socks5/pptp/modbus)へ接続する | ボディに`i_own_these: true`が無いと一切実行しない。許可範囲判定はnetcheck/zgrab2と同じ。`port`省略時はモジュールごとの既定ポート。Python標準ライブラリのみで動く(TLSの証明書有効期限だけは`cryptography`パッケージが無いと省略される)。mssql/oracle/pptpは実機未検証(自作の模擬応答での自己テストのみ、結果に明示)。OT/ICSはModbus(読み取り専用コマンドのみ)だけに対応、他(DNP3/BACnet/Siemens等)は非対応。出力はzgrab2の各モジュールと互換の形式で返すため、GUI側はzgrab2として自動判別する |
 | `POST /scan/strix` | [usestrix/strix](https://github.com/usestrix/strix)のモックLLM版PoC(`strix-local-poc/`)を実行し、生成された`findings.sarif`を返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`STRIX_LOCAL_DIR`に、事前にclone・パッチ適用・`uv sync`済みのStrix作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneやパッチ適用は行わない)。対象(`targets`、既定`127.0.0.1`)は、netcheck/zgrab2と同じ許可範囲判定(`netcheck/config.json`)を通した1台のみ指定可。既定(127.0.0.1)の場合だけこのリポジトリ自身の`sqli-lab`デモアプリを自動起動し、それ以外を指定した場合は対象側であらかじめ同等のアプリを起動しておく必要がある |
 | `POST /scan/cairn` | [oritera/Cairn](https://github.com/oritera/Cairn)を、Dockerワーカー・LLMを使わず`CairnClient`で直接駆動し(`cairn-lab/run_real_scan.py`)、実際にSQLi認証バイパスを再現してCairnのFactとして記録、エクスポートしたFactをSARIF形式に変換して返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`CAIRN_LOCAL_DIR`に、事前にclone・`uv sync --project cairn`済みのCairn作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneは行わない)。対象(`targets`、既定`127.0.0.1`)はStrixと同じ許可範囲判定・1台のみ。Cairnの実ディスパッチャ(`cairn dispatch`)は使わない(下記「なぜディスパッチャを使わないか」参照) |
 
@@ -135,6 +135,60 @@ host:portを差し込めるよう、第2引数で受け取るように変更し�
 - 範囲内だが到達不能なアドレス(`10.255.255.254`)を指定した場合、明確な接続エラーが返ることを確認。
 - Strix側は、`STRIX_LOCAL_DIR`が引き続き未設定のため(ネットワーク制限)、対象の文字列置換ロジック
   単体の検証(`sys.argv`を差し替えてモジュールを実行し、生成される攻撃コマンド文字列を確認)のみ。
+
+### zgrab2の軽量な代替(`/scan/multiproto`)をさらに拡張: MongoDB/MSSQL/Oracleの本実装、
+SMB/RDP/SNMP/MQTT/AMQP/IPP/SOCKS5/PPTP、Modbus(読み取り専用)に対応(2026-11-01)
+
+これまで「TCP接続の可否だけ」だったMongoDB/MSSQL/Oracleを、各プロトコル仕様どおりの最初の1往復
+(MongoDBはOP_MSGのhello、MSSQLはTDSのPRELOGIN、OracleはTNSのCONNECT)に置き換えた。あわせて、
+これまで未対応だったSMB・RDP・SNMP・MQTT・AMQP・IPP・SOCKS5・PPTPを追加し、OT/ICS(制御系)は
+Modbusの読み取り専用コマンド(Read Holding Registers、ファンクションコード0x03、1レジスタのみ)
+だけに限定して追加した。DNP3/BACnet/Siemens S7等の他OT/ICSプロトコルは、実機が無く検証できない
+ことと、不正なパケットで機器が予期せぬ挙動を起こすリスクが相対的に高いことから、引き続き見送って
+いる。
+
+対応の深さは今回もプロトコルごとに使い分けている:
+- **SMB/RDP/SNMP/MQTT/SOCKS5/Modbus**: 各プロトコル仕様どおりの最小限の1往復を実装し、応答を
+  正しくデコードする(SMB2 Negotiateのdialect、RDPの選択セキュリティプロトコル、SNMPのsysDescr、
+  MQTTのCONNACK、SOCKS5の選択認証方式、Modbusのレジスタ値/例外応答)。
+- **AMQP/MongoDB**: プロトコル仕様どおりの最初の1往復(プロトコルヘッダ/OP_MSG hello)は送るが、
+  応答本体の完全なデコードはせず、印字可能な文字列を抜き出す簡易抽出に留めている(フィールド
+  テーブル/BSONの完全なパーサーは実装していない)。
+- **MSSQL/Oracle/PPTP**: 各プロトコル仕様に基づいて実装したが、このサンドボックスには実機(本物の
+  SQL Server/Oracle Database/PPTPサーバー)が無く、自作の模擬応答での自己テストしか行えていない。
+  実機での結果と異なる可能性がある(GUI・結果にも明示)。
+
+実機確認(このサンドボックス内): `apt-get install`で実際のサーバーが用意できるものは、本物の
+サーバーに対して確認した。
+
+| モジュール | 確認方法 | 結果 |
+|---|---|---|
+| SMB | 実際の`samba`(smbd、非特権ポート) | SMB2 Negotiate Responseから`SMB 3.0.2`を正しく取得 |
+| RDP | 実際の`xrdp` | X.224/RDP Negotiation Responseから選択セキュリティプロトコル(標準セキュリティ)を正しく取得 |
+| SNMP | 実際の`net-snmp`(snmpd、UDP) | `sysDescr.0`を正しく取得 |
+| MQTT | 実際の`mosquitto` | CONNACK(accepted)を正しく取得 |
+| AMQP | 実際の`rabbitmq-server` | Connection.Start応答から`RabbitMQ`・`3.12.1`等を簡易抽出で取得 |
+| IPP | 実際の`cups`(cupsd) | HTTP 200・IPP status-codeを正しく取得 |
+| SOCKS5 | 実際の`dante-server`(danted) | 選択認証方式(認証不要)を正しく取得 |
+| MongoDB | 自作の模擬OP_MSG応答サーバー(実機無し) | hello応答から`version`・`gitVersion`を簡易抽出で取得 |
+| Modbus | 自作の模擬Modbus TCPサーバー(実機無し) | Read Holding Registersの応答値を正しく取得 |
+| MSSQL | 自作の模擬TDS応答サーバー(実機無し) | PRELOGIN応答からサーバーバージョンを正しく取得 |
+| Oracle | 自作の模擬TNS応答サーバー(実機無し) | REFUSE応答のタイプと理由文字列を正しく取得 |
+| PPTP | 自作の模擬SCCRP応答サーバー(実機無し) | Control Message Type・Result Codeを正しく取得 |
+
+この過程で見つかり、修正したバグ:
+- **SMB**: Negotiate ResponseのDialectRevisionフィールドのオフセットを誤っていた(`body[2:4]`
+  (実際はSecurityMode)を読んでいたのを`body[4:6]`に修正)。実際のSambaから常に`0x0001`
+  (SecurityMode値)が返ってきたことで気づいた。
+- **PPTP**: 自作のテスト用クライアント実装自体は正しかったが、応答を解析する側でControl Message
+  Typeのオフセットを誤っていた(8バイトの共通ヘッダー(length+PPTP_MESSAGE_TYPE+Magic Cookie)の
+  直後から始まる、という理解が最初漏れていた)。
+- **AMQP**: 簡易抽出で取り出す文字列の件数上限(`max_items`)が小さすぎて、製品名・バージョン
+  (フィールドテーブルの後半にある)が切り捨てられていた。上限を増やして修正した。
+
+Modbusはこのサンドボックスに実機(PLC等)が無いため自己テストのみ。ただし実装自体は、Read Holding
+Registers(読み取り専用)という、nmapのmodbus-discoverスクリプトなど資産検出ツールが広く使う標準的
+な手法に限定しており、書き込み系コマンドは一切送らない。
 
 ### zgrab2の軽量な代替(`/scan/multiproto`)を拡張: SSH/FTP/Telnet/SMTP/Redis/Memcached/MySQL/
 PostgreSQL/TLS詳細/MongoDB/MSSQL/Oracleに対応(2026-11-01)
