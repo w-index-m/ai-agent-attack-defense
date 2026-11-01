@@ -153,14 +153,20 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
       </details>
       <details class="cfgwrap">
         <summary>Strix(自律型ペネトレーションAIエージェント。モックLLM版)</summary>
-        <p class="note">このリポジトリ自身の<code style="font-family:var(--font-mono)">security-scan/sqli-lab</code>デモアプリ(自分が所有する使い捨て対象)に対して、実際にSQLi認証バイパス等の攻撃ペイロードを送ります。LLMは台本どおりに動くモック(実APIキー不要・コスト$0)ですが、ツール実行・レポート生成は本物です。事前に<a class="src" href="security-scan/strix-local-poc/README.md">strix-local-poc/README.md</a>の手順(clone・パッチ適用・uv sync)を済ませ、<code style="font-family:var(--font-mono)">STRIX_LOCAL_DIR</code>環境変数を設定した状態で<code style="font-family:var(--font-mono)">local_scan_server.py</code>を起動しておく必要があります。</p>
-        <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="strix-consent"> このリポジトリ自身が所有するsqli-labデモアプリへの攻撃実行(SQLi認証バイパス等)に同意します。</label>
+        <p class="note">既定ではこのリポジトリ自身の<code style="font-family:var(--font-mono)">security-scan/sqli-lab</code>デモアプリ(127.0.0.1、自動起動)に対して、実際にSQLi認証バイパス等の攻撃ペイロードを送ります。対象は下のIP欄で変更可能ですが、<code style="font-family:var(--font-mono)">netcheck/config.json</code>の許可範囲(既定で127.0.0.0/8・10.0.0.0/8・172.16.0.0/12・192.168.0.0/16)を超える対象は拒否されます。127.0.0.1以外を指定した場合、対象側に同じ<code style="font-family:var(--font-mono)">/login</code>相当のアプリを先に自分で起動しておく必要があります。LLMは台本どおりに動くモック(実APIキー不要・コスト$0)ですが、ツール実行・レポート生成は本物です。事前に<a class="src" href="security-scan/strix-local-poc/README.md">strix-local-poc/README.md</a>の手順(clone・パッチ適用・uv sync)を済ませ、<code style="font-family:var(--font-mono)">STRIX_LOCAL_DIR</code>環境変数を設定した状態で<code style="font-family:var(--font-mono)">local_scan_server.py</code>を起動しておく必要があります。</p>
+        <div class="cfg">
+          <label>対象(IP。1台のみ)<input class="f" id="strix-targets" placeholder="127.0.0.1"></label>
+        </div>
+        <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="strix-consent"> 入力した対象は、自社が管理している、または書面で許可を得たものです。攻撃実行(SQLi認証バイパス等)に同意します。</label>
         <div class="row" style="margin-top:6px"><button type="button" id="strix-run">Strixを実行(数分かかることがあります)</button></div>
       </details>
       <details class="cfgwrap">
         <summary>Cairn(マルチエージェント型ペネトレーションツール。Cairn自身のAPIを直接駆動)</summary>
-        <p class="note">このリポジトリ自身の<code style="font-family:var(--font-mono)">security-scan/sqli-lab</code>デモアプリに対して、実際にSQLi認証バイパスを再現し、その結果をCairnのFact(発見)として記録します。CairnのDocker worker・LLMは使わず、Cairn自身のサーバーAPI(<code style="font-family:var(--font-mono)">CairnClient</code>)を直接呼び出します(詳細: <a class="src" href="security-scan/cairn-lab/handoff-recheck-notes.md">handoff-recheck-notes.md</a>のPR #89と同じ手法)。事前に<a class="src" href="security-scan/cairn-lab/cairn-authorized-lab-runbook.md">cairn-authorized-lab-runbook.md</a>の手順(clone・<code style="font-family:var(--font-mono)">uv sync --project cairn</code>)を済ませ、<code style="font-family:var(--font-mono)">CAIRN_LOCAL_DIR</code>環境変数を設定した状態で<code style="font-family:var(--font-mono)">local_scan_server.py</code>を起動しておく必要があります。</p>
-        <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="cairn-consent"> このリポジトリ自身が所有するsqli-labデモアプリへの攻撃実行(SQLi認証バイパス)に同意します。</label>
+        <p class="note">既定ではこのリポジトリ自身の<code style="font-family:var(--font-mono)">security-scan/sqli-lab</code>デモアプリ(127.0.0.1、自動起動)に対して、実際にSQLi認証バイパスを再現し、その結果をCairnのFact(発見)として記録します。対象は下のIP欄で変更可能ですが、Strixと同じくnetcheckの許可範囲内に限ります。127.0.0.1以外を指定した場合、対象側のアプリは自動起動しません(先に自分で起動しておいてください)。CairnのDocker worker・LLMは使わず、Cairn自身のサーバーAPI(<code style="font-family:var(--font-mono)">CairnClient</code>)を直接呼び出します(詳細: <a class="src" href="security-scan/cairn-lab/handoff-recheck-notes.md">handoff-recheck-notes.md</a>のPR #89と同じ手法)。事前に<a class="src" href="security-scan/cairn-lab/cairn-authorized-lab-runbook.md">cairn-authorized-lab-runbook.md</a>の手順(clone・<code style="font-family:var(--font-mono)">uv sync --project cairn</code>)を済ませ、<code style="font-family:var(--font-mono)">CAIRN_LOCAL_DIR</code>環境変数を設定した状態で<code style="font-family:var(--font-mono)">local_scan_server.py</code>を起動しておく必要があります。</p>
+        <div class="cfg">
+          <label>対象(IP。1台のみ)<input class="f" id="cairn-targets" placeholder="127.0.0.1"></label>
+        </div>
+        <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="cairn-consent"> 入力した対象は、自社が管理している、または書面で許可を得たものです。攻撃実行(SQLi認証バイパス)に同意します。</label>
         <div class="row" style="margin-top:6px"><button type="button" id="cairn-run">Cairnを実行</button></div>
       </details>
       <p class="note">詳細: <a class="src" href="security-scan/local-scan-server-notes.md">local-scan-server-notes.md</a></p>
@@ -732,13 +738,17 @@ function llmContext(){
   /* ローカルスキャナー(scripts/local_scan_server.py)を呼び出し、結果をそのまま addJson() に流す。
      parseOne() は JSON.parse 済みのオブジェクト/配列の形で各ツールを自動判別するので、
      サーバーが返す生のJSONをそのまま JSON.stringify して渡すだけでよい(解析ロジックは共通)。 */
-  var LS={url:"vt-scan-url",ncTargets:"vt-nc-targets"};
+  var LS={url:"vt-scan-url",ncTargets:"vt-nc-targets",strixTargets:"vt-strix-targets",cairnTargets:"vt-cairn-targets"};
   function load(id,k,def){try{var v=localStorage.getItem(k);$(id).value=(v!=null?v:def||"")}catch(e){$(id).value=def||""}}
   function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
   load("scan-url",LS.url,"http://localhost:8766");
   $("scan-url").addEventListener("change",function(){save(LS.url,$("scan-url").value.trim())});
   load("nc-targets",LS.ncTargets,"127.0.0.1");
   $("nc-targets").addEventListener("change",function(){save(LS.ncTargets,$("nc-targets").value.trim())});
+  load("strix-targets",LS.strixTargets,"127.0.0.1");
+  $("strix-targets").addEventListener("change",function(){save(LS.strixTargets,$("strix-targets").value.trim())});
+  load("cairn-targets",LS.cairnTargets,"127.0.0.1");
+  $("cairn-targets").addEventListener("change",function(){save(LS.cairnTargets,$("cairn-targets").value.trim())});
 
   var scanRunning=false;
   function setScanButtonsDisabled(d){
@@ -803,14 +813,16 @@ function llmContext(){
     callScan("/scan/zgrab2",{targets:targets,i_own_these:true},"zgrab2");
   });
   $("strix-run").addEventListener("click",function(){
+    var targets=($("strix-targets").value||"").trim()||"127.0.0.1";
     var consent=$("strix-consent").checked;
-    if(!consent){setScanStatus("sqli-labデモアプリへの攻撃実行への同意(チェックボックス)が必要です。","err");return}
-    callScan("/scan/strix",{i_own_these:true},"Strix");
+    if(!consent){setScanStatus("対象への攻撃実行への同意(チェックボックス)が必要です。","err");return}
+    callScan("/scan/strix",{targets:targets,i_own_these:true},"Strix("+targets+")");
   });
   $("cairn-run").addEventListener("click",function(){
+    var targets=($("cairn-targets").value||"").trim()||"127.0.0.1";
     var consent=$("cairn-consent").checked;
-    if(!consent){setScanStatus("sqli-labデモアプリへの攻撃実行への同意(チェックボックス)が必要です。","err");return}
-    callScan("/scan/cairn",{i_own_these:true},"Cairn");
+    if(!consent){setScanStatus("対象への攻撃実行への同意(チェックボックス)が必要です。","err");return}
+    callScan("/scan/cairn",{targets:targets,i_own_these:true},"Cairn("+targets+")");
   });
 })();
 

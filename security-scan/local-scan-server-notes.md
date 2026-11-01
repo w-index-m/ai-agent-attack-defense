@@ -25,8 +25,8 @@ POSTする。
 | `POST /scan/gitleaks` | `gitleaks detect --report-format=json --exit-code=0`（CIと同じ） | ローカルに`gitleaks`があればそれを優先、無ければDocker |
 | `POST /scan/netcheck` | `netcheck/netcheck.py`の設定・許可範囲判定・スキャンロジックをそのまま再利用（サーバーは別途立てず、同期的にジョブを実行） | 対象は既定で`127.0.0.1`。リクエストで変えられるが、netcheck自身の許可範囲（`netcheck/config.json`）を超えることはできない |
 | `POST /scan/zgrab2` | `scripts/zgrab2_guard.py`と同じ許可範囲判定を通した後、`zgrab2`本体を実行 | ボディに`i_own_these: true`が無いと一切実行しない。`zgrab2`本体が未インストールなら、その旨を明確なエラーで返す |
-| `POST /scan/strix` | [usestrix/strix](https://github.com/usestrix/strix)のモックLLM版PoC(`strix-local-poc/`)を実行し、生成された`findings.sarif`を返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`STRIX_LOCAL_DIR`に、事前にclone・パッチ適用・`uv sync`済みのStrix作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneやパッチ適用は行わない)。対象はこのリポジトリ自身の`sqli-lab`デモアプリに固定 |
-| `POST /scan/cairn` | [oritera/Cairn](https://github.com/oritera/Cairn)を、Dockerワーカー・LLMを使わず`CairnClient`で直接駆動し(`cairn-lab/run_real_scan.py`)、実際にSQLi認証バイパスを再現してCairnのFactとして記録、エクスポートしたFactをSARIF形式に変換して返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`CAIRN_LOCAL_DIR`に、事前にclone・`uv sync --project cairn`済みのCairn作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneは行わない)。対象はこのリポジトリ自身の`sqli-lab`デモアプリに固定。Cairnの実ディスパッチャ(`cairn dispatch`)は使わない(下記「なぜディスパッチャを使わないか」参照) |
+| `POST /scan/strix` | [usestrix/strix](https://github.com/usestrix/strix)のモックLLM版PoC(`strix-local-poc/`)を実行し、生成された`findings.sarif`を返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`STRIX_LOCAL_DIR`に、事前にclone・パッチ適用・`uv sync`済みのStrix作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneやパッチ適用は行わない)。対象(`targets`、既定`127.0.0.1`)は、netcheck/zgrab2と同じ許可範囲判定(`netcheck/config.json`)を通した1台のみ指定可。既定(127.0.0.1)の場合だけこのリポジトリ自身の`sqli-lab`デモアプリを自動起動し、それ以外を指定した場合は対象側であらかじめ同等のアプリを起動しておく必要がある |
+| `POST /scan/cairn` | [oritera/Cairn](https://github.com/oritera/Cairn)を、Dockerワーカー・LLMを使わず`CairnClient`で直接駆動し(`cairn-lab/run_real_scan.py`)、実際にSQLi認証バイパスを再現してCairnのFactとして記録、エクスポートしたFactをSARIF形式に変換して返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`CAIRN_LOCAL_DIR`に、事前にclone・`uv sync --project cairn`済みのCairn作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneは行わない)。対象(`targets`、既定`127.0.0.1`)はStrixと同じ許可範囲判定・1台のみ。Cairnの実ディスパッチャ(`cairn dispatch`)は使わない(下記「なぜディスパッチャを使わないか」参照) |
 
 どのツールも、生のJSON出力をそのまま返す（加工しない）。ページ側は、既存の`addJson()`（貼り付け/
 ファイル読み込みと同じ関数）にそのまま渡すので、解析ロジックは一本化されている。`strix`が返す
@@ -111,6 +111,28 @@ Strixを使うには、事前に[`strix-local-poc/README.md`](strix-local-poc/RE
   3. Playwright(実ブラウザ)で`vuln_triage.html`を開き、「全部消す」→Cairnの同意チェックボックス→
      「Cairnを実行」ボタンをクリックする、実際の利用フローも確認。✅成功表示、「2. 全体像」が
      正しく1件(中・連鎖1「SQLインジェクション」に該当)に再描画されることまで確認した。
+
+### 対象(IP)を指定できるように変更(2026-11-01)
+
+当初、Strix/Cairnの攻撃対象はこのリポジトリ自身の`sqli-lab`デモアプリ(127.0.0.1)に固定だったが、
+netcheck/zgrab2と同じ対象入力欄・許可範囲判定を追加し、自分が管理する他の端末も対象にできるように
+した。設計は`_resolve_single_target()`(新規の共通ヘルパー)で、netcheckの`expand_targets()`を
+再利用して1台だけに絞り込み、`netcheck/config.json`の許可範囲を超える対象は拒否する。既定の
+127.0.0.1以外を指定した場合は、対象側のデモアプリを自動起動しない(対象で先に自分で起動しておく
+前提)。Strix側は、攻撃コマンドが埋め込まれた`mock_llm_server.py`のスクリプト文字列に対象の
+host:portを差し込めるよう、第2引数で受け取るように変更した。
+
+実機確認(このサンドボックス内):
+- 範囲外アドレス(`8.8.8.8`)が、Strix・Cairnとも即座に拒否されることを確認。
+- 既定(127.0.0.1)でのCairnのフルエンドツーエンドが、変更後も壊れていないことを再確認。
+- `127.0.0.2`(ループバックの別アドレス)に`vulnerable_app.py`を手動で立ち上げ、Cairnの対象を
+  `127.0.0.2`に指定して実行。自動起動されず(既定以外のため)、実際に`127.0.0.2:5000`へ本物の
+  SQLi認証バイパスが行われ、`findings.sarif`の場所(`artifactLocation.uri`)も
+  `http://127.0.0.2:5000/login`と正しく対象を反映することを確認。Playwright経由のボタン操作でも
+  同じ結果を確認した。
+- 範囲内だが到達不能なアドレス(`10.255.255.254`)を指定した場合、明確な接続エラーが返ることを確認。
+- Strix側は、`STRIX_LOCAL_DIR`が引き続き未設定のため(ネットワーク制限)、対象の文字列置換ロジック
+  単体の検証(`sys.argv`を差し替えてモジュールを実行し、生成される攻撃コマンド文字列を確認)のみ。
 
 ### 実機(Windows PC、Docker Desktop)での検証(2026-10-31)
 
