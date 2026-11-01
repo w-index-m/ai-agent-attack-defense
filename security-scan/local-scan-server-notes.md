@@ -26,6 +26,7 @@ POSTする。
 | `POST /scan/netcheck` | `netcheck/netcheck.py`の設定・許可範囲判定・スキャンロジックをそのまま再利用（サーバーは別途立てず、同期的にジョブを実行） | 対象は既定で`127.0.0.1`。リクエストで変えられるが、netcheck自身の許可範囲（`netcheck/config.json`）を超えることはできない。`ports`（`"standard"`既定／`"extended"`）はGUIの「netcheckのポート範囲」セレクトから選べる |
 | `POST /scan/zgrab2` | `scripts/zgrab2_guard.py`と同じ許可範囲判定を通した後、`zgrab2`本体を実行 | ボディに`i_own_these: true`が無いと一切実行しない。`zgrab2`本体が未インストールなら、その旨を明確なエラーで返す。`zgrab2`自体はこのリポジトリに含まれない別のOSS（[zmap/zgrab2](https://github.com/zmap/zgrab2)）で、`pull`しただけでは入らず、別途ビルド・PATHへの配置が必要。`module`（既定`"http"`。`ssh`・`tls`・`ftp`など）はGUIの「zgrab2のモジュール」欄から選べる |
 | `POST /scan/httplite` | `scripts/http_lite_banner.py`(zgrab2が無くても使える軽量な代替)で、対象の80番(HTTP)・443番(HTTPS、証明書検証なし)へGETを送る | ボディに`i_own_these: true`が無いと一切実行しない。許可範囲判定はnetcheck/zgrab2と同じ。Python標準ライブラリのみで動き、外部バイナリ不要。出力はzgrab2の`http`モジュールと互換の形式で返すため、GUI側はzgrab2として自動判別する(SSH/TLS詳細など他プロトコルは非対応) |
+| `POST /scan/multiproto` | `scripts/multi_proto_lite.py`(zgrab2が無くても使える軽量な代替)で、`module`で指定したプロトコル(ssh/ftp/telnet/smtp/redis/memcached/mysql/postgres/tls/mongodb/mssql/oracle)へ接続する | ボディに`i_own_these: true`が無いと一切実行しない。許可範囲判定はnetcheck/zgrab2と同じ。`port`省略時はモジュールごとの既定ポート。Python標準ライブラリのみで動く(TLSの証明書有効期限だけは`cryptography`パッケージが無いと省略される)。mongodb/mssql/oracleはTCP接続の可否だけの確認(プロトコルのハンドシェイクは未実装、結果に明示)。出力はzgrab2の各モジュールと互換の形式で返すため、GUI側はzgrab2として自動判別する |
 | `POST /scan/strix` | [usestrix/strix](https://github.com/usestrix/strix)のモックLLM版PoC(`strix-local-poc/`)を実行し、生成された`findings.sarif`を返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`STRIX_LOCAL_DIR`に、事前にclone・パッチ適用・`uv sync`済みのStrix作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneやパッチ適用は行わない)。対象(`targets`、既定`127.0.0.1`)は、netcheck/zgrab2と同じ許可範囲判定(`netcheck/config.json`)を通した1台のみ指定可。既定(127.0.0.1)の場合だけこのリポジトリ自身の`sqli-lab`デモアプリを自動起動し、それ以外を指定した場合は対象側であらかじめ同等のアプリを起動しておく必要がある |
 | `POST /scan/cairn` | [oritera/Cairn](https://github.com/oritera/Cairn)を、Dockerワーカー・LLMを使わず`CairnClient`で直接駆動し(`cairn-lab/run_real_scan.py`)、実際にSQLi認証バイパスを再現してCairnのFactとして記録、エクスポートしたFactをSARIF形式に変換して返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`CAIRN_LOCAL_DIR`に、事前にclone・`uv sync --project cairn`済みのCairn作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneは行わない)。対象(`targets`、既定`127.0.0.1`)はStrixと同じ許可範囲判定・1台のみ。Cairnの実ディスパッチャ(`cairn dispatch`)は使わない(下記「なぜディスパッチャを使わないか」参照) |
 
@@ -134,6 +135,53 @@ host:portを差し込めるよう、第2引数で受け取るように変更し�
 - 範囲内だが到達不能なアドレス(`10.255.255.254`)を指定した場合、明確な接続エラーが返ることを確認。
 - Strix側は、`STRIX_LOCAL_DIR`が引き続き未設定のため(ネットワーク制限)、対象の文字列置換ロジック
   単体の検証(`sys.argv`を差し替えてモジュールを実行し、生成される攻撃コマンド文字列を確認)のみ。
+
+### zgrab2の軽量な代替(`/scan/multiproto`)を拡張: SSH/FTP/Telnet/SMTP/Redis/Memcached/MySQL/
+PostgreSQL/TLS詳細/MongoDB/MSSQL/Oracleに対応(2026-11-01)
+
+`scripts/http_lite_banner.py`(HTTP/HTTPSのみ)に続き、`scripts/multi_proto_lite.py`で対応
+プロトコルを広げた。「スクラッチでzgrab2相当を全部作れるか」との相談に対し、全20以上の
+プロトコルを一度に実装するのはリスク(検証手段がない環境での誤判定)が大きいと判断し、
+対応の深さをプロトコルごとに使い分けている(誠実さを優先):
+
+- **バナーをそのまま読むだけ(低リスク)**: SSH・FTP・Telnet・SMTP・MySQL。接続して最初の
+  応答を読むだけで、こちらから何も送らない(MySQLだけ、サーバーが自動で送ってくる初期
+  ハンドシェイクパケットからバージョン文字列を取り出す)。
+- **最小限のコマンドだけ送って応答を見る(中リスク)**: Redis(`PING`→`PONG`を確認、
+  zgrab2と同じ「認証なしRedis」判定が働く)、Memcached(`version`コマンド)、
+  PostgreSQL(`SSLRequest`という8バイトの定型パケットを送り、`S`/`N`の1バイト応答で
+  TLS対応の有無だけを見る。libpqが実際に使う手順で、認証もクエリも行わない)。
+- **TLS**: Pythonの`ssl`モジュールで実際にハンドシェイクし(自前のTLS実装はしない)、
+  プロトコルバージョンを記録。証明書の有効期限は、`cryptography`パッケージ(今回の
+  サンドボックスには既に入っていた)があれば読み取り、無ければその項目だけ省略する
+  (`pip install cryptography`で有効化)。
+- **MongoDB/MSSQL/Oracle(やらないことにした部分)**: プロトコル固有のハンドシェイクは
+  実装していない。バイナリプロトコルが複雑なうえ、この環境には実機の検証手段(実際の
+  MongoDB/MSSQL/Oracleサーバー)が無く、誤判定のリスクの方が大きいと判断したため。
+  TCP接続の可否だけを確認し、結果にも「プロトコルハンドシェイクは未実装」と明示する。
+
+出力は、いずれもzgrab2の対応モジュールと互換の形式(`vuln_triage.html`側の取り込みロジック
+をそのまま再利用、新しい解析コードは追加していない)。GUIには「追加プロトコルを確認(軽量)」
+ボタンと、モジュール選択・ポート指定(空欄で既定値)を追加した。
+
+実機確認(このサンドボックス内): 実際に動くサービスを用意して確認した。
+- Redis: `redis-server`を実際に起動し、認証なしで`PING`→`PONG`が返ること、zgrab2互換の
+  「認証なしでRedisが応答している」(critical)・「データベース/キャッシュが直接届く」(high)
+  の両方の指摘が生成されることを確認。
+- SSH/FTP/Telnet/SMTP/MySQL/Memcached: それぞれのプロトコルの初期応答を模した簡易サーバーを
+  用意し、バナー・バージョン文字列(SSHは`OpenSSH_8.9p1`、MySQLは`8.0.35-fake`など)が正しく
+  抽出されることを確認。
+- PostgreSQL: `SSLRequest`に`S`で応答する簡易サーバーに対し、`tls_supported: true`が正しく
+  返ることを確認。
+- TLS: 自己署名証明書を使った簡易HTTPSサーバーに対し、バージョン(`TLSv1.3`)・証明書の
+  有効期限が正しく取得され、GUI経由(Playwright)で「証明書の期限が近い」指摘が実際に
+  生成されることを確認(自己署名証明書を有効期限1日で発行したため)。
+- MongoDB/MSSQL(実際にはsqli-labの5000/5001番ポートで代用): 接続成功時に「TCP接続のみ確認」
+  の結果が返ることを確認。
+- エラー系: 接続拒否(`connection-refused`)、平文ポートへのTLS接続時の
+  `ssl.SSLError`の正しい分類(`protocol-error`、`http_lite_banner.py`と同じ修正パターン)を確認。
+- `/scan/multiproto`エンドポイント(`curl`)・GUIのボタン操作(Playwright)の両方で、一連の
+  動作に不具合がないことを確認。
 
 ### zgrab2の軽量な代替(`/scan/httplite`)を追加(2026-11-01)
 

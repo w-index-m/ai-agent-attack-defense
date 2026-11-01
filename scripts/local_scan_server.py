@@ -477,6 +477,45 @@ def scan_httplite(body):
     return rows
 
 
+def scan_multiproto(body):
+    """zgrab2本体が無くても使える、SSH/FTP/Telnet/SMTP/Redis等の複数プロトコルの軽量な代替
+    (scripts/multi_proto_lite.py)。zgrab2と同じ同意フラグ(i_own_these)・許可範囲判定が無いと
+    一切実行しない。出力はzgrab2の各モジュールと互換の形式で返すため、GUI側の取り込みロジック
+    (zgrab2として自動判別)をそのまま再利用できる。"""
+    body = body or {}
+    if body.get("i_own_these") is not True:
+        return {"error": "拒否: i_own_these(自社が管理している、または書面で許可を得た対象であること)が"
+                          "trueである必要があります。"}
+    targets_text = str(body.get("targets", "") or "")
+    if not targets_text.strip():
+        return {"error": "対象を入力してください。"}
+    mpl = _load_module(os.path.join(HERE, "multi_proto_lite.py"), "multi_proto_lite_local")
+    module = str(body.get("module", "") or "ssh").strip().lower()
+    if module not in mpl.DEFAULT_PORTS:
+        return {"error": "未対応のモジュールです: %s(対応: %s)" % (module, ", ".join(sorted(mpl.DEFAULT_PORTS)))}
+    port = body.get("port")
+    try:
+        port = int(port) if port not in (None, "") else None
+    except (TypeError, ValueError):
+        return {"error": "portは数値で指定してください。"}
+    nc = _load_module(os.path.join(REPO_ROOT, "netcheck", "netcheck.py"), "netcheck_local_for_multiproto")
+    cfg = nc.load_config()
+    try:
+        ok, refused = nc.expand_targets(targets_text, cfg)
+    except nc.TooMany as e:
+        return {"error": str(e)}
+    if refused:
+        return {"error": "許可した範囲の外、または解釈できない対象があります。何も実行しません。",
+                "refused": refused}
+    if not ok:
+        return {"error": "対象がありません。"}
+    rows = []
+    for name, ip in ok:
+        host = name if name != ip else None
+        rows.append(mpl.grab_target(module, ip, port=port, host=host, timeout=5.0))
+    return rows
+
+
 def scan_zgrab2(body):
     """能動スキャナ。scripts/zgrab2_guard.py と同じ同意フラグが無いと一切実行しない。
     zgrab2 本体が入っていない場合は、その旨を明確なエラーで返す(黙ってスキップしない)。"""
@@ -534,6 +573,7 @@ ROUTES = {
     "/scan/netcheck": lambda body: scan_netcheck(body),
     "/scan/zgrab2": lambda body: scan_zgrab2(body),
     "/scan/httplite": lambda body: scan_httplite(body),
+    "/scan/multiproto": lambda body: scan_multiproto(body),
     "/scan/strix": lambda body: scan_strix(body),
     "/scan/cairn": lambda body: scan_cairn(body),
 }
