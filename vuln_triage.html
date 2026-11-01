@@ -136,6 +136,23 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
       <datalist id="zg-modules"><option value="http"><option value="https"><option value="ssh"><option value="tls"><option value="ftp"><option value="smtp"><option value="smb"><option value="banner"></datalist>
       <p class="note" style="margin-top:6px">自宅LAN内の他の端末(例: <code style="font-family:var(--font-mono)">192.168.1.5</code>)も、<code style="font-family:var(--font-mono)">netcheck/config.json</code>の許可範囲(既定で127.0.0.0/8・10.0.0.0/8・172.16.0.0/12・192.168.0.0/16)内であれば対象にできます。127.0.0.1以外を指定した場合、Strix/Cairnは対象アプリを自動起動しないので、対象側で先に起動しておいてください。</p>
       <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="target-consent"> 入力した対象は、自社が管理している、または書面で許可を得たものです(zgrab2・Strix・Cairnの実行に必要。netcheckには不要)。</label>
+      <div class="cfg" style="margin-top:6px">
+        <label>追加プロトコル(軽量版、zgrab2不要)<select class="f" id="mp-module">
+          <option value="ssh">ssh(バナー)</option>
+          <option value="ftp">ftp(バナー)</option>
+          <option value="telnet">telnet(バナー)</option>
+          <option value="smtp">smtp(バナー)</option>
+          <option value="redis">redis(PING確認)</option>
+          <option value="memcached">memcached(version確認)</option>
+          <option value="mysql">mysql(バナー)</option>
+          <option value="postgres">postgres(TLS対応確認のみ)</option>
+          <option value="tls">tls(バージョン・証明書期限)</option>
+          <option value="mongodb">mongodb(接続確認のみ)</option>
+          <option value="mssql">mssql(接続確認のみ)</option>
+          <option value="oracle">oracle(接続確認のみ)</option>
+        </select></label>
+        <label>ポート(空欄で既定値)<input class="f" id="mp-port" placeholder="例: 22" inputmode="numeric"></label>
+      </div>
       <div class="row" id="scan-buttons" style="margin-top:6px">
         <button type="button" data-tool="semgrep">Semgrepを実行</button>
         <button type="button" data-tool="trivy">Trivyを実行</button>
@@ -143,11 +160,12 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
         <button type="button" id="nc-run">netcheckを実行</button>
         <button type="button" id="zg-run">zgrab2を実行</button>
         <button type="button" id="hl-run">HTTPバナー取得(軽量・zgrab2不要)</button>
+        <button type="button" id="mp-run">追加プロトコルを確認(軽量)</button>
         <button type="button" id="strix-run">Strixを実行(数分かかることがあります)</button>
         <button type="button" id="cairn-run">Cairnを実行</button>
       </div>
       <div id="scan-status" class="note" role="status"></div>
-      <p class="note">Semgrep・Trivy・gitleaks=このリポジトリ自身のコードを確認(対象欄は使いません)。netcheck=対象への受動的なポート確認。zgrab2=対象への能動スキャナ(バナー取得、<a class="src" href="security-scan/zgrab2-notes.md">詳細ノート</a>)。HTTPバナー取得(軽量)=zgrab2本体が無くても使える代替。ポート80(HTTP)・443(HTTPS)へのGETだけをPython標準ライブラリで行い、結果はzgrab2互換として取り込む(SSH/TLS詳細など他プロトコルは非対応)。Strix・Cairn=自律型ペネトレーションAIエージェント(モックLLM版。既定で<code style="font-family:var(--font-mono)">sqli-lab</code>デモアプリへSQLi認証バイパスを実行)。Strixは事前に<a class="src" href="security-scan/strix-local-poc/README.md">strix-local-poc/README.md</a>の手順+<code style="font-family:var(--font-mono)">STRIX_LOCAL_DIR</code>環境変数の設定が必要。Cairnは事前に<a class="src" href="security-scan/cairn-lab/cairn-authorized-lab-runbook.md">cairn-authorized-lab-runbook.md</a>の手順+<code style="font-family:var(--font-mono)">CAIRN_LOCAL_DIR</code>環境変数の設定が必要。詳細: <a class="src" href="security-scan/local-scan-server-notes.md">local-scan-server-notes.md</a></p>
+      <p class="note">Semgrep・Trivy・gitleaks=このリポジトリ自身のコードを確認(対象欄は使いません)。netcheck=対象への受動的なポート確認。zgrab2=対象への能動スキャナ(バナー取得、<a class="src" href="security-scan/zgrab2-notes.md">詳細ノート</a>)。HTTPバナー取得(軽量)=zgrab2本体が無くても使える代替。ポート80(HTTP)・443(HTTPS)へのGETだけをPython標準ライブラリで行い、結果はzgrab2互換として取り込む(SSH/TLS詳細など他プロトコルは非対応)。追加プロトコルを確認(軽量)=同じくzgrab2不要で、SSH/FTP/Telnet/SMTP/Redis/Memcached/MySQLのバナー取得、PostgreSQLのTLS対応確認、TLSのバージョン・証明書期限確認ができる。MongoDB/MSSQL/OracleはTCP接続の可否だけの確認(プロトコルのハンドシェイクは未実装)。Strix・Cairn=自律型ペネトレーションAIエージェント(モックLLM版。既定で<code style="font-family:var(--font-mono)">sqli-lab</code>デモアプリへSQLi認証バイパスを実行)。Strixは事前に<a class="src" href="security-scan/strix-local-poc/README.md">strix-local-poc/README.md</a>の手順+<code style="font-family:var(--font-mono)">STRIX_LOCAL_DIR</code>環境変数の設定が必要。Cairnは事前に<a class="src" href="security-scan/cairn-lab/cairn-authorized-lab-runbook.md">cairn-authorized-lab-runbook.md</a>の手順+<code style="font-family:var(--font-mono)">CAIRN_LOCAL_DIR</code>環境変数の設定が必要。詳細: <a class="src" href="security-scan/local-scan-server-notes.md">local-scan-server-notes.md</a></p>
     </div>
     <div class="panel">
       <label for="paste" class="note">JSON を貼り付けるか、ファイルを選びます。ツールの種類(Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2)は自動で判別します。複数回の取り込みは合算されますが、同じ内容を二重に取り込もうとすると警告して追加しません。</label>
@@ -716,7 +734,8 @@ function llmContext(){
   /* ローカルスキャナー(scripts/local_scan_server.py)を呼び出し、結果をそのまま addJson() に流す。
      parseOne() は JSON.parse 済みのオブジェクト/配列の形で各ツールを自動判別するので、
      サーバーが返す生のJSONをそのまま JSON.stringify して渡すだけでよい(解析ロジックは共通)。 */
-  var LS={url:"vt-scan-url",targetIp:"vt-target-ip",ncPorts:"vt-nc-ports",zgModule:"vt-zg-module"};
+  var LS={url:"vt-scan-url",targetIp:"vt-target-ip",ncPorts:"vt-nc-ports",zgModule:"vt-zg-module",
+    mpModule:"vt-mp-module",mpPort:"vt-mp-port"};
   function load(id,k,def){try{var v=localStorage.getItem(k);$(id).value=(v!=null?v:def||"")}catch(e){$(id).value=def||""}}
   function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
   load("scan-url",LS.url,"http://localhost:8766");
@@ -727,6 +746,10 @@ function llmContext(){
   $("nc-ports").addEventListener("change",function(){save(LS.ncPorts,$("nc-ports").value)});
   load("zg-module",LS.zgModule,"http");
   $("zg-module").addEventListener("change",function(){save(LS.zgModule,$("zg-module").value.trim())});
+  load("mp-module",LS.mpModule,"ssh");
+  $("mp-module").addEventListener("change",function(){save(LS.mpModule,$("mp-module").value)});
+  load("mp-port",LS.mpPort,"");
+  $("mp-port").addEventListener("change",function(){save(LS.mpPort,$("mp-port").value.trim())});
 
   var scanRunning=false;
   function setScanButtonsDisabled(d){
@@ -793,6 +816,20 @@ function llmContext(){
     var consent=$("target-consent").checked;
     if(!consent){setScanStatus("対象への許可の確認(チェックボックス)が必要です。","err");return}
     callScan("/scan/httplite",{targets:targets,i_own_these:true},"HTTPバナー取得(軽量)("+targets+")");
+  });
+  $("mp-run").addEventListener("click",function(){
+    var targets=targetValue();
+    var consent=$("target-consent").checked;
+    if(!consent){setScanStatus("対象への許可の確認(チェックボックス)が必要です。","err");return}
+    var module=$("mp-module").value||"ssh";
+    var portStr=($("mp-port").value||"").trim();
+    var body={targets:targets,i_own_these:true,module:module};
+    if(portStr){
+      var port=parseInt(portStr,10);
+      if(isNaN(port)){setScanStatus("ポートは数値で指定してください。","err");return}
+      body.port=port;
+    }
+    callScan("/scan/multiproto",body,"追加プロトコル確認("+targets+"・"+module+")");
   });
   $("strix-run").addEventListener("click",function(){
     var targets=targetValue();

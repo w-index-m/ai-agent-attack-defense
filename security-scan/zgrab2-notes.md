@@ -115,6 +115,28 @@ printf '192.168.1.10\n' | python3 scripts/http_lite_banner.py --i-own-these > ht
 
 GUIからは「HTTPバナー取得(軽量・zgrab2不要)」ボタンで実行できる(`/scan/httplite`)。
 
+### 軽量な代替(続き): `scripts/multi_proto_lite.py`(2026-11-01)
+
+HTTP/HTTPS以外のプロトコルについても、`scripts/multi_proto_lite.py`で軽量な代替を追加した。
+対応の深さはプロトコルごとに違う(誠実さを優先し、できる範囲だけを実装):
+
+| モジュール | やっていること |
+|---|---|
+| `ssh` / `ftp` / `telnet` / `smtp` | 接続して最初の応答(バナー)を読むだけ |
+| `mysql` | 接続すると自動で送られてくる初期ハンドシェイクパケットからバージョン文字列を抽出 |
+| `redis` | `PING`を送り`PONG`が返るか確認(zgrab2と同じ「認証なしRedis」判定が働く) |
+| `memcached` | `version`コマンドを送り応答を確認 |
+| `postgres` | `SSLRequest`(8バイトの定型パケット)を送り、`S`/`N`の1バイト応答でTLS対応の有無だけを見る(libpqが実際に使う手順。認証もクエリも行わない) |
+| `tls` | Pythonの`ssl`モジュールで実際にハンドシェイクし、プロトコルバージョンを記録。証明書の有効期限は`cryptography`パッケージがあれば読み取る(無ければ省略) |
+| `mongodb` / `mssql` / `oracle` | プロトコル固有のハンドシェイクは実装していない。TCP接続の可否だけを確認し、結果にも明示する(バイナリプロトコルが複雑なうえ、検証手段がこの環境に無いため) |
+
+```bash
+printf '192.168.1.10\n' | python3 scripts/multi_proto_lite.py --module ssh --i-own-these
+```
+
+GUIからは「追加プロトコルを確認(軽量)」ボタンで実行できる(`/scan/multiproto`。モジュール選択・
+ポート指定(空欄で既定値)が可能)。
+
 ## 4. 防御の観点での位置づけ（R1–R7 / ③）
 
 - **守る側から見た zgrab2**: 外部からの `zgrab2` 的な接続（短時間に多数のポートへ、同じ手順でバナーを取りに来る動き）は、
