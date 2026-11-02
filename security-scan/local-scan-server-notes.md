@@ -354,6 +354,37 @@ Trivy以外はすべて実機で正常動作を確認済み。Trivyのみ、お�
 同様の`/tmp`ハードコードがあるが、これらは`local_scan_server.py`からは呼ばれない独立したPoCスクリプト
 で、かつペイロード自体がUnixシェルコマンド(`curl`/`printf`/`cat`)前提のデモなので、今回は対象外とした。
 
+### Windows実機での続報: ポート5000/5001が常時専有されているケースへの対応(2026-11-02)
+
+上記の`/tmp`修正後、同じユーザーのWindows PCで改めてStrixを試したところ、今度は`vulnerable_app.py`
+が起動時に`アクセス許可で禁じられた方法でソケットにアクセスしようとしました`(WinError 10013)で
+失敗した。実機での切り分け(`netstat -ano`・`netsh interface ipv4 show excludedportrange`)の結果、
+Hyper-V/WSL2のポート除外範囲が原因ではなく、**「agent」という名前の常駐プロセス(管理者権限が無いと
+詳細情報が見えず、エンドポイント保護ソフト等と推測される)がポート5000/5001を常時専有している**ことが
+判明した(`taskkill`も「アクセスが拒否されました」で失敗し、ユーザー権限では終了できない)。
+
+`vulnerable_app.py`自体は`VULN_APP_PORT`/`VULN_INTERNAL_PORT`環境変数でポートを変更できる設計に
+既になっていた(コメント: 「WSL2 mirrored networkingがWindowsのサービスとポートを共有する場合」を
+想定)が、`local_scan_server.py`側(`scan_strix`・`scan_cairn`)はポート5000を複数箇所にハードコード
+しており、この環境変数を認識できなかった。`local_scan_server.py`に`VULN_APP_PORT`(既定`5000`)を
+追加し、ハードコードされていた`5000`をすべてこの変数に置き換えた。`local_scan_server.py`を起動する
+前に`$env:VULN_APP_PORT="5100"`(PowerShell)のように指定すれば、GUI経由のStrix/Cairn自動起動も
+同じポートで動くようになる。
+
+あわせて、この調査の過程で見つけたもう1つの不具合も修正した: Strix自身が内部的に失敗した実行
+(`run.json`の`status`が`"failed"`。今回は、`mock_llm_server.py`に接続できず
+「LLM CONNECTION FAILED」で止まっていた)でも、`findings.sarif`は0件のまま書き出されてしまい、
+`scan_strix()`はそれをそのまま「成功(0件)」として返していた。GUI上は✅の成功表示になり、実際には
+スキャンが一度も実行されていないことに気づけない設計になっていた。`run.json`の`status`を確認し、
+`"failed"`等が含まれる場合は明確なエラー(`strix.log`の末尾付き)として返すよう修正した。
+
+実機確認(このサンドボックス内): `VULN_APP_PORT=5100`を指定して`local_scan_server.py`を起動し、
+`vulnerable_app.py`が実際にポート5100で自動起動すること、`/login`のSQLi認証バイパスがそのポートでも
+正しく動作することを確認。`run.json`の`status`判定ロジックも、ユーザーが実際に遭遇した
+`{"status": "failed"}`を模したフィクスチャで、正しくエラーとして検出されること(および通常の
+`"completed"`等では誤検知しないこと)を確認した。Strix本体はこのサンドボックスには実機が無く
+(`STRIX_LOCAL_DIR`未設定)、この部分の実機確認はユーザーの手元での再試行待ち。
+
 > 確認・検知の設計に限定。攻撃の実行手順や安全機構の回避方法は含めない。
 
 ---
