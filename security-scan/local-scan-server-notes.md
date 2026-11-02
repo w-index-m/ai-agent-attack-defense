@@ -332,6 +332,28 @@ Playwright確認だけでは気づけなかった。実機でのクリック操�
 
 Trivy以外はすべて実機で正常動作を確認済み。Trivyのみ、お手元での確認がまだ無い。
 
+### Windows実機でStrixを試した際に見つかり、修正したバグ(2026-11-02)
+
+ユーザーがWindows PCで実際にStrixセットアップ(`STRIX_LOCAL_DIR`設定・v1.7.0タグへのcheckout・
+パッチ適用・`uv sync`)を完了させた後、GUIから「Strixを実行」を押すと
+「対象(127.0.0.1:5000)またはmock_llm_server.pyの起動を確認できませんでした」というエラーで
+失敗した。
+
+原因は、`vulnerable_app.py`(DB_PATH)・`strix-local-poc/mock_llm_server.py`(LOG_PATH)の両方が、
+ログ/DBファイルの保存先として`/tmp/...`というLinux専用のパスをハードコードしていたこと。Windowsでは
+`/tmp`が存在しないため、両プロセスとも起動直後にファイルオープンでエラーになり、ポート5000・8899の
+どちらも開かず、`_ensure_background()`が20秒待っても確認できないまま上記のエラーメッセージになって
+いた。
+
+`os.path.join(tempfile.gettempdir(), ...)`に置き換えて修正(`tempfile.gettempdir()`はWindowsでは
+`C:\Users\<user>\AppData\Local\Temp`のような実在するパスを返す)。このサンドボックス内で、修正後に
+両プロセスが正常に起動し、`vulnerable_app.py`の`/login`SQLi認証バイパスも従来どおり動作することを
+確認した。
+
+`security-scan/strix-local-poc/mock_llm_server_chain.py`・`mock_llm_server_deserialize.py`にも
+同様の`/tmp`ハードコードがあるが、これらは`local_scan_server.py`からは呼ばれない独立したPoCスクリプト
+で、かつペイロード自体がUnixシェルコマンド(`curl`/`printf`/`cat`)前提のデモなので、今回は対象外とした。
+
 > 確認・検知の設計に限定。攻撃の実行手順や安全機構の回避方法は含めない。
 
 ---

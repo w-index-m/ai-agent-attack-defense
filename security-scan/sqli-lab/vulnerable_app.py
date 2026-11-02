@@ -17,6 +17,7 @@ import secrets as secrets_mod
 import socket
 import subprocess
 import sqlite3
+import tempfile
 import threading
 from urllib.parse import urlparse
 
@@ -33,7 +34,7 @@ from markupsafe import escape
 app = Flask(__name__)
 # Demo-only secret key, fine for a local lab; never do this in anything real.
 app.secret_key = "sqli-lab-demo-key-not-for-production"
-DB_PATH = "/tmp/sqli_lab.db"
+DB_PATH = os.path.join(tempfile.gettempdir(), "sqli_lab.db")
 DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs")
 
 
