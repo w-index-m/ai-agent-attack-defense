@@ -38,6 +38,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
 RESULTS_DIR = os.path.join(REPO_ROOT, "results", "local-scan")
 TIMEOUT_SEC = 300
+# sqli-labデモアプリ(vulnerable_app.py)の既定ポート。環境変数VULN_APP_PORTで変更できる
+# (例: Windowsでウイルス対策ソフト等が5000/5001番を常時専有している場合の回避策)。
+# vulnerable_app.py自身も同じ環境変数を見るので、起動時に渡す環境にも含めておけば一致する。
+VULN_APP_PORT = int(os.environ.get("VULN_APP_PORT", "5000"))
 
 # localhost 系オリジンだけを許可する（file:// から開いた場合、Origin ヘッダは "null" になる）。
 ALLOWED_ORIGIN_PREFIXES = ("http://localhost", "http://127.0.0.1", "null")
@@ -252,7 +256,7 @@ def scan_strix(body):
     target_ip, err = _resolve_single_target(body)
     if err:
         return err
-    target = "%s:5000" % target_ip
+    target = "%s:%d" % (target_ip, VULN_APP_PORT)
 
     strix_dir = os.environ.get("STRIX_LOCAL_DIR", "").strip()
     if not strix_dir or not os.path.isdir(strix_dir):
@@ -275,18 +279,21 @@ def scan_strix(body):
         # 既定(このリポジトリ自身のsqli-labデモアプリ)の場合だけ、ローカルで自動起動する。
         vuln_env = dict(os.environ)
         vuln_env.setdefault("VULN_APP_HOST", "127.0.0.1")
-        _ensure_background([sys.executable, vuln_app], REPO_ROOT, vuln_env, "127.0.0.1", 5000)
-    elif not _port_open(target_ip, 5000):
-        return {"error": "対象(%s:5000)に接続できません。許可範囲内の別端末を指定した場合は、"
+        vuln_env["VULN_APP_PORT"] = str(VULN_APP_PORT)
+        _ensure_background([sys.executable, vuln_app], REPO_ROOT, vuln_env, "127.0.0.1", VULN_APP_PORT)
+    elif not _port_open(target_ip, VULN_APP_PORT):
+        return {"error": "対象(%s:%d)に接続できません。許可範囲内の別端末を指定した場合は、"
                           "そちら側で対象アプリ(sqli-labのvulnerable_app.pyと同じ"
-                          "/loginエンドポイント相当)を先に起動しておいてください。" % target_ip}
+                          "/loginエンドポイント相当)を先に起動しておいてください。" % (target_ip, VULN_APP_PORT)}
     _ensure_background([sys.executable, mock_llm, "8899", target], REPO_ROOT, dict(os.environ),
                         "127.0.0.1", 8899)
 
-    if not _port_open(target_ip, 5000) or not _port_open("127.0.0.1", 8899):
-        return {"error": "対象(%s:5000)または mock_llm_server.py の起動を確認できませんでした。"
-                          "手動で起動してから再試行してください(詳細: " % target_ip +
-                          "security-scan/strix-local-poc/README.md)。"}
+    if not _port_open(target_ip, VULN_APP_PORT) or not _port_open("127.0.0.1", 8899):
+        return {"error": "対象(%s:%d)または mock_llm_server.py の起動を確認できませんでした。"
+                          "手動で起動してから再試行してください(詳細: " % (target_ip, VULN_APP_PORT) +
+                          "security-scan/strix-local-poc/README.md)。"
+                          "既定ポートが他のソフトに使われている場合は、環境変数VULN_APP_PORTで"
+                          "別のポートを指定できます。"}
 
     strix_env = dict(os.environ)
     strix_env["STRIX_RUNTIME_BACKEND"] = "local"
@@ -317,6 +324,28 @@ def scan_strix(body):
         return {"error": "Strixの実行結果(strix_runs配下)が見つかりませんでした。",
                 "returncode": p.returncode, "stderr": p.stderr.decode("utf-8", "replace")[-2000:]}
     run_id = new_runs[-1]
+    # Strix自身が"失敗"と記録した実行(例: LLMサーバーに繋がらなかった、サンドボックス起動に
+    # 失敗した等)でも、findings.sarif自体は(0件のまま)書き出されてしまう。run.jsonのstatusを
+    # 見て、黙って「0件=成功」として返さないようにする。
+    run_json_path = os.path.join(runs_dir, run_id, "run.json")
+    if os.path.exists(run_json_path):
+        try:
+            with open(run_json_path, encoding="utf-8") as f:
+                run_info = json.load(f)
+        except (OSError, ValueError):
+            run_info = {}
+        status = str(run_info.get("status", "")).lower()
+        if "fail" in status or "error" in status:
+            log_path = os.path.join(runs_dir, run_id, "strix.log")
+            log_tail = ""
+            if os.path.exists(log_path):
+                with open(log_path, encoding="utf-8", errors="replace") as f:
+                    log_tail = f.read()[-2000:]
+            return {"error": "Strixの実行自体が失敗しました(run.jsonのstatus=%s、run_id=%s)。"
+                              "sarifは0件のまま書き出されるため、これを無視すると見逃します。" % (status, run_id),
+                    "returncode": p.returncode,
+                    "stderr": p.stderr.decode("utf-8", "replace")[-2000:],
+                    "strix_log_tail": log_tail}
     sarif_path = os.path.join(runs_dir, run_id, "findings.sarif")
     if not os.path.exists(sarif_path):
         return {"error": "findings.sarifが見つかりませんでした(run_id=%s)。"
@@ -384,11 +413,12 @@ def scan_cairn(body):
         # 既定(このリポジトリ自身のsqli-labデモアプリ)の場合だけ、ローカルで自動起動する。
         vuln_env = dict(os.environ)
         vuln_env.setdefault("VULN_APP_HOST", "127.0.0.1")
-        _ensure_background([sys.executable, vuln_app], REPO_ROOT, vuln_env, "127.0.0.1", 5000)
-    elif not _port_open(target_ip, 5000):
-        return {"error": "対象(%s:5000)に接続できません。許可範囲内の別端末を指定した場合は、"
+        vuln_env["VULN_APP_PORT"] = str(VULN_APP_PORT)
+        _ensure_background([sys.executable, vuln_app], REPO_ROOT, vuln_env, "127.0.0.1", VULN_APP_PORT)
+    elif not _port_open(target_ip, VULN_APP_PORT):
+        return {"error": "対象(%s:%d)に接続できません。許可範囲内の別端末を指定した場合は、"
                           "そちら側で対象アプリ(sqli-labのvulnerable_app.pyと同じ"
-                          "/loginエンドポイント相当)を先に起動しておいてください。" % target_ip}
+                          "/loginエンドポイント相当)を先に起動しておいてください。" % (target_ip, VULN_APP_PORT)}
 
     cairn_env = dict(os.environ)
     cairn_env.setdefault("UV_DEFAULT_INDEX", "https://pypi.org/simple")
@@ -397,14 +427,16 @@ def scan_cairn(body):
          "--port", str(CAIRN_SERVE_PORT)],
         cairn_dir, cairn_env, "127.0.0.1", CAIRN_SERVE_PORT, wait_sec=30)
 
-    if not _port_open(target_ip, 5000) or not _port_open("127.0.0.1", CAIRN_SERVE_PORT):
-        return {"error": "対象(%s:5000)または cairn serve の起動を確認できませんでした。"
-                          "手動で起動してから再試行してください(詳細: " % target_ip +
-                          "security-scan/cairn-lab/cairn-authorized-lab-runbook.md)。"}
+    if not _port_open(target_ip, VULN_APP_PORT) or not _port_open("127.0.0.1", CAIRN_SERVE_PORT):
+        return {"error": "対象(%s:%d)または cairn serve の起動を確認できませんでした。"
+                          "手動で起動してから再試行してください(詳細: " % (target_ip, VULN_APP_PORT) +
+                          "security-scan/cairn-lab/cairn-authorized-lab-runbook.md)。"
+                          "既定ポートが他のソフトに使われている場合は、環境変数VULN_APP_PORTで"
+                          "別のポートを指定できます。"}
 
     cmd = [sys.executable, run_script, "--cairn-src", cairn_src,
            "--base-url", "http://127.0.0.1:%d" % CAIRN_SERVE_PORT,
-           "--target", "http://%s:5000" % target_ip]
+           "--target", "http://%s:%d" % (target_ip, VULN_APP_PORT)]
     try:
         p = subprocess.run(cmd, capture_output=True, timeout=CAIRN_TIMEOUT_SEC)
     except subprocess.TimeoutExpired:
@@ -424,7 +456,7 @@ def scan_cairn(body):
         return {"error": "Cairnの出力(YAML)の解析に失敗しました: %s" % e}
 
     target_uri = ("security-scan/sqli-lab/vulnerable_app.py" if target_ip == "127.0.0.1"
-                  else "http://%s:5000/login" % target_ip)
+                  else "http://%s:%d/login" % (target_ip, VULN_APP_PORT))
     facts = (parsed or {}).get("facts") or []
     results = []
     for fact in facts:
