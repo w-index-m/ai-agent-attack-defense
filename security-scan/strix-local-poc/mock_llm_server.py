@@ -8,10 +8,12 @@ with that real evidence, then call finish_scan to end the run cleanly. The clien
 requests stream=true (SSE), so responses are sent as OpenAI-style streaming chunks.
 """
 import json
+import os
 import sys
+import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-LOG_PATH = "/tmp/mock_llm/requests.jsonl"
+LOG_PATH = os.path.join(tempfile.gettempdir(), "mock_llm", "requests.jsonl")
 state = {"n": 0}
 
 # 対象(host:port)は第2引数で指定できる(既定: 127.0.0.1:5000、このリポジトリ自身のsqli-labデモアプリ)。
@@ -273,6 +275,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
     open(LOG_PATH, "w").close()
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8899
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
