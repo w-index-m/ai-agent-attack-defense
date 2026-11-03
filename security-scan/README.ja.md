@@ -31,11 +31,17 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
   | gitleaks | ✅ 確認済み(10/31) | 未確認(Docker無し) |
   | netcheck | ✅ 確認済み(10/31、実際の露出3件を検出) | ✅ ブラウザ操作まで確認 |
   | zgrab2 | 「未インストール」エラーの表示のみ確認(Go無し) | ✅ 本物をビルドして確認 |
-  | HTTPバナー取得(軽量) | **未確認** | ✅ |
+  | HTTPバナー取得(軽量) | ⚠️ 動作は確認(11/03、`127.0.0.1:80`から「CSPがない」「バージョン情報が出ている」の2件を取り込み)。ただし、要求がWindows側でなくWSL2側のサーバーに届いていた可能性があり、Windowsのサーバーでの実行は未確定 | ✅ |
   | 追加プロトコル(軽量) | **未確認** | ✅ 本物のサーバー13種類。MongoDB・MSSQL・Oracle・PPTP・Modbusは模擬サーバーのみ |
   | Strix | ✅ Windows 11+WSL2の実機で確認済み(11/03。画面はWindowsのブラウザ、StrixだけWSL2のサーバー(8767)へ送る構成。SQLi認証バイパス1件を取り込み、模擬LLMとのやり取り4回)。※攻撃手順は模擬LLMの台本で、AIの自律的な発見ではない。Windows上のサーバー単体では実行不可(押すとすぐエラー表示) | ✅ 実際のStrixでエンドツーエンド確認(11/03、ボタン経由で2回) |
-  | Cairn | **未確認**(10/31の実機確認の記録に含まれていない) | ✅ エンドツーエンドで確認 |
+  | Cairn | **未確認**(`CAIRN_LOCAL_DIR`未準備。11/03に押した際は、設定が無い旨のエラーが正しく表示された) | ✅ エンドツーエンドで確認 |
   | 自前LLMに質問 | ✅ Ollama(qwen2.5:1.5b)で確認。ただし**11/03の変更(指示とデータの分離)後は未確認** | 偽のLLMで送信内容を確認 |
+
+  **11/03の実機確認で分かった注意点**: 画面の「エンドポイント」を`http://localhost:8766`にしていても、
+  WSL2側(Linux)のサーバーが返事をしていた(エラー中の設定例が`export ...`、Windowsなら`$env:...`)。
+  `curl.exe http://localhost:8766/health`ではWindowsのサーバーが返事をしたので、`localhost`の
+  名前解決の違い(IPv6の`::1`経由でWSL2へ転送される)や、WSL2側に残った8766番のサーバーが原因と
+  みられる(未確定)。確実にWindowsのサーバーへ送るには、エンドポイントを`http://127.0.0.1:8766`にする。
 
   11/03に追加した監査ログ・ツール呼び出しガード・自己診断スクリプトも、Windows実機では未確認
   (サンドボックスとCIで確認済み)。以前この欄に「Windows実機で確認済み」と書いていたCairnは、
@@ -60,7 +66,8 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | 項目 | 状態 | 次にやること |
 |---|---|---|
 | Hermes・PentestGPT・hackingBuddyGPTのGUIボタン化 | 未着手 | Strix/Cairnと同じパターンで`local_scan_server.py`に追加 |
-| Windows実機で未確認のボタン(Trivy・HTTPバナー取得・追加プロトコル・Cairn)と11/03の変更 | 未確認 | サーバー起動中に`python scripts\local_scan_selfcheck.py --full`を実行し、`results\local-scan\selfcheck.txt`を確認。Cairnは`CAIRN_LOCAL_DIR`を設定してGUIから実行 |
+| Windows実機で未確認のボタン(Trivy・追加プロトコル・Cairn、Windowsのサーバーでの HTTPバナー取得)と11/03の変更 | 未確認 | まずエンドポイントを`http://127.0.0.1:8766`にし、Cairnのエラー中の設定例が`$env:...`になる(=Windowsのサーバーに届いている)ことを確認。そのうえで各ボタンを試すか、`python scripts\local_scan_selfcheck.py --full`を実行して`results\local-scan\selfcheck.txt`を確認。Cairnは`CAIRN_LOCAL_DIR`を設定してGUIから実行 |
+| WSL2側に8766番のサーバーが残っていないかの確認 | 未確認 | Ubuntuで`ss -ltnp \| grep python`。`:8766`があれば止める |
 | OS更新確認(Windows) | 未確認 | お手元のWindows PCで`os_patch_check_windows.py`を実行 |
 | OS更新確認(RHEL、本物のサブスクリプション版) | 未確認(Rocky Linuxでは確認済み) | 本物のサブスクリプション登録済みRHELがあれば確認(必須ではない) |
 | hackingBuddyGPTのバグ報告(GitHub Issue) | 未投稿 | 権限の都合でこのセッションからは投稿できず、下書きを渡し済み。ご自身で投稿するか、権限設定を変更して再依頼 |
