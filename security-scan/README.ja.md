@@ -33,7 +33,7 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
   | zgrab2 | 「未インストール」エラーの表示のみ確認(Go無し) | ✅ 本物をビルドして確認 |
   | HTTPバナー取得(軽量) | **未確認** | ✅ |
   | 追加プロトコル(軽量) | **未確認** | ✅ 本物のサーバー13種類。MongoDB・MSSQL・Oracle・PPTP・Modbusは模擬サーバーのみ |
-  | Strix | ❌ Windows上のサーバーでは実行不可(`local`バックエンドがUnix専用)。押すとすぐエラー表示。WSL2のサーバーを「Strix用エンドポイント」に指定して使う(WSL2からの接続は確認済み。実行は、11/03の修正後に要再確認) | ✅ 実際のStrixでエンドツーエンド確認(11/03、ボタン経由で2回) |
+  | Strix | ✅ Windows 11+WSL2の実機で確認済み(11/03。画面はWindowsのブラウザ、StrixだけWSL2のサーバー(8767)へ送る構成。SQLi認証バイパス1件を取り込み、模擬LLMとのやり取り4回)。※攻撃手順は模擬LLMの台本で、AIの自律的な発見ではない。Windows上のサーバー単体では実行不可(押すとすぐエラー表示) | ✅ 実際のStrixでエンドツーエンド確認(11/03、ボタン経由で2回) |
   | Cairn | **未確認**(10/31の実機確認の記録に含まれていない) | ✅ エンドツーエンドで確認 |
   | 自前LLMに質問 | ✅ Ollama(qwen2.5:1.5b)で確認。ただし**11/03の変更(指示とデータの分離)後は未確認** | 偽のLLMで送信内容を確認 |
 
@@ -60,7 +60,6 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | 項目 | 状態 | 次にやること |
 |---|---|---|
 | Hermes・PentestGPT・hackingBuddyGPTのGUIボタン化 | 未着手 | Strix/Cairnと同じパターンで`local_scan_server.py`に追加 |
-| StrixのGUIボタン、実機でのフル動作確認 | Windowsネイティブで失敗 | WSL2でポート8767のサーバーを起動し、「Strix用エンドポイント」に指定して確認([`strix-local-poc/README.md`](strix-local-poc/README.md)の「Windowsの場合」) |
 | Windows実機で未確認のボタン(Trivy・HTTPバナー取得・追加プロトコル・Cairn)と11/03の変更 | 未確認 | サーバー起動中に`python scripts\local_scan_selfcheck.py --full`を実行し、`results\local-scan\selfcheck.txt`を確認。Cairnは`CAIRN_LOCAL_DIR`を設定してGUIから実行 |
 | OS更新確認(Windows) | 未確認 | お手元のWindows PCで`os_patch_check_windows.py`を実行 |
 | OS更新確認(RHEL、本物のサブスクリプション版) | 未確認(Rocky Linuxでは確認済み) | 本物のサブスクリプション登録済みRHELがあれば確認(必須ではない) |

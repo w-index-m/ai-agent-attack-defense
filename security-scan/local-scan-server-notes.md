@@ -511,6 +511,25 @@ Strixのエラー出力の最後は`LocalDirReadError: failed to read local dir 
   「動くはず」として渡していた。今回のサンドボックスには、実は必要なもの(Strixの作業コピーとuv)が
   揃っていた。確認できないと判断する前に、手元にあるもので最後まで動かせないかを先に確かめる。
 
+### Windows 11+WSL2の実機で、Strixボタンの動作を確認(2026-11-03)
+
+上の修正(一時フォルダからの起動)の後、ユーザーのWindows 11 PCで確認した。
+
+- 構成: Windows(PowerShell)で`local_scan_server.py`(8766)、WSL2(Ubuntu、Python 3.14)で
+  `STRIX_LOCAL_DIR=~/strix VULN_APP_PORT=5100 VULN_INTERNAL_PORT=5101 python3 scripts/local_scan_server.py --port 8767`。
+  `vuln_triage.html`はWindowsのブラウザで開き、「Strix用エンドポイント」に`http://localhost:8767`を指定。
+- Windowsから`curl.exe http://localhost:8767/health`で`"platform": "linux"`が返り、WSL2のサーバーへ
+  `localhost`で届くことを確認。
+- 「Strixを実行」で✅。「2. 全体像」に高1件(SQLi認証バイパス)が入り、攻撃連鎖の「ログイン画面の
+  SQLインジェクション」に1件該当。`/tmp/mock_llm/requests.jsonl`は4行(失敗時は1行)で、Strixが
+  模擬LLMとやり取りしながら最後まで進んだことも確認。
+- 注意: 攻撃の手順は模擬LLMの台本であり、AIが自律的に脆弱性を見つけたことを示すものではない。
+  確認できたのは、Strixの実行の仕組み(実行環境の作成・コマンド実行・レポート生成)が、この構成で
+  正しく動くこと。
+- 途中でつまずいた点: 古いサーバーが動いたまま起動し直すと`OSError: [Errno 98] Address already in use`
+  になる(`pkill -f "local_scan_server.py --port 8767"`で止めてから起動する)。WSL2用のコマンドを
+  PowerShellに入力してしまう(先に`wsl`でUbuntuに入る)。
+
 ## English summary
 
 Adds `scripts/local_scan_server.py`, a small localhost-only companion HTTP server that lets
