@@ -147,6 +147,7 @@ CVEではなく未適用更新の一般的な棚卸し)、`scripts/dep_cve_check
 | [`llm-target-attacks.ja.md`](llm-target-attacks.ja.md) / [`.en.md`](llm-target-attacks.en.md) | **LLM システム自体への攻撃**（プロンプトインジェクション、システムプロンプト漏洩、間接的プロンプトインジェクション、LLMjacking、**マルチエージェント間のセッション悪用**の5類型）の、一次情報に基づく整理。既存の R1–R8/G1–G6 との接続点つき（C・D・EはR9–R11として実装済み）。Unit 42 の CrewAI/AutoGen 実証研究・Web経由IDPIの大規模実態調査・GCP Vertex AI "Double Agents"・Agent Session Smuggling（A2Aプロトコル）も収録。 |
 | [`openclaw-skill-supply-chain.ja.md`](openclaw-skill-supply-chain.ja.md) / [`.en.md`](openclaw-skill-supply-chain.en.md) | AIエージェント **OpenClaw** のスキル・マーケットプレイス **ClawHub** を舞台にした、Unit 42 の2本の一次情報の整理。悪性スキルの実例（情報窃取・スキャン回避・エージェント特有の金銭目的型）と、振る舞い整合性検証（BIV）によるレジストリ全体調査（49,943件中80%に乖離）。 |
 | [`llm-defense-checklist.ja.md`](llm-defense-checklist.ja.md) / [`.en.md`](llm-defense-checklist.en.md) | `llm-target-attacks.ja.md` の5類型の予防・検知項目を、**自分のシステムで守られているか確認するチェックリスト**にしたもの。自動判定スクリプトではなく、人が確認する前提。 |
+| [`ai-security-roadmap-mapping.md`](ai-security-roadmap-mapping.md) | SNSで広まっている**AIセキュリティ学習ロードマップ(12段階)**と、このリポジトリの対応表。足りなかった部分として、GUIの間接プロンプトインジェクション対策・改ざん検知つき監査ログ(`scripts/audit_log.py`)・エージェントのツール呼び出しガード(`scripts/agent_tool_guard.py`)・その回帰テスト(CIで毎回実行)を追加した経緯と限界。 |
 
 ### 検知ルールの実装
 
