@@ -816,6 +816,7 @@ function llmContext(){
     var el=$("scan-status");
     el.textContent=text;
     el.className="note"+(kind?(" "+kind):"");
+    el.style.whiteSpace="pre-wrap";
   }
   async function callScan(path,body,label,baseOverride){
     if(scanRunning){setScanStatus("他のスキャンが実行中です。終わるまでお待ちください。","err");return}
@@ -828,11 +829,20 @@ function llmContext(){
       setScanStatus(label+" を実行中…("+s+"秒経過。数十秒〜数分かかることがあります)","busy");
     },1000);
     setScanStatus(label+" を実行中…(0秒経過)","busy");
+    var reached=false;
     try{
       var r=await fetch(base+path,{method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify(body||{})});
+      reached=true;
       var j=await r.json();
-      if(!r.ok||(j&&j.error)){throw new Error((j&&j.error)||("HTTP "+r.status))}
+      if(!r.ok||(j&&j.error)){
+        /* サーバーが返す詳細(Strixのエラー出力・ログの末尾)も表示する。これが無いと原因が分からない */
+        var detail="";
+        if(j&&j.stderr&&String(j.stderr).trim())detail+="\n--- エラー出力(末尾) ---\n"+String(j.stderr).trim().slice(-1500);
+        if(j&&j.strix_log_tail&&String(j.strix_log_tail).trim())detail+="\n--- strix.log(末尾) ---\n"+String(j.strix_log_tail).trim().slice(-800);
+        if(j&&j.returncode!=null)detail+="\n(終了コード: "+j.returncode+")";
+        throw new Error(((j&&j.error)||("HTTP "+r.status))+detail);
+      }
       var skipMsg=addJson(JSON.stringify(j),label+"(ローカルスキャナー)");
       if(skipMsg){
         setScanStatus("⚠️ "+skipMsg,"err");
@@ -843,8 +853,10 @@ function llmContext(){
         setMsg(label+"(ローカルスキャナー)の結果を取り込みました。"+extra,!!j.truncated);
       }
     }catch(err){
+      /* サーバーに届いてエラーが返った場合は、その本文が原因。接続の確認を促す一文は、届かなかった時だけ出す
+         (毎回出すと、関係ない「Docker」等を疑わせてしまう) */
       setScanStatus("❌ エラー: "+(err&&err.message?err.message:err)+
-        " (確認: ①local_scan_server.pyが起動しているか ②エンドポイントURL ③必要なツール/Dockerが入っているか)","err");
+        (reached?"":" (確認: ①local_scan_server.pyが起動しているか ②エンドポイントURL("+base+")が正しいか)"),"err");
     }finally{
       clearInterval(timer);scanRunning=false;setScanButtonsDisabled(false);
     }

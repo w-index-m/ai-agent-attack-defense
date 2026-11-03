@@ -365,14 +365,27 @@ def scan_strix(body):
     strix_env["OPENAI_API_BASE"] = "http://127.0.0.1:8899/v1"
     strix_env["OPENAI_API_KEY"] = "dummy-mock-key"
 
-    before_runs = set()
-    runs_dir = os.path.join(strix_dir, "strix_runs")
-    if os.path.isdir(runs_dir):
-        before_runs = set(os.listdir(runs_dir))
+    # Strixの「-t ./」は、カレントフォルダの中身を丸ごと実行環境へコピーする。Strixの作業コピー自身
+    # (STRIX_LOCAL_DIR)で実行すると、その中の.venvにあるシンボリックリンクをSDKが読めず
+    # (LocalDirReadError: symlink_not_supported)、必ず失敗する(2026-11-03、WSL2の実機で発見)。
+    # 毎回、シンボリックリンクの無い一時フォルダにsqli-labのコードだけをコピーし、そこから
+    # `uv run --project <STRIX_LOCAL_DIR>`で起動する(手動での検証で成功していた手順と同じ)。
+    work_dir = tempfile.mkdtemp(prefix="strix-gui-target-")
+    lab_dst = os.path.join(work_dir, "security-scan", "sqli-lab")
+    os.makedirs(lab_dst)
+    lab_src = os.path.dirname(vuln_app)
+    for name in sorted(os.listdir(lab_src)):
+        src = os.path.join(lab_src, name)
+        if name.endswith(".py") and os.path.isfile(src) and not os.path.islink(src):
+            shutil.copyfile(src, os.path.join(lab_dst, name))
 
-    cmd = ["uv", "run", "strix", "-n", "-t", "./", "--scan-mode", "quick", "--max-budget", "10"]
+    before_runs = set()
+    runs_dir = os.path.join(work_dir, "strix_runs")
+
+    cmd = ["uv", "run", "--project", strix_dir, "strix", "-n", "-t", "./",
+           "--scan-mode", "quick", "--max-budget", "10"]
     try:
-        p = subprocess.run(cmd, cwd=strix_dir, env=strix_env, capture_output=True,
+        p = subprocess.run(cmd, cwd=work_dir, env=strix_env, capture_output=True,
                             timeout=STRIX_TIMEOUT_SEC)
     except subprocess.TimeoutExpired:
         return {"error": "Strixの実行がタイムアウトしました(%d秒)。" % STRIX_TIMEOUT_SEC}
@@ -411,7 +424,8 @@ def scan_strix(body):
                         "OpenAI Agents SDKのUnixLocalSandboxClient(Unix専用)を使うため、Windowsでは"
                         "サンドボックスの作成で失敗する可能性が高いです。WSL2(Ubuntu等)上での実行を推奨します。")
             return {"error": "Strixの実行自体が失敗しました(run.jsonのstatus=%s、run_id=%s)。"
-                              "sarifは0件のまま書き出されるため、これを無視すると見逃します。%s" % (status, run_id, hint),
+                              "sarifは0件のまま書き出されるため、これを無視すると見逃します。ログ: %s。%s"
+                              % (status, run_id, os.path.join(runs_dir, run_id), hint),
                     "returncode": p.returncode,
                     "stderr": p.stderr.decode("utf-8", "replace")[-2000:],
                     "strix_log_tail": log_tail}
@@ -421,7 +435,10 @@ def scan_strix(body):
                           "脆弱性が検出されなかった可能性があります。" % run_id,
                 "returncode": p.returncode}
     with open(sarif_path, encoding="utf-8") as f:
-        return json.load(f)
+        result = json.load(f)
+    # 成功時だけ一時フォルダを消す(失敗時は、ログを調べられるよう残す)
+    shutil.rmtree(work_dir, ignore_errors=True)
+    return result
 
 
 CAIRN_SERVE_PORT = 8010  # このエンドポイント専用。他で手動起動したcairn serveと衝突しないよう固定ポート
