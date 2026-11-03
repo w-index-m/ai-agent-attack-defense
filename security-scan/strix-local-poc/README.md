@@ -117,10 +117,11 @@ python3 scripts/local_scan_server.py
 監査ログはポートごとに別ファイル(8767は`results/local-scan/audit-8767.jsonl`)。同じファイルに
 2つのサーバーが同時に書くと番号が重複して検証がNGになることを、テストで確認したため。
 
-確認状況: Windows上のサーバーでStrixを押したときの即時エラー、「Strix用エンドポイント」への振り分け、
-他のボタンが従来のサーバーへ送られること、監査ログの分離は、このサンドボックス(Linux。Windowsの
-判定を模擬)と実際のブラウザで確認した。WSL2での実行と、Windowsのブラウザから`localhost`でWSL2へ
-接続できることは、この環境では確認できていない。
+確認状況: 2026-11-03に、Windows 11+WSL2(Ubuntu)の実機で、この手順どおりにStrixを実行し、SQLi認証
+バイパスの指摘を画面に取り込めた(Windowsのブラウザから`localhost:8767`でWSL2のサーバーへ届くことも
+確認)。手順2のコマンドは、PowerShellではなく、`wsl`と入力して入ったUbuntuの中で実行する。古いサーバーが
+動いたままだと`Address already in use`になるので、`pkill -f "local_scan_server.py --port 8767"`で止めてから
+起動する。
 
 既定では`sqli-lab`デモアプリはポート5000(内部ポート5001)で起動する。Windows環境で、ウイルス対策
 ソフトなどの常駐プロセスがこのポートを既に専有していて起動に失敗する場合は、`local_scan_server.py`を
