@@ -67,7 +67,32 @@ Strixを使うには、事前に[`strix-local-poc/README.md`](strix-local-poc/RE
 状態で`local_scan_server.py`を起動すること。「sqli-labデモアプリへの攻撃実行に同意する」チェック
 ボックスの明示も必要(実際にSQLi認証バイパス等のペイロードを、このリポジトリ自身のデモアプリに
 送る能動的な操作のため)。`vulnerable_app.py`・`mock_llm_server.py`は、まだ起動していなければ
-エンドポイント自身が自動で起動する。
+エンドポイント自身が自動で起動する(`local_scan_server.py`をCtrl+Cで止めると一緒に止まる)。
+
+### Windows 11(PowerShell)での手順
+
+コマンドはすべてPowerShell構文(`$env:名前="値"`)。cmd.exeの`set`や`%TEMP%`、bashの`export`は
+PowerShellでは使えない。環境変数は、`local_scan_server.py`を起動する**同じウィンドウ**で設定する。
+
+```powershell
+cd C:\Users\<ユーザー名>\ai-agent-attack-defense
+git pull
+# 必要なときだけ(ポート5000/5001を他のソフトが使っている場合)
+$env:VULN_APP_PORT="5100"; $env:VULN_INTERNAL_PORT="5101"
+python scripts\local_scan_server.py
+```
+
+起動メッセージに、`STRIX_LOCAL_DIR`/`CAIRN_LOCAL_DIR`の設定状態とデモアプリのポートが表示される。
+別のPowerShellウィンドウで自己診断を実行すると、環境・ポート・各機能の疎通をまとめて確認できる
+(結果は`results\local-scan\selfcheck.txt`にも保存される)。
+
+```powershell
+python scripts\local_scan_selfcheck.py          # 数十秒
+python scripts\local_scan_selfcheck.py --full   # Semgrep/Trivy/gitleaksも実行(数分)
+```
+
+Strixは、`local`バックエンドがUnix専用の部品を使うため、Windowsネイティブでは動かない可能性が高い。
+WSL2(Ubuntu)上での実行を推奨する。
 
 ## 検証の状態（正直に）
 
@@ -414,6 +439,45 @@ Hyper-V/WSL2のポート除外範囲が原因ではなく、**「agent」とい�
   になっていた(GUIの「古いTLSが使われている」判定が働かない)。最低バージョンを下げたコンテキストを
   使うようにし、TLS1.0専用の試験サーバーで、修正前は握手失敗、修正後は`TLSv1`を記録できることを
   確認した。
+
+### Windows対応の総点検と、実機エラーから見えたミスの傾向(2026-11-03)
+
+Windows 11で実際に使ってもらう中で、pull・再試行が何度も必要になった。実機のエラーログを振り返り、
+同じ種類のミスを残さないよう、関係するPythonスクリプト一式を総点検した。このサンドボックスはLinuxの
+ため、Windows実機での確認はできていない。日本語版Windowsの条件(文字コードcp932)を
+`PYTHONIOENCODING=cp932`と`-X warn_default_encoding`で再現して確認した。
+
+**実機エラーから見えたミスの傾向**
+
+| 傾向 | 実際に起きたこと | 対策 |
+|---|---|---|
+| Linuxでの動作をそのまま前提にした | `/tmp`の決め打ちで、デモアプリとモックLLMがWindowsで起動直後に落ちた | `tempfile.gettempdir()`に統一 |
+| 文字コードを指定しなかった | (総点検で発見。まだ実機では未遭遇)日本語Windowsでは、ファイル書き込みやリダイレクト出力で、cp932に無い文字(絵文字・U+FFFD等)があると例外で落ちる | `open(..., encoding="utf-8")`と、JSON Lines出力の標準出力をUTF-8に固定 |
+| 設定値を部品ごとに別々に持った | デモアプリはポートを環境変数で変えられるのに、サーバー側は5000を固定で書いていた | `VULN_APP_PORT`をサーバー側でも参照し、起動メッセージに表示 |
+| 案内したコマンドのシェルを取り違えた | PowerShellの利用者にcmd.exe構文(`set`・`%TEMP%`・`dir /o-d`)を案内し、往復が増えた。複数ウィンドウを使う手順で手順漏れも誘発した | エラーメッセージの環境変数例をOSに合わせて表示し、手順書はPowerShell構文に統一 |
+| 前提バージョンを手順に書かなかった | パッチはStrix v1.7.0専用なのにcloneの手順にタグ指定が無く、`git apply`が失敗した | 手順とエラーメッセージに`git checkout v1.7.0`を明記 |
+| 失敗を成功として表示した | Strixの内部失敗(`run.json`の`status=failed`)でも、0件のSARIFを✅として取り込み、真因の発見が遅れた | `run.json`を確認してエラーとして返す |
+| ログの証拠と合わない結論を出した | モックへの疎通確認が成功している記録があるのに「モックLLMに接続できなかった」と説明した。本当の原因は、Unix専用部品(`UnixLocalSandboxClient`)を使う`local`バックエンドだった。パッチ内のクラス名から事前に気づけた | 結論を出す前に、ログの各行と矛盾しないか照合する。Windowsでの失敗時はエラーに注意書きを出す |
+| 自作の模擬サーバーが、自分の誤りを再現してしまった | PPTPの応答オフセットやTNSの記述子オフセットの誤りが、同じ理解で作った模擬サーバーでは「成功」に見えた | 模擬サーバー側で、受け取った値と仕様上の位置を突き合わせる。可能な限り本物のサーバーで確認する |
+| 状態が持ち越されることを想定しなかった | 使い回すモックLLMの手数カウントで2回目以降が0件になった。自動起動したデモアプリが残り、ポートを塞いだ | 実行ごとにリセットし、サーバー停止時に子プロセスも止める |
+
+**総点検の結果(このコミットで修正したもの)**
+
+- `mock_llm_server.py`: ログの読み書き3箇所で文字コード未指定。日本語Windowsでは、絵文字を含む要求で
+  例外になる(`-X warn_default_encoding`で実行時に3箇所すべてを検出)。
+- `multi_proto_lite.py`・`http_lite_banner.py`: `> out.jsonl`のようにファイルへ保存すると、標準出力が
+  cp932になり、Telnetバナー等に含まれる文字で落ちる(cp932を再現して`UnicodeEncodeError`を確認)。
+- `local_scan_server.py`: 環境変数の設定例をbash構文だけで出していた(PowerShellでは使えない)。
+  自動起動した子プロセスがサーバー停止後も残っていた(Ctrl+Cで止まることを確認)。起動時に
+  `STRIX_LOCAL_DIR`等が効いているか分からなかった。
+- Strixの手順とエラーメッセージに、バージョン指定(`git checkout v1.7.0`)が無かった。
+- 自己診断スクリプト`scripts/local_scan_selfcheck.py`を追加した(上の「Windows 11(PowerShell)での手順」
+  参照)。ポートの判定では、使用中(WinError 10048)とウイルス対策ソフト等によるブロック
+  (WinError 10013)を区別する。
+
+全エンドポイントを、正常系・同意なし・範囲外・不正なモジュール名・不正なポート・前提ツール無しの
+各ケースで呼び出し、500(内部エラー)が1件も出ないこと、実行時の文字コード警告がゼロになったことを
+確認した。
 
 > 確認・検知の設計に限定。攻撃の実行手順や安全機構の回避方法は含めない。
 

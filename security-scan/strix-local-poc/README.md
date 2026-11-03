@@ -22,7 +22,8 @@
 ```bash
 # 1) strix を取得して依存を入れる
 git clone https://github.com/usestrix/strix
-cd strix && uv sync
+cd strix && git checkout v1.7.0   # パッチはv1.7.0専用。最新(main)には当たらない
+uv sync
 
 # 2) パッチを当てる
 git apply /path/to/strix-local-backend.patch
@@ -61,6 +62,7 @@ uv run strix -n -t ./ --scan-mode quick --max-budget 10
 # 事前準備(初回だけ、上記3c)と同じ)
 git clone https://github.com/usestrix/strix /path/to/strix
 cd /path/to/strix
+git checkout v1.7.0   # パッチはv1.7.0専用。最新(main)には当たらない
 git apply /path/to/strix-local-backend.patch
 uv sync
 

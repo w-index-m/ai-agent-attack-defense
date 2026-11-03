@@ -217,7 +217,8 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             req = {"_raw": body.decode(errors="replace")}
 
-        with open(LOG_PATH, "a") as f:
+        # 日本語版Windowsの既定(cp932)では、絵文字等を含む要求の書き込みで例外になるためUTF-8を明示する。
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(req, ensure_ascii=False) + "\n")
 
         state["n"] += 1
@@ -265,7 +266,8 @@ class Handler(BaseHTTPRequestHandler):
             sse_chunk(self.wfile, {**base, "choices": [{"index": 0, "delta": {"role": "assistant", "content": "OK"}, "finish_reason": None}]})
             sse_chunk(self.wfile, {**base, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
         else:
-            real_turns_seen = sum(1 for line in open(LOG_PATH) if json.loads(line).get("tools"))
+            with open(LOG_PATH, encoding="utf-8") as f:
+                real_turns_seen = sum(1 for line in f if json.loads(line).get("tools"))
             target = current_target()
             if real_turns_seen <= 1:
                 name, args = "exec_command", {"cmd": recon_cmd(target)}
@@ -297,7 +299,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     os.makedirs(STATE_DIR, exist_ok=True)
-    open(LOG_PATH, "w").close()
+    open(LOG_PATH, "w", encoding="utf-8").close()
     with open(TARGET_FILE, "w", encoding="utf-8") as f:
         f.write(TARGET)  # 前回の実行で残った対象より、起動時の引数を優先する
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8899

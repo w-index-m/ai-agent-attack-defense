@@ -877,6 +877,9 @@ def main():
                      help="入力した対象は、自社が管理している(または書面で許可を得た)ものである")
     ap.add_argument("--timeout", type=float, default=5.0, help="接続タイムアウト秒(既定5秒)")
     a = ap.parse_args()
+    # 日本語版Windowsでファイルへリダイレクトすると標準出力がcp932になり、バナーに含まれる文字
+    # (例: U+FFFD)で落ちる。出力はvuln_triage.htmlに読ませるJSON Linesなので常にUTF-8で書く。
+    sys.stdout.reconfigure(encoding="utf-8")
 
     if not a.consent:
         print("拒否: --i-own-these が必要です(対象が自社の管理下、または書面の許可があることの明示)。", file=sys.stderr)
