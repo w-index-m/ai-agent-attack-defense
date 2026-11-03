@@ -530,6 +530,23 @@ Strixのエラー出力の最後は`LocalDirReadError: failed to read local dir 
   になる(`pkill -f "local_scan_server.py --port 8767"`で止めてから起動する)。WSL2用のコマンドを
   PowerShellに入力してしまう(先に`wsl`でUbuntuに入る)。
 
+### 同日の続き: HTTPバナー取得と、要求がWSL2側のサーバーに届いていた件(2026-11-03)
+
+- 「HTTPバナー取得(軽量)」を押すと、`127.0.0.1:80`から「CSPがない」(中)・「応答にバージョン情報が
+  出ている」(低)の2件が取り込まれた(ポート80で動いているWebサーバーの実際の応答)。
+- その後Cairnを押すと、`CAIRN_LOCAL_DIR`未設定のエラーの設定例が`export CAIRN_LOCAL_DIR=...`
+  (Linux向け)だった。Windowsのサーバーなら`$env:...`と表示する作りなので、要求はWSL2側のサーバーが
+  受けていた。エンドポイント欄は`http://localhost:8766`で、PowerShellの`curl.exe`では8766が
+  `"platform": "windows"`、8767が`"linux"`を返しており、サーバー自体は正しく分かれていた。
+- 原因の推定(未確定): ブラウザは`localhost`をIPv6の`::1`で先に試す。WSL2の`localhost`転送は
+  `::1`側でも待ち受けるため、WSL2側に`--port`無しで起動した8766番のサーバーが残っていると、
+  ブラウザだけがそちらにつながる。`127.0.0.1`を指定すれば、この食い違いは起きない。
+- このため、上のHTTPバナー取得も、WSL2側のサーバーで実行された可能性がある(ボタン自体が動くことは
+  確認できた)。次回は、エンドポイントを`http://127.0.0.1:8766`にして確かめ直す。
+- 画面の改善点(未対応): 要求に返事をしたサーバー(Windows/Linux)を結果の表示に出すと、この種の
+  食い違いにすぐ気づける。Strixの指摘の場所が、Strix自身の出力どおり`SECURITY.md`と表示される
+  (実際の場所`/login`はSARIFの`logicalLocations`に入っている)。
+
 ## English summary
 
 Adds `scripts/local_scan_server.py`, a small localhost-only companion HTTP server that lets
