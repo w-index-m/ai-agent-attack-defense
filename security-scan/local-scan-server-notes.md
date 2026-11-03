@@ -94,8 +94,10 @@ python scripts\local_scan_selfcheck.py          # 数十秒
 python scripts\local_scan_selfcheck.py --full   # Semgrep/Trivy/gitleaksも実行(数分)
 ```
 
-Strixは、`local`バックエンドがUnix専用の部品を使うため、Windowsネイティブでは動かない可能性が高い。
-WSL2(Ubuntu)上での実行を推奨する。
+Strixは、`local`バックエンドがUnix専用の部品を使うため、Windows上で起動したサーバーでは実行できない
+(押すとすぐにエラーと手順を表示する)。画面はWindowsのブラウザのまま、WSL2(Ubuntu)でポート8767の
+2つ目のサーバーを起動し、接続設定の「Strix用エンドポイント」に`http://localhost:8767`を入れる。
+手順: [`strix-local-poc/README.md`](strix-local-poc/README.md)の「Windowsの場合」。
 
 ## 検証の状態（正直に）
 

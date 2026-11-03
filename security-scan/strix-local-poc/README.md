@@ -76,10 +76,51 @@ python3 scripts/local_scan_server.py
 `sqli-lab`デモアプリへ攻撃ペイロードを送ることへの同意チェックボックスを明示的に要求する。結果は
 `findings.sarif`として返り、`vuln_triage.html`の既存SARIF取り込みにそのまま乗る。
 
-**Windowsの場合**: `local`バックエンドはOpenAI Agents SDKの`UnixLocalSandboxClient`(Unix専用)を
-使うため、Windowsネイティブではサンドボックス作成の時点で失敗する可能性が高い(実機で
-`run.json`の`status`が`failed`になることを確認)。WSL2(Ubuntu等)上でStrix・`local_scan_server.py`を
-動かすことを推奨する。
+### Windowsの場合: 画面はWindows、StrixだけWSL2のサーバーで動かす
+
+`local`バックエンドはOpenAI Agents SDKの`UnixLocalSandboxClient`(Unix専用)を使うため、Windows上で
+起動した`local_scan_server.py`ではStrixを実行できない(2026-11-02に実機で`run.json`の`status`が
+`failed`になることを確認)。そのため、Windows上のサーバーで「Strixを実行」を押すと、数分待たずに
+すぐ理由と手順をエラー表示する(起動時のメッセージと自己診断にも表示される)。
+
+`vuln_triage.html`はブラウザで開くただのページで、ボタンを押すと、接続設定に書いたURLへHTTPで
+要求を送るだけ。サーバーがどこで動いているかは問わないので、**画面はWindowsのブラウザのまま、Strix
+だけWSL2で起動したサーバーに送る**ことができる。WSL2で起動したサーバーには、Windowsのブラウザから
+通常`localhost`で接続できる(WSL2の既定の機能)。
+
+1. いつも通り、Windows(PowerShell)で`python scripts\local_scan_server.py`を起動する(ポート8766。
+   Semgrep・Trivy・gitleaks・netcheck・Cairn等はこちら)。
+2. WSL2(Ubuntu)のターミナルで、2つ目のサーバーをポート8767で起動する。作業フォルダはWSL側に
+   cloneするのがおすすめ(`/mnt/c/...`のWindows側フォルダより速い)。
+
+   ```bash
+   # 初回だけ
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   git clone https://github.com/w-index-m/ai-agent-attack-defense ~/ai-agent-attack-defense
+   git clone https://github.com/usestrix/strix ~/strix
+   cd ~/strix && git checkout v1.7.0
+   git apply ~/ai-agent-attack-defense/security-scan/strix-local-poc/strix-local-backend.patch
+   uv sync
+
+   # 毎回
+   cd ~/ai-agent-attack-defense && git pull
+   STRIX_LOCAL_DIR=~/strix VULN_APP_PORT=5100 VULN_INTERNAL_PORT=5101 \
+     python3 scripts/local_scan_server.py --port 8767
+   ```
+
+   `VULN_APP_PORT=5100`は、WSL2の「ミラーモード」でWindowsとポートを共有している場合に、Windows側で
+   5000/5001を使っている常駐ソフトとぶつからないようにするため(ぶつからない環境なら省略可)。
+3. `vuln_triage.html`の「接続設定」で、「Strix用エンドポイント」に`http://localhost:8767`を入れる
+   (この端末に保存される)。以後、「Strixを実行」だけがWSL2のサーバーへ送られ、他のボタンは
+   これまで通りWindowsのサーバー(8766)へ送られる。
+
+監査ログはポートごとに別ファイル(8767は`results/local-scan/audit-8767.jsonl`)。同じファイルに
+2つのサーバーが同時に書くと番号が重複して検証がNGになることを、テストで確認したため。
+
+確認状況: Windows上のサーバーでStrixを押したときの即時エラー、「Strix用エンドポイント」への振り分け、
+他のボタンが従来のサーバーへ送られること、監査ログの分離は、このサンドボックス(Linux。Windowsの
+判定を模擬)と実際のブラウザで確認した。WSL2での実行と、Windowsのブラウザから`localhost`でWSL2へ
+接続できることは、この環境では確認できていない。
 
 既定では`sqli-lab`デモアプリはポート5000(内部ポート5001)で起動する。Windows環境で、ウイルス対策
 ソフトなどの常駐プロセスがこのポートを既に専有していて起動に失敗する場合は、`local_scan_server.py`を
