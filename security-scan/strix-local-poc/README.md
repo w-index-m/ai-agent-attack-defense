@@ -22,7 +22,8 @@
 ```bash
 # 1) strix を取得して依存を入れる
 git clone https://github.com/usestrix/strix
-cd strix && uv sync
+cd strix && git checkout v1.7.0   # パッチはv1.7.0専用。最新(main)には当たらない
+uv sync
 
 # 2) パッチを当てる
 git apply /path/to/strix-local-backend.patch
@@ -61,6 +62,7 @@ uv run strix -n -t ./ --scan-mode quick --max-budget 10
 # 事前準備(初回だけ、上記3c)と同じ)
 git clone https://github.com/usestrix/strix /path/to/strix
 cd /path/to/strix
+git checkout v1.7.0   # パッチはv1.7.0専用。最新(main)には当たらない
 git apply /path/to/strix-local-backend.patch
 uv sync
 
@@ -73,6 +75,11 @@ python3 scripts/local_scan_server.py
 自身が自動で起動する(手動で先に立ち上げておく必要はない)。GUI側は、能動的にこのリポジトリ自身の
 `sqli-lab`デモアプリへ攻撃ペイロードを送ることへの同意チェックボックスを明示的に要求する。結果は
 `findings.sarif`として返り、`vuln_triage.html`の既存SARIF取り込みにそのまま乗る。
+
+**Windowsの場合**: `local`バックエンドはOpenAI Agents SDKの`UnixLocalSandboxClient`(Unix専用)を
+使うため、Windowsネイティブではサンドボックス作成の時点で失敗する可能性が高い(実機で
+`run.json`の`status`が`failed`になることを確認)。WSL2(Ubuntu等)上でStrix・`local_scan_server.py`を
+動かすことを推奨する。
 
 既定では`sqli-lab`デモアプリはポート5000(内部ポート5001)で起動する。Windows環境で、ウイルス対策
 ソフトなどの常駐プロセスがこのポートを既に専有していて起動に失敗する場合は、`local_scan_server.py`を

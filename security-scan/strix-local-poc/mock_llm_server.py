@@ -13,16 +13,41 @@ import sys
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-LOG_PATH = os.path.join(tempfile.gettempdir(), "mock_llm", "requests.jsonl")
+STATE_DIR = os.path.join(tempfile.gettempdir(), "mock_llm")
+LOG_PATH = os.path.join(STATE_DIR, "requests.jsonl")
+# local_scan_server.py は、このサーバーを使い回したまま対象を変えて再実行することがあるため、
+# Strix実行の直前にここへ対象を書き込み、LOG_PATHを空にする(台本の手数カウントもリセットされる)。
+TARGET_FILE = os.path.join(STATE_DIR, "target.txt")
 state = {"n": 0}
 
 # 対象(host:port)は第2引数で指定できる(既定: 127.0.0.1:5000、このリポジトリ自身のsqli-labデモアプリ)。
 # local_scan_server.py の /scan/strix が、netcheck/zgrab2と同じ許可範囲チェックを通した上で渡す。
 TARGET = sys.argv[2] if len(sys.argv) > 2 else "127.0.0.1:5000"
 
-RECON_CMD = (
-    "curl -s 'http://" + TARGET + "/login?username=admin%27%20--&password=x'"
-)
+
+def current_target():
+    try:
+        with open(TARGET_FILE, encoding="utf-8") as f:
+            t = f.read().strip()
+        return t or TARGET
+    except OSError:
+        return TARGET
+
+
+def recon_cmd(target):
+    return "curl -s 'http://" + target + "/login?username=admin%27%20--&password=x'"
+
+
+def poc_script_code(target):
+    return (
+        "curl -s 'http://" + target + "/login?username=admin%27%20--&password=x'\n"
+        "# -> 200 'Login OK ... Rows: [(3, 'admin', 1)]'\n\n"
+        "curl -s 'http://" + target + "/login?username=nope&password=nope'\n"
+        "# -> 401 'Login failed'"
+    )
+
+
+RECON_CMD = recon_cmd(TARGET)
 
 REPORT_ARGS = {
     "title": "SQL Injection Authentication Bypass in /login",
@@ -65,12 +90,7 @@ REPORT_ARGS = {
         "the bypass is caused by the injected `--` comment and not by a "
         "generic application bug."
     ),
-    "poc_script_code": (
-        "curl -s 'http://" + TARGET + "/login?username=admin%27%20--&password=x'\n"
-        "# -> 200 'Login OK ... Rows: [(3, 'admin', 1)]'\n\n"
-        "curl -s 'http://" + TARGET + "/login?username=nope&password=nope'\n"
-        "# -> 401 'Login failed'"
-    ),
+    "poc_script_code": poc_script_code(TARGET),
     "remediation_steps": (
         "Replace the string-interpolated query with a parameterized query "
         "that binds `username` and `password` as placeholders instead of "
@@ -197,7 +217,8 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             req = {"_raw": body.decode(errors="replace")}
 
-        with open(LOG_PATH, "a") as f:
+        # 日本語版Windowsの既定(cp932)では、絵文字等を含む要求の書き込みで例外になるためUTF-8を明示する。
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(req, ensure_ascii=False) + "\n")
 
         state["n"] += 1
@@ -245,11 +266,13 @@ class Handler(BaseHTTPRequestHandler):
             sse_chunk(self.wfile, {**base, "choices": [{"index": 0, "delta": {"role": "assistant", "content": "OK"}, "finish_reason": None}]})
             sse_chunk(self.wfile, {**base, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]})
         else:
-            real_turns_seen = sum(1 for line in open(LOG_PATH) if json.loads(line).get("tools"))
+            with open(LOG_PATH, encoding="utf-8") as f:
+                real_turns_seen = sum(1 for line in f if json.loads(line).get("tools"))
+            target = current_target()
             if real_turns_seen <= 1:
-                name, args = "exec_command", {"cmd": RECON_CMD}
+                name, args = "exec_command", {"cmd": recon_cmd(target)}
             elif real_turns_seen == 2:
-                name, args = "create_vulnerability_report", REPORT_ARGS
+                name, args = "create_vulnerability_report", dict(REPORT_ARGS, poc_script_code=poc_script_code(target))
             else:
                 name, args = "finish_scan", FINISH_ARGS
             sys.stderr.write(f"    -> scripted call: {name}({args})\n")
@@ -275,8 +298,10 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
-    open(LOG_PATH, "w").close()
+    os.makedirs(STATE_DIR, exist_ok=True)
+    open(LOG_PATH, "w", encoding="utf-8").close()
+    with open(TARGET_FILE, "w", encoding="utf-8") as f:
+        f.write(TARGET)  # 前回の実行で残った対象より、起動時の引数を優先する
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8899
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     sys.stderr.write(f"mock LLM server listening on 127.0.0.1:{port}\n")

@@ -31,6 +31,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -222,13 +223,25 @@ def _port_open(host, port, timeout=0.5):
         s.close()
 
 
+def _env_hint(name, unix_example, windows_example):
+    """環境変数の設定例を、実行中のOSのシェルに合わせて返す(WindowsはPowerShell構文)。"""
+    if os.name == "nt":
+        return '$env:%s="%s"(PowerShell)' % (name, windows_example)
+    return "export %s=%s" % (name, unix_example)
+
+
+# このサーバーが自動起動した子プロセス。サーバー終了時に止める(残すと次回ポートを塞ぐ)。
+_STARTED = []
+
+
 def _ensure_background(cmd, cwd, env, host, port, wait_sec=20):
     """host:port が既に待ち受けていなければ、cmd をバックグラウンドで起動し、
     待ち受け開始まで待つ(最大 wait_sec 秒)。新規に起動したかどうかを返す。"""
     if _port_open(host, port):
         return False
-    subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                      stdin=subprocess.DEVNULL, start_new_session=True)
+    _STARTED.append(subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                                      start_new_session=True))
     deadline = time.monotonic() + wait_sec
     while time.monotonic() < deadline:
         if _port_open(host, port):
@@ -262,10 +275,11 @@ def scan_strix(body):
     if not strix_dir or not os.path.isdir(strix_dir):
         return {"error": "STRIX_LOCAL_DIRが設定されていないか、ディレクトリが存在しません。"
                           "事前にsecurity-scan/strix-local-poc/README.mdの手順("
-                          "git clone https://github.com/usestrix/strix → "
+                          "git clone https://github.com/usestrix/strix → git checkout v1.7.0 → "
                           "strix-local-backend.patch等を適用 → uv sync)を済ませ、"
-                          "local_scan_server.pyを起動する前に "
-                          "STRIX_LOCAL_DIR=/path/to/strix を環境変数で指定してください。"}
+                          "local_scan_server.pyを起動する前に同じウィンドウで "
+                          + _env_hint("STRIX_LOCAL_DIR", "/path/to/strix", r"C:\path\to\strix")
+                          + " のように環境変数を指定してください。"}
     if _which("uv") is None:
         return {"error": "uvコマンドが見つかりません。https://docs.astral.sh/uv/ を参照してインストールしてください。"}
 
@@ -294,6 +308,15 @@ def scan_strix(body):
                           "security-scan/strix-local-poc/README.md)。"
                           "既定ポートが他のソフトに使われている場合は、環境変数VULN_APP_PORTで"
                           "別のポートを指定できます。"}
+
+    # mock_llm_server.py は前回の実行から起動したまま使い回されることがある。台本の手数カウント
+    # (ログ行数)と対象を、今回の実行用にリセットしておく(しないと2回目以降は1手目から
+    # finish_scanが返って0件になり、対象を変えても前回の対象へ攻撃コマンドが向かう)。
+    mock_state_dir = os.path.join(tempfile.gettempdir(), "mock_llm")
+    os.makedirs(mock_state_dir, exist_ok=True)
+    open(os.path.join(mock_state_dir, "requests.jsonl"), "w", encoding="utf-8").close()
+    with open(os.path.join(mock_state_dir, "target.txt"), "w", encoding="utf-8") as f:
+        f.write(target)
 
     strix_env = dict(os.environ)
     strix_env["STRIX_RUNTIME_BACKEND"] = "local"
@@ -341,8 +364,13 @@ def scan_strix(body):
             if os.path.exists(log_path):
                 with open(log_path, encoding="utf-8", errors="replace") as f:
                     log_tail = f.read()[-2000:]
+            hint = ""
+            if os.name == "nt":
+                hint = ("Windowsで実行しています。strix-local-backend.patchのlocalバックエンドは"
+                        "OpenAI Agents SDKのUnixLocalSandboxClient(Unix専用)を使うため、Windowsでは"
+                        "サンドボックスの作成で失敗する可能性が高いです。WSL2(Ubuntu等)上での実行を推奨します。")
             return {"error": "Strixの実行自体が失敗しました(run.jsonのstatus=%s、run_id=%s)。"
-                              "sarifは0件のまま書き出されるため、これを無視すると見逃します。" % (status, run_id),
+                              "sarifは0件のまま書き出されるため、これを無視すると見逃します。%s" % (status, run_id, hint),
                     "returncode": p.returncode,
                     "stderr": p.stderr.decode("utf-8", "replace")[-2000:],
                     "strix_log_tail": log_tail}
@@ -392,8 +420,9 @@ def scan_cairn(body):
         return {"error": "CAIRN_LOCAL_DIRが設定されていないか、ディレクトリが存在しません。"
                           "事前にsecurity-scan/cairn-lab/cairn-authorized-lab-runbook.mdの手順("
                           "git clone https://github.com/oritera/Cairn → uv sync --project cairn)を"
-                          "済ませ、local_scan_server.pyを起動する前に "
-                          "CAIRN_LOCAL_DIR=/path/to/Cairn を環境変数で指定してください。"}
+                          "済ませ、local_scan_server.pyを起動する前に同じウィンドウで "
+                          + _env_hint("CAIRN_LOCAL_DIR", "/path/to/Cairn", r"C:\path\to\Cairn")
+                          + " のように環境変数を指定してください。"}
     if _which("uv") is None:
         return {"error": "uvコマンドが見つかりません。https://docs.astral.sh/uv/ を参照してインストールしてください。"}
 
@@ -686,11 +715,21 @@ def main():
     httpd = http.server.ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
     print("local_scan_server: http://127.0.0.1:%d で待ち受け中(Ctrl+Cで終了)" % a.port)
     print("対象リポジトリ: %s" % REPO_ROOT)
+    for name in ("STRIX_LOCAL_DIR", "CAIRN_LOCAL_DIR"):
+        v = os.environ.get(name, "").strip()
+        state = ("OK: %s" % v) if v and os.path.isdir(v) else (
+            "フォルダが見つかりません: %s" % v if v else "未設定(このボタンは使えません)")
+        print("%s: %s" % (name, state))
+    print("sqli-labデモアプリのポート(VULN_APP_PORT): %d" % VULN_APP_PORT)
     print("vuln_triage.html の「ローカルスキャナーを呼び出す」から利用してください。")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        for p in _STARTED:
+            if p.poll() is None:
+                p.terminate()
 
 
 if __name__ == "__main__":
