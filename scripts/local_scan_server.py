@@ -233,6 +233,34 @@ def _env_hint(name, unix_example, windows_example):
 # このサーバーが自動起動した子プロセス。サーバー終了時に止める(残すと次回ポートを塞ぐ)。
 _STARTED = []
 
+# 改ざんを検知できる監査ログ(scripts/audit_log.py)。全スキャン要求の「誰が・いつ・何に・
+# 同意フラグ付きで」と結果の概要を記録する。検証: python scripts/audit_log.py verify <このファイル>
+AUDIT = _load_module(os.path.join(HERE, "audit_log.py"), "audit_log_local")
+AUDIT_PATH = os.path.join(RESULTS_DIR, "audit.jsonl")
+
+
+def _audit_request(body):
+    """要求のうち、監査に必要な項目だけを残す(長さも制限する)。"""
+    body = body if isinstance(body, dict) else {}
+    out = {}
+    for k in ("targets", "module", "port", "ports"):
+        if k in body:
+            out[k] = str(body[k])[:300]
+    out["i_own_these"] = body.get("i_own_these") is True
+    return out
+
+
+def _audit_outcome(result):
+    if isinstance(result, dict) and "error" in result:
+        return {"error": str(result["error"])[:200]}
+    if isinstance(result, list):
+        return {"items": len(result)}
+    if isinstance(result, dict) and isinstance(result.get("runs"), list):
+        return {"items": sum(len(r.get("results", [])) for r in result["runs"] if isinstance(r, dict))}
+    if isinstance(result, dict) and isinstance(result.get("results"), list):
+        return {"items": len(result["results"])}
+    return {}
+
 
 def _ensure_background(cmd, cwd, env, host, port, wait_sec=20):
     """host:port が既に待ち受けていなければ、cmd をバックグラウンドで起動し、
@@ -697,12 +725,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = json.loads(raw.decode("utf-8")) if raw else {}
         except ValueError:
             return self._send(400, {"error": "JSONの形式が不正です。"})
+        req = _audit_request(body)
+        # 実行前に記録する。書けない場合は実行しない(能動スキャンが記録なしで走らないように)。
+        try:
+            start = AUDIT.append(AUDIT_PATH, {"event": "scan_start", "endpoint": self.path,
+                                              "client": self.client_address[0],
+                                              "origin": self.headers.get("Origin", ""), "request": req})
+        except Exception as e:  # noqa
+            return self._send(500, {"error": "監査ログ(%s)に書き込めないため、実行しません: %s" % (AUDIT_PATH, e)})
+        t0 = time.monotonic()
         with _LOCK:
             try:
                 result = ROUTES[self.path](body)
             except Exception as e:  # noqa
-                return self._send(500, {"error": "内部エラー: %s" % e})
-        code = 400 if isinstance(result, dict) and "error" in result else 200
+                result, code = {"error": "内部エラー: %s" % e}, 500
+            else:
+                code = 400 if isinstance(result, dict) and "error" in result else 200
+        try:
+            AUDIT.append(AUDIT_PATH, {"event": "scan_end", "endpoint": self.path, "start_seq": start["seq"],
+                                      "status": code, "duration_ms": int((time.monotonic() - t0) * 1000),
+                                      "outcome": _audit_outcome(result)})
+        except Exception as e:  # noqa
+            sys.stderr.write("警告: 監査ログ(scan_end)の書き込みに失敗しました: %s\n" % e)
         self._send(code, result)
 
 
@@ -721,12 +765,17 @@ def main():
             "フォルダが見つかりません: %s" % v if v else "未設定(このボタンは使えません)")
         print("%s: %s" % (name, state))
     print("sqli-labデモアプリのポート(VULN_APP_PORT): %d" % VULN_APP_PORT)
+    print("監査ログ: %s" % AUDIT_PATH)
     print("vuln_triage.html の「ローカルスキャナーを呼び出す」から利用してください。")
+    AUDIT.append(AUDIT_PATH, {"event": "server_start", "port": a.port, "vuln_app_port": VULN_APP_PORT,
+                              "strix_dir_set": bool(os.environ.get("STRIX_LOCAL_DIR")),
+                              "cairn_dir_set": bool(os.environ.get("CAIRN_LOCAL_DIR"))})
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        AUDIT.append(AUDIT_PATH, {"event": "server_stop"})
         for p in _STARTED:
             if p.poll() is None:
                 p.terminate()

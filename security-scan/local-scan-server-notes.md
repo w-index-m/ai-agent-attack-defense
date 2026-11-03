@@ -83,6 +83,9 @@ python scripts\local_scan_server.py
 ```
 
 起動メッセージに、`STRIX_LOCAL_DIR`/`CAIRN_LOCAL_DIR`の設定状態とデモアプリのポートが表示される。
+すべてのスキャン要求は、実行前と実行後に、改ざんを検知できる監査ログ`results\local-scan\audit.jsonl`
+へ記録される(書き込めない場合は実行しない)。検証は`python scripts\audit_log.py verify results\local-scan\audit.jsonl`
+(詳細: [`ai-security-roadmap-mapping.md`](ai-security-roadmap-mapping.md))。
 別のPowerShellウィンドウで自己診断を実行すると、環境・ポート・各機能の疎通をまとめて確認できる
 (結果は`results\local-scan\selfcheck.txt`にも保存される)。
 

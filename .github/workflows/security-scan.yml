@@ -32,6 +32,10 @@ jobs:
         run: |
           set -o pipefail
           python3 -I tools/check_consistency.py | tee -a "$GITHUB_STEP_SUMMARY"
+      # LLMへ渡すデータの組み立て(間接プロンプトインジェクション対策)・監査ログ・ツール呼び出しガードの
+      # 回帰テストと、不可視文字(Trojan Source)の混入検査。node はランナーに標準で入っている。
+      - name: AIセキュリティ防御部品の回帰テスト
+        run: python3 -I tools/test_ai_guards.py
 
   scan:
     runs-on: ubuntu-latest
