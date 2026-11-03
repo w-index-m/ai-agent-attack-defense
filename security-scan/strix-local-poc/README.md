@@ -74,6 +74,11 @@ python3 scripts/local_scan_server.py
 `sqli-lab`デモアプリへ攻撃ペイロードを送ることへの同意チェックボックスを明示的に要求する。結果は
 `findings.sarif`として返り、`vuln_triage.html`の既存SARIF取り込みにそのまま乗る。
 
+**Windowsの場合**: `local`バックエンドはOpenAI Agents SDKの`UnixLocalSandboxClient`(Unix専用)を
+使うため、Windowsネイティブではサンドボックス作成の時点で失敗する可能性が高い(実機で
+`run.json`の`status`が`failed`になることを確認)。WSL2(Ubuntu等)上でStrix・`local_scan_server.py`を
+動かすことを推奨する。
+
 既定では`sqli-lab`デモアプリはポート5000(内部ポート5001)で起動する。Windows環境で、ウイルス対策
 ソフトなどの常駐プロセスがこのポートを既に専有していて起動に失敗する場合は、`local_scan_server.py`を
 起動する前に環境変数`VULN_APP_PORT`で変更できる(例: PowerShellで`$env:VULN_APP_PORT="5100"`)。

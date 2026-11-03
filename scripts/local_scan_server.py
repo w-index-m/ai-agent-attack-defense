@@ -31,6 +31,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -295,6 +296,15 @@ def scan_strix(body):
                           "既定ポートが他のソフトに使われている場合は、環境変数VULN_APP_PORTで"
                           "別のポートを指定できます。"}
 
+    # mock_llm_server.py は前回の実行から起動したまま使い回されることがある。台本の手数カウント
+    # (ログ行数)と対象を、今回の実行用にリセットしておく(しないと2回目以降は1手目から
+    # finish_scanが返って0件になり、対象を変えても前回の対象へ攻撃コマンドが向かう)。
+    mock_state_dir = os.path.join(tempfile.gettempdir(), "mock_llm")
+    os.makedirs(mock_state_dir, exist_ok=True)
+    open(os.path.join(mock_state_dir, "requests.jsonl"), "w").close()
+    with open(os.path.join(mock_state_dir, "target.txt"), "w", encoding="utf-8") as f:
+        f.write(target)
+
     strix_env = dict(os.environ)
     strix_env["STRIX_RUNTIME_BACKEND"] = "local"
     strix_env["STRIX_LLM"] = "openai/mock-model"
@@ -341,8 +351,13 @@ def scan_strix(body):
             if os.path.exists(log_path):
                 with open(log_path, encoding="utf-8", errors="replace") as f:
                     log_tail = f.read()[-2000:]
+            hint = ""
+            if os.name == "nt":
+                hint = ("Windowsで実行しています。strix-local-backend.patchのlocalバックエンドは"
+                        "OpenAI Agents SDKのUnixLocalSandboxClient(Unix専用)を使うため、Windowsでは"
+                        "サンドボックスの作成で失敗する可能性が高いです。WSL2(Ubuntu等)上での実行を推奨します。")
             return {"error": "Strixの実行自体が失敗しました(run.jsonのstatus=%s、run_id=%s)。"
-                              "sarifは0件のまま書き出されるため、これを無視すると見逃します。" % (status, run_id),
+                              "sarifは0件のまま書き出されるため、これを無視すると見逃します。%s" % (status, run_id, hint),
                     "returncode": p.returncode,
                     "stderr": p.stderr.decode("utf-8", "replace")[-2000:],
                     "strix_log_tail": log_tail}

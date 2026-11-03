@@ -374,7 +374,6 @@ def _snmp_parse_response(raw):
         pp = 0
         _, _reqid, pp = _ber_read_tlv(pdu, pp)
         _, err_status, pp = _ber_read_tlv(pdu, pp)
-        pp_ = pp
         _, _err_idx, pp = _ber_read_tlv(pdu, pp)
         if err_status and err_status != b"\x00":
             return "エラー応答(error-status=%d)" % int.from_bytes(err_status, "big")
@@ -703,7 +702,7 @@ def _tns_connect_packet(host, port, service_name="ORCL"):
         (0x0001).to_bytes(2, "big") + (0x0800).to_bytes(2, "big") + (0x7FFF).to_bytes(2, "big") +
         (0x4E54).to_bytes(2, "big") + (0x0001).to_bytes(2, "big") + (0x0000).to_bytes(2, "big") +
         len(cd).to_bytes(2, "big") + (58).to_bytes(2, "big") + (0).to_bytes(4, "big") +
-        bytes([0x00, 0x00]) + b"\x00" * 8
+        bytes([0x00, 0x00]) + b"\x00" * 24  # trace等の予約領域。接続記述子がちょうど58バイト目から始まるように
     ) + cd
     total_len = 8 + len(body)
     header = total_len.to_bytes(2, "big") + b"\x00\x00" + bytes([0x01, 0x00]) + b"\x00\x00"
@@ -788,10 +787,23 @@ def _tls_cert_validity_end(der_bytes):
         return None
 
 
-def grab_tls(ip, port, timeout, host=None):
+def _permissive_tls_context():
+    """古いTLSのサーバーとも握手できるコンテキスト(バナー取得・古いTLSの検出が目的)。
+    既定コンテキストは最低TLS1.2のため、TLS1.0/1.1しか話さないサーバーだと握手自体が失敗し、
+    「古いTLSが使われている」という本来検出したい事実が見えなくなる。"""
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE  # バナー取得が目的で、証明書の検証はしない
+    try:
+        ctx.minimum_version = ssl.TLSVersion.MINIMUM_SUPPORTED
+        ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+    except (ValueError, ssl.SSLError):
+        pass  # OpenSSLのビルドによっては下げられない。その場合は既定のまま
+    return ctx
+
+
+def grab_tls(ip, port, timeout, host=None):
+    ctx = _permissive_tls_context()
     try:
         with socket.create_connection((ip, port), timeout=timeout) as raw_sock:
             with ctx.wrap_socket(raw_sock, server_hostname=host or ip) as s:
