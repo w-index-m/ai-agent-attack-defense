@@ -488,6 +488,29 @@ Windows 11で実際に使ってもらう中で、pull・再試行が何度も必
 
 ---
 
+### StrixボタンがWSL2で必ず失敗していた原因と修正(2026-11-03)
+
+WSL2で「Strix用エンドポイント」を使って実行したところ、約4秒で`run.json`のstatusが`failed`になった。
+Strixのエラー出力の最後は`LocalDirReadError: failed to read local dir artifact: /home/<ユーザー>/strix`。
+
+- 原因: `/scan/strix`は、Strixの作業コピー(`STRIX_LOCAL_DIR`)をカレントフォルダにして`-t ./`で
+  起動していた。`-t ./`はカレントフォルダの中身を丸ごと実行環境へコピーするが、作業コピーの中の
+  `.venv`にはシンボリックリンク(`bin/python`等)があり、SDK(openai-agents 0.19)はシンボリックリンクを
+  読まない(`symlink_not_supported`)。そのため、OSを問わず**必ず**失敗していた。これまでStrixの成功を
+  確認できていたのは、別に用意した対象フォルダから`uv run --project ~/strix`で起動した手動の検証
+  だけで、このエンドポイント自体を最後まで動かしたことは無かった(サンドボックスのネットワーク
+  制限を理由に、確認を後回しにしていた)。Windowsでの失敗も、この原因が重なっていた可能性がある。
+- 修正: 毎回、シンボリックリンクの無い一時フォルダに`sqli-lab`の`.py`だけをコピーし、そこから
+  `uv run --project <STRIX_LOCAL_DIR> strix -n -t ./`で起動する。成功時は一時フォルダを消し、
+  失敗時はログを調べられるよう残す(場所はエラー表示に出る)。
+- 画面にも、エラー出力とログの末尾を表示するようにした(これまではサーバーが返しても捨てていた)。
+- 確認: このサンドボックスで、実際のStrix(v1.7.0にパッチ適用、openai-agents 0.19.0)を、
+  `curl`とブラウザ(Playwright)の両方から2回続けて実行し、どちらもSQLi認証バイパス(CWE-89)の
+  指摘1件を取り込めた。監査ログの検証もOK。
+- 教訓(ミスの傾向に追加): 「依存する環境が無いので確認できない」機能を、部品ごとの確認だけで
+  「動くはず」として渡していた。今回のサンドボックスには、実は必要なもの(Strixの作業コピーとuv)が
+  揃っていた。確認できないと判断する前に、手元にあるもので最後まで動かせないかを先に確かめる。
+
 ## English summary
 
 Adds `scripts/local_scan_server.py`, a small localhost-only companion HTTP server that lets
