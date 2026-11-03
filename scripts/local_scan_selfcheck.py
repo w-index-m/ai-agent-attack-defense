@@ -74,9 +74,10 @@ def check_environment():
             row("OK", name, val)
         else:
             row("NG", name, "フォルダが存在しません: %s" % val)
-    if os.name == "nt" and os.environ.get("STRIX_LOCAL_DIR"):
-        row("警告", "Strix(Windows)", "localバックエンドはUnix専用の部品を使うため、Windowsネイティブでは"
-            "失敗する可能性が高いです。WSL2での実行を推奨します。")
+    if os.name == "nt":
+        row("情報", "Strix(Windows)", "Windows上のサーバーではStrixボタンは即座にエラーになります(Unix専用の"
+            "部品を使うため)。WSL2で別ポート(例: 8767)のサーバーを起動し、画面の「Strix用エンドポイント」に"
+            "指定してください。")
 
 
 def port_state(port):

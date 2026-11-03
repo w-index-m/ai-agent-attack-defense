@@ -126,7 +126,9 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
         <summary>接続設定(初回だけ入力。この端末に保存されます)</summary>
         <div class="cfg">
           <label>エンドポイント<input class="f" id="scan-url" placeholder="http://localhost:8766"></label>
+          <label>Strix用エンドポイント(空欄=上と同じ)<input class="f" id="strix-url" placeholder="例: http://localhost:8767(WSL2で起動したサーバー)"></label>
         </div>
+        <p class="note" style="margin-top:6px">Windowsの場合: StrixはUnix専用の部品を使うため、Windowsで起動したサーバーでは実行できません(押すとすぐエラーになります)。このページはWindowsのブラウザで開いたまま、WSL2(Ubuntu)で2つ目の<code style="font-family:var(--font-mono)">local_scan_server.py</code>を別ポート(例: 8767)で起動し、その URL を「Strix用エンドポイント」に入れてください。WSL2で起動したサーバーには、Windowsのブラウザから<code style="font-family:var(--font-mono)">localhost</code>で接続できます。手順: <a class="src" href="security-scan/strix-local-poc/README.md">strix-local-poc/README.md</a></p>
       </details>
       <div class="cfg">
         <label>対象(IP。netcheck・zgrab2・Strix・Cairnで共通。既定は127.0.0.1自身。1台のみ)<input class="f" id="target-ip" placeholder="127.0.0.1"></label>
@@ -788,11 +790,13 @@ function llmContext(){
      parseOne() は JSON.parse 済みのオブジェクト/配列の形で各ツールを自動判別するので、
      サーバーが返す生のJSONをそのまま JSON.stringify して渡すだけでよい(解析ロジックは共通)。 */
   var LS={url:"vt-scan-url",targetIp:"vt-target-ip",ncPorts:"vt-nc-ports",zgModule:"vt-zg-module",
-    mpModule:"vt-mp-module",mpPort:"vt-mp-port"};
+    mpModule:"vt-mp-module",mpPort:"vt-mp-port",strixUrl:"vt-strix-url"};
   function load(id,k,def){try{var v=localStorage.getItem(k);$(id).value=(v!=null?v:def||"")}catch(e){$(id).value=def||""}}
   function save(k,v){try{localStorage.setItem(k,v)}catch(e){}}
   load("scan-url",LS.url,"http://localhost:8766");
   $("scan-url").addEventListener("change",function(){save(LS.url,$("scan-url").value.trim())});
+  load("strix-url",LS.strixUrl,"");
+  $("strix-url").addEventListener("change",function(){save(LS.strixUrl,$("strix-url").value.trim())});
   load("target-ip",LS.targetIp,"127.0.0.1");
   $("target-ip").addEventListener("change",function(){save(LS.targetIp,$("target-ip").value.trim())});
   load("nc-ports",LS.ncPorts,"standard");
@@ -813,9 +817,9 @@ function llmContext(){
     el.textContent=text;
     el.className="note"+(kind?(" "+kind):"");
   }
-  async function callScan(path,body,label){
+  async function callScan(path,body,label,baseOverride){
     if(scanRunning){setScanStatus("他のスキャンが実行中です。終わるまでお待ちください。","err");return}
-    var base=($("scan-url").value||"").trim().replace(/\/+$/,"");
+    var base=(baseOverride||$("scan-url").value||"").trim().replace(/\/+$/,"");
     if(!base){setScanStatus("エンドポイントを入力してください。","err");return}
     scanRunning=true;setScanButtonsDisabled(true);
     var startedAt=Date.now();
@@ -888,7 +892,8 @@ function llmContext(){
     var targets=targetValue();
     var consent=$("target-consent").checked;
     if(!consent){setScanStatus("対象への攻撃実行への同意(チェックボックス)が必要です。","err");return}
-    callScan("/scan/strix",{targets:targets,i_own_these:true},"Strix("+targets+")");
+    var strixBase=($("strix-url").value||"").trim();
+    callScan("/scan/strix",{targets:targets,i_own_these:true},"Strix("+targets+")",strixBase);
   });
   $("cairn-run").addEventListener("click",function(){
     var targets=targetValue();

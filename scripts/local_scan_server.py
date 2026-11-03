@@ -278,6 +278,15 @@ def _ensure_background(cmd, cwd, env, host, port, wait_sec=20):
     return True  # 起動は試みた。疎通未確認のまま次に進み、Strix側のエラーに委ねる。
 
 
+WINDOWS_STRIX_MSG = (
+    "Strixは、Windows上で起動したlocal_scan_server.pyからは実行できません(Strixのlocalバックエンドが"
+    "Unix専用の部品を使うため。2026-11-02に実機で失敗を確認)。ブラウザとvuln_triage.htmlは"
+    "Windowsのままでかまいません。WSL2(Ubuntu)で、もう1つlocal_scan_server.pyを別ポートで起動し"
+    "(例: STRIX_LOCAL_DIR=~/strix VULN_APP_PORT=5100 python3 scripts/local_scan_server.py --port 8767)、"
+    "画面の接続設定の「Strix用エンドポイント」に http://localhost:8767 を入れてください。"
+    "手順: security-scan/strix-local-poc/README.md")
+
+
 def scan_strix(body):
     """Strix(usestrix/strix)のモックLLMベースPoCを、GUIから起動する。
 
@@ -290,6 +299,10 @@ def scan_strix(body):
     Strixの作業コピーのパスを設定しておく必要がある。
     """
     body = body or {}
+    # Windowsネイティブでは、Strixのlocalバックエンド(UnixLocalSandboxClient)がUnix専用のため動かない
+    # (2026-11-02の実機で失敗を確認)。数分待たせてから失敗させず、補助プロセスも起動せずに即座に知らせる。
+    if os.name == "nt" and os.environ.get("STRIX_ALLOW_WINDOWS", "").strip() != "1":
+        return {"error": WINDOWS_STRIX_MSG}
     if body.get("i_own_these") is not True:
         return {"error": "拒否: i_own_these(自社が管理している、または書面で許可を得た対象への"
                           "攻撃実行に同意すること)がtrueである必要があります。"}
@@ -713,7 +726,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            return self._send(200, {"status": "ok", "repo_root": REPO_ROOT})
+            return self._send(200, {"status": "ok", "repo_root": REPO_ROOT,
+                                    "platform": "windows" if os.name == "nt" else sys.platform,
+                                    "strix_supported": os.name != "nt"
+                                    or os.environ.get("STRIX_ALLOW_WINDOWS", "").strip() == "1"})
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -751,11 +767,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def main():
+    global AUDIT_PATH
     ap = argparse.ArgumentParser(description="vuln_triage.html から、このリポジトリ自身を対象に"
                                               "各診断ツールを実際に呼び出す、ローカル専用の補助サーバー")
     ap.add_argument("--port", type=int, default=8766, help="待ち受けポート(既定 8766)")
     a = ap.parse_args()
     os.makedirs(RESULTS_DIR, exist_ok=True)
+    if a.port != 8766:
+        # 2つ目のサーバー(例: WSL2でStrix用に8767で起動)が同じ作業フォルダを使うと、同じ監査ログへ
+        # 別プロセスから同時に追記して番号が重複し、検証がNGになる(プロセス内のロックは効かない)。
+        # ポートごとに別ファイルへ記録する。
+        AUDIT_PATH = os.path.join(RESULTS_DIR, "audit-%d.jsonl" % a.port)
     httpd = http.server.ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
     print("local_scan_server: http://127.0.0.1:%d で待ち受け中(Ctrl+Cで終了)" % a.port)
     print("対象リポジトリ: %s" % REPO_ROOT)
@@ -764,6 +786,9 @@ def main():
         state = ("OK: %s" % v) if v and os.path.isdir(v) else (
             "フォルダが見つかりません: %s" % v if v else "未設定(このボタンは使えません)")
         print("%s: %s" % (name, state))
+    if os.name == "nt":
+        print("注意: Windows上のこのサーバーではStrixを実行できません(他のボタンは使えます)。"
+              "StrixはWSL2で別ポートのサーバーを起動して使います(詳細はStrixボタンのエラー表示を参照)。")
     print("sqli-labデモアプリのポート(VULN_APP_PORT): %d" % VULN_APP_PORT)
     print("監査ログ: %s" % AUDIT_PATH)
     print("vuln_triage.html の「ローカルスキャナーを呼び出す」から利用してください。")
