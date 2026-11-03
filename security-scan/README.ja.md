@@ -15,18 +15,32 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
   脆弱性チェックを試したい人向けの入口。netcheckでの棚卸し → DVWA/Juice Shopでの練習 →
   Strix+ローカルLLMでの自動診断、という一連の流れと手順リンクをまとめたもの。
 
-## 進捗と残タスク（2026-11-01 時点）
+## 進捗と残タスク（2026-11-03 時点）
 
 ### 進捗（今回のセッションで完了・マージ済み）
 
 - **`vuln_triage.html`のローカルスキャナー呼び出し機能**(`scripts/local_scan_server.py`、
   詳細は[`local-scan-server-notes.md`](local-scan-server-notes.md)): ブラウザのボタンから
   このリポジトリ自身を対象に、確認専用ツールも能動ツールも実行できるようになった。
-  - ✅ 実機(Windows PC、Docker Desktop)で動作確認済み: Semgrep・gitleaks・netcheck・Cairn
-  - ✅ サンドボックス内で完全なエンドツーエンド確認済み: netcheck、Cairn(本物のSQLi認証
-    バイパスをCairn経由で検知→SARIF変換→取り込みまで確認)
-  - ⚠️ 設計・エラーパスのみ確認、実行自体は未確認: Strix(`usestrix/strix`へのネットワーク
-    到達がこのサンドボックスでは不可だったため)、Trivy(お手元PCでの実行報告がまだ無い)
+  ボタンごとの確認状況(2026-11-03時点。「Windows」はお手元のWindows 11 + Docker Desktop):
+
+  | ボタン | Windows実機 | サンドボックス(Linux) |
+  |---|---|---|
+  | Semgrep | ✅ 確認済み(10/31、11件取り込み) | ❌ 実行できず(サンドボックス側の問題) |
+  | Trivy | **未確認** | 未確認(Docker無し) |
+  | gitleaks | ✅ 確認済み(10/31) | 未確認(Docker無し) |
+  | netcheck | ✅ 確認済み(10/31、実際の露出3件を検出) | ✅ ブラウザ操作まで確認 |
+  | zgrab2 | 「未インストール」エラーの表示のみ確認(Go無し) | ✅ 本物をビルドして確認 |
+  | HTTPバナー取得(軽量) | **未確認** | ✅ |
+  | 追加プロトコル(軽量) | **未確認** | ✅ 本物のサーバー13種類。MongoDB・MSSQL・Oracle・PPTP・Modbusは模擬サーバーのみ |
+  | Strix | ❌ 失敗(`local`バックエンドがUnix専用。WSL2での実行を推奨) | 未確認(ネットワーク制限) |
+  | Cairn | **未確認**(10/31の実機確認の記録に含まれていない) | ✅ エンドツーエンドで確認 |
+  | 自前LLMに質問 | ✅ Ollama(qwen2.5:1.5b)で確認。ただし**11/03の変更(指示とデータの分離)後は未確認** | 偽のLLMで送信内容を確認 |
+
+  11/03に追加した監査ログ・ツール呼び出しガード・自己診断スクリプトも、Windows実機では未確認
+  (サンドボックスとCIで確認済み)。以前この欄に「Windows実機で確認済み」と書いていたCairnは、
+  詳しい検証記録([`local-scan-server-notes.md`](local-scan-server-notes.md))に裏付けが無かったため、
+  未確認に訂正した。
   - ❌ 未着手: Hermes・PentestGPT・hackingBuddyGPT
 - **実機テストで見つかり修正した`vuln_triage.html`のバグ4件**: 二重クリックでの並行実行、
   「2. 全体像」の再描画漏れ、成功/失敗判定の取り違え、ファイルパスでの誤分類(詳細は
@@ -46,8 +60,8 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
 | 項目 | 状態 | 次にやること |
 |---|---|---|
 | Hermes・PentestGPT・hackingBuddyGPTのGUIボタン化 | 未着手 | Strix/Cairnと同じパターンで`local_scan_server.py`に追加 |
-| StrixのGUIボタン、実機でのフル動作確認 | 未確認 | `usestrix/strix`へ到達できる環境(お手元PC等)で`STRIX_LOCAL_DIR`を設定して確認 |
-| TrivyのGUIボタン、実機での動作確認 | 未確認 | お手元のDocker Desktop環境で「Trivyを実行」を押して結果を確認 |
+| StrixのGUIボタン、実機でのフル動作確認 | Windowsネイティブで失敗 | WSL2上でサーバーを起動して確認([`strix-local-poc/README.md`](strix-local-poc/README.md)) |
+| Windows実機で未確認のボタン(Trivy・HTTPバナー取得・追加プロトコル・Cairn)と11/03の変更 | 未確認 | サーバー起動中に`python scripts\local_scan_selfcheck.py --full`を実行し、`results\local-scan\selfcheck.txt`を確認。Cairnは`CAIRN_LOCAL_DIR`を設定してGUIから実行 |
 | OS更新確認(Windows) | 未確認 | お手元のWindows PCで`os_patch_check_windows.py`を実行 |
 | OS更新確認(RHEL、本物のサブスクリプション版) | 未確認(Rocky Linuxでは確認済み) | 本物のサブスクリプション登録済みRHELがあれば確認(必須ではない) |
 | hackingBuddyGPTのバグ報告(GitHub Issue) | 未投稿 | 権限の都合でこのセッションからは投稿できず、下書きを渡し済み。ご自身で投稿するか、権限設定を変更して再依頼 |
