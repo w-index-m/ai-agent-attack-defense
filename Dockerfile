@@ -5,7 +5,13 @@
 # sanity test that the checkout is complete.
 FROM python:3.12-slim
 
+# Do not run as root (Trivy AVD-DS-0002 / Semgrep dockerfile.security.missing-user).
+# The audit only reads /src, so an unprivileged user is enough.
+RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin scanner
+
 WORKDIR /src
-COPY . /src
+COPY --chown=scanner:scanner . /src
 
 RUN python3 tools/check_consistency.py
+
+USER scanner

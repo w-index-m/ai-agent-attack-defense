@@ -41,4 +41,4 @@ Dockerfile: Dockerfile
 - [ ] 利用規約に同意するかを決める
 - [ ] `anthropics/oss-scanner` をフォークして PR を出す（出す前に内容を確認してもらいます）
 - [ ] `tools/validate.py` で設定を確認する（`anthropics/oss-scanner` のクローンが必要。**未実施**）
-- [ ] Dockerfile のビルド確認（**未実施**：このセッションでは Docker のデーモンに接続できなかった。`docker build .` をローカルで実行して確認してください）
+- [x] Dockerfile のビルド確認（**確認済み、2026-11-04**：クラウド作業環境で `dockerd` を手動起動して `docker build .` が通ることを確認。実行ユーザーを非 root（`scanner`、uid 10001）にした版でも、ビルドと `tools/check_consistency.py` の実行が通る。`anthropics/oss-scanner` 本体での確認は未実施）
