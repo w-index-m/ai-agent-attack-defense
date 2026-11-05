@@ -171,6 +171,8 @@ def read_context(full_path, line, span=CONTEXT_LINES):
 
 def ask_llm(base_url, model, api_key, system_hint, user_prompt, timeout=120):
     url = base_url.rstrip("/") + "/chat/completions"
+    if not url.lower().startswith(("http://", "https://")):  # file:// など、http 以外は拒否する
+        raise ValueError("base_url は http:// か https:// で始めてください: %s" % base_url)
     body = json.dumps({
         "model": model, "stream": False, "temperature": 0.1, "max_tokens": 700,
         "messages": [{"role": "user", "content": system_hint}, {"role": "user", "content": user_prompt}],
