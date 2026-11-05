@@ -32,6 +32,8 @@
     "R27": {"kind": "detection", "name": "CI/エージェントワークフローが、プライベートリポジトリの読み取り直後に、公開の出力先へ書き込む（GitLost: GitHub Agentic Workflowsへの間接プロンプトインジェクション、Noma Security 2026-07-06開示、未確証の探索的ヒューリスティック）"},
     "R28": {"kind": "detection", "name": "IDE/AIコーディング拡張機能のプロセスが、インストール・更新直後にSSH鍵を作成/authorized_keysを変更（Cursorマーケットプレイスの改ざんされたClaude Code拡張、2026-10-29、未確証の探索的ヒューリスティック）"},
     "R29": {"kind": "detection", "name": "アプリケーションプロセスが、受信直後にLDAP/RMIへ新規アウトバウンド接続（JNDIインジェクション型RCEの兆候。Log4Shell(CVE-2021-44228)系。韓国7金融機関への侵害基盤でJNDI/LDAP悪用ツールセットが確認されたとの報道(Hunt.io、2026-11-04)に基づく）"},
+    "R30": {"kind": "detection", "name": "単一のアカウント/セッションが、短時間に多数の異なる送信元IPから認証（プロキシローテーション基盤の兆候。同じ侵害基盤で約79種類の出口IPが確認されたとの報道(Hunt.io、2026-11-04)に基づく探索的ヒューリスティック、未確証）"},
+    "R31": {"kind": "detection", "name": "サーバ/本番ホストから、暗号資産取引所のAPIへの通信（同じ侵害基盤で暗号資産取引所へのアクセスツールが確認されたとの報道(Hunt.io、2026-11-04)に基づく。事件との直接的な関係は未確認）"},
     "③": {"kind": "control", "name": "攻撃面最小化（ネット直結の露出を断つ）"},
     "③CSP": {"kind": "control", "name": "CSP による読み込み制御"}
   },
@@ -94,7 +96,9 @@
       "R26": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R27": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R28": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R29": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
+      "R29": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
+      "R30": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
+      "R31": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
     }
   }
 }

@@ -1,0 +1,16 @@
+{
+  "name": "[R31] Server/production host connects to a cryptocurrency exchange API",
+  "type": "log_detection",
+  "message": "Exploratory heuristic for the \"cryptocurrency exchange access\" tooling Hunt.io found on attacker infrastructure tied to a campaign against seven South Korean banks (2026-11-04). Hunt.io said this tooling's relation to that specific campaign is unconfirmed -- this rule targets the general technique (a compromised server, not a user's own trading client, reaching an exchange API), a common later-stage monetization step after a breach.\n\nTune: allowlist any legitimate backend integration your own product has with a crypto exchange before relying on this. The exchange hostname list is illustrative, not exhaustive.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1020", "technique:T1657", "tactic:exfiltration"],
+  "queries": [
+    {
+      "name": "server_crypto_api_egress",
+      "query": "source:proxy @src.zone:(server OR production OR backend) @destination.hostname:(*api.binance.* OR *api.coinbase.* OR *api.kraken.* OR *api.upbit.* OR *api.bithumb.* OR *api.okx.* OR *api.bybit.*)"
+    }
+  ],
+  "cases": [
+    { "name": "Server-zone host reached a cryptocurrency exchange API", "status": "medium", "condition": "server_crypto_api_egress > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

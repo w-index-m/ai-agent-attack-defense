@@ -101,7 +101,12 @@ under authorization** should capture under **G1–G6**.
   - **This document's response**: §5's wording moved from "suspicion/clue" to "infrastructure-level
     corroboration, role still unconfirmed." Detection-side, added
     `detections/r29_jndi_ldap_rce_attempt.yml` (detects the JNDI/LDAP technique itself, tool-agnostic). See
-    **R29** in `shared/taxonomy.json`.
+    **R29** in `shared/taxonomy.json`. The same write-up's ~79-distinct-egress-IP proxy pool, crypto-
+    exchange access tooling, and Linux privilege-escalation tooling (relation to this specific campaign
+    unconfirmed) are likewise covered as **R30** (proxy-rotation detection), **R31** (server-to-crypto-
+    exchange-API egress), and a reference addendum on the existing **R21** (generic unexplained-root
+    heuristic), respectively. Mobile-device tooling was out of scope: this repo's existing scanners
+    (`dep_cve_check.py`, `netcheck`, `auto_vuln_scanner.py`) only cover web/host targets.
 - Chinese-community claims of a **"0-day found with zero human intervention"** (Kingdee) → **unverified**.
 
 ## 6. Sources
