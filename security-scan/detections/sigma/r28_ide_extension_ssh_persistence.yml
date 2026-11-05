@@ -1,0 +1,56 @@
+title: IDE/AI-coding extension process creates SSH keys or modifies authorized_keys shortly after install/update
+id: 6f3d9a52-8c1e-4b70-a5f3-r28extssh0000
+status: experimental
+description: >
+  Exploratory heuristic for the pattern reported around a tampered copy of
+  Anthropic's "Claude Code" extension published to Cursor's VS Code
+  Extension Marketplace (versions 2.1.312/2.1.313, live for roughly 11
+  hours on 2026-10-29, up to ~5,000 users affected per Cursor's notice).
+  The malicious code ran on extension load -- no interaction with the AI
+  agent itself was required -- and attempted to plant SSH keys/establish a
+  persistent remote-access backdoor; Cursor warned that uninstalling the
+  extension may not remove already-dropped standalone persistence scripts.
+  Anthropic said it did not build or publish the tampered version and that
+  its own systems were not compromised; how the marketplace listing itself
+  was tampered with was not disclosed. No IOC (hash/C2 domain) has been
+  published by either party as of this writing -- this rule is a
+  behavioral proxy for the general technique (editor-extension-host
+  process writing SSH persistence material), not a signature for this
+  specific campaign.
+references:
+  - https://www.bleepingcomputer.com/news/security/malicious-claude-code-extension-on-cursor-planted-ssh-backdoors/
+  - https://www.csoonline.com/article/4243210/cursor-removes-malicious-claude-code-extension-after-ssh-backdoor-attempt.html
+author: ai-agent-attack-defense
+date: 2026/11/06
+logsource:
+  product: linux
+  category: file_event
+detection:
+  selection_parent:
+    parent_process_name|contains:
+      - 'Cursor'
+      - 'Code - Insiders'
+      - 'code'
+      - 'extensionHost'
+  selection_target:
+    target_file|contains:
+      - '/.ssh/authorized_keys'
+      - '/.ssh/id_'
+    target_file|endswith:
+      - 'authorized_keys'
+  condition: selection_parent and selection_target
+fields:
+  - host
+  - user
+  - process_name
+  - parent_process_name
+  - target_file
+falsepositives:
+  - A developer legitimately generating or rotating their own SSH keys from an integrated terminal inside the editor (the terminal's shell is usually a distinguishable child process from the extension host itself; tune out known interactive-terminal process names rather than the editor process as a whole).
+  - Remote-development extensions (Remote-SSH, devcontainers) that legitimately manage SSH config/keys as part of their normal function -- allowlist the specific, known extension IDs that do this.
+level: high
+tags:
+  - attack.persistence
+  - attack.t1098.004
+  - attack.initial_access
+  - attack.t1195.002

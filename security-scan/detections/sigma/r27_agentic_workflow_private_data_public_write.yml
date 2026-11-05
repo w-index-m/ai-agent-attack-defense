@@ -1,0 +1,62 @@
+title: CI/agentic-workflow process writes to a public-facing output shortly after reading private-repo context
+id: 4e8a1c70-2b5d-4f6a-9d31-r27gitlost000
+status: experimental
+description: >
+  Exploratory heuristic for the pattern disclosed as "GitLost" (Noma Security,
+  2026-07-06): a public GitHub Issue's body contained hidden instructions that
+  steered GitHub's Agentic Workflows into reading private-repository data and
+  posting it back into a public thread -- a cross-repository indirect prompt
+  injection (untrusted external content -> agent action -> data exposed to an
+  attacker-readable public output), the same general shape as R9 (steered
+  egress) but here the "exfiltration" channel is a legitimate public write
+  path (issue comment / PR comment / public artifact) rather than an
+  unapproved network destination, so R9's domain-allowlist approach does not
+  cover it. Noma Labs gave no reusable log signature for this -- this rule is
+  this repository's own constructed proxy, not a confirmed indicator: a CI/
+  agent-runner process that reads from a private-repository path or a
+  secret-scoped context, then writes to a public-facing output (issue
+  comment, PR comment, published artifact/page) within the same run. Needs
+  SIEM-side sequencing (read-then-write within one run/process-tree), not a
+  single-event match.
+references:
+  - https://runtimewire.com/article/gitlost-github-agentic-workflows-private-repos
+  - https://aviatrix.ai/threat-research-center/gitlost-leaks-private-data-github-agentic-workflows-2026
+author: ai-agent-attack-defense
+date: 2026/11/06
+logsource:
+  category: application
+  product: github
+detection:
+  selection_private_read:
+    event_type:
+      - 'repo.content.read'
+      - 'actions.workflow_run'
+    repository_visibility: 'private'
+  selection_public_write:
+    event_type:
+      - 'issue_comment.create'
+      - 'pull_request_comment.create'
+      - 'pages.publish'
+      - 'artifact.publish'
+    output_visibility: 'public'
+  condition: selection_private_read and selection_public_write
+  # Sigma's single detection block can only express each half of the
+  # pattern; the actual signal is SEQUENCE + correlation (same
+  # run_id/process tree, private read followed by a public write within
+  # the run), which must be built in the SIEM (same caveat as
+  # r20_agent_markdown_handoff_burst.yml / r12_dns_water_torture.yml).
+fields:
+  - run_id
+  - actor
+  - repository
+  - event_type
+  - output_visibility
+falsepositives:
+  - Legitimate workflows that intentionally publish a sanitized/aggregated summary derived from private data (release notes, changelogs) -- allowlist known publishing jobs by name/service account.
+  - Any agentic workflow that is only ever given read access to public repositories will not match the private-read half; this rule is only useful where the workflow's own permissions already span both private read and public write, which is exactly the privilege-escalation-free attack surface GitLost highlighted.
+level: medium
+tags:
+  - attack.exfiltration
+  - attack.t1567
+  - attack.initial_access
+  - attack.t1195.002
