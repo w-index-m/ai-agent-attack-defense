@@ -22,8 +22,9 @@ import re
 import socket
 import sys
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from typing import Callable
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -472,6 +473,114 @@ def print_discovered_routes(routes: list[DiscoveredRoute], base_url: str) -> Non
         print()
 
 
+# --------------------------------------------------------------------------
+# Discovery (dynamic): actually browse the running app -- plain GET requests
+# only, following <a href> links and reading (never submitting) <form>
+# elements -- to find pages and GET params without reading the source. This
+# is the "crawling/browsing" half of Strix's auto-discovery that --discover
+# (static, source-only) cannot do: it only sees what a route handler
+# generates and links to at runtime, which can differ from what's in the
+# source (e.g. conditionally-rendered links). It still sends no attack
+# payload and submits no form, so it is not itself a vulnerability scan --
+# only an automated version of a human clicking around.
+# --------------------------------------------------------------------------
+
+
+class _LinkFormParser(HTMLParser):
+    """Pulls <a href=...> targets and <form> actions/methods/input-names out
+    of one page of HTML. Deliberately simple (stdlib only, no bs4): good
+    enough for this lab's plain HTML, not a full browser-grade parser."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[str] = []
+        self.forms: list[dict] = []
+        self._current_form: dict | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a = dict(attrs)
+        if tag == "a" and a.get("href"):
+            self.links.append(a["href"])
+        elif tag == "form":
+            self._current_form = {
+                "action": a.get("action", ""),
+                "method": (a.get("method") or "GET").upper(),
+                "inputs": [],
+            }
+            self.forms.append(self._current_form)
+        elif tag in ("input", "textarea", "select") and self._current_form is not None:
+            name = a.get("name")
+            if name:
+                self._current_form["inputs"].append(name)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "form":
+            self._current_form = None
+
+
+@dataclass
+class CrawledPage:
+    url: str
+    status: int
+    params: list[str]  # from this page's own URL query string, if any
+    forms: list[dict]
+
+
+def crawl(base_url: str, max_pages: int = 25) -> list[CrawledPage]:
+    """Breadth-first, same-host crawl starting at base_url. GET requests
+    only -- no form is ever submitted, no attack payload is ever sent.
+    Stays in scope (checked once up front by the caller via
+    _is_allowed_target, same guard as the payload-firing scan)."""
+    seen: set[str] = set()
+    queue: list[str] = [base_url]
+    host = urlparse(base_url).netloc
+    pages: list[CrawledPage] = []
+
+    while queue and len(pages) < max_pages:
+        url = queue.pop(0)
+        if url in seen:
+            continue
+        seen.add(url)
+        try:
+            resp = requests.get(url, timeout=5)
+        except requests.RequestException:
+            continue
+        parsed = urlparse(url)
+        own_params = sorted(set(p.split("=", 1)[0] for p in parsed.query.split("&") if p))
+        parser = _LinkFormParser()
+        if "html" in resp.headers.get("Content-Type", ""):
+            parser.feed(resp.text)
+        pages.append(CrawledPage(url, resp.status_code, own_params, parser.forms))
+        for href in parser.links:
+            next_url = urljoin(url, href)
+            if urlparse(next_url).netloc == host and next_url not in seen:
+                queue.append(next_url)
+
+    return pages
+
+
+def print_crawled_pages(pages: list[CrawledPage]) -> None:
+    print(
+        f"Crawled {len(pages)} page(s) (GET requests only, no form was submitted, "
+        "no attack payload was sent):\n"
+    )
+    for p in pages:
+        print(f"  {p.status} {p.url}")
+        if p.params:
+            print(f"    query params seen in this URL: {', '.join(p.params)}")
+        for f in p.forms:
+            inputs = ", ".join(f["inputs"]) if f["inputs"] else "(none found)"
+            print(f"    form: method={f['method']} action={f['action'] or '(same page)'} inputs: {inputs}")
+        print()
+    if len(pages) <= 1:
+        print(
+            "Note: this found nothing beyond the seed URL. A target with no navigable "
+            "<a href> links or <form> elements from its seed page (e.g. a flat set of "
+            "independent API-style endpoints, as in this lab's vulnerable_app.py) cannot "
+            "be discovered by browsing -- use --discover (reads the source) instead.\n"
+        )
+
+
 @dataclass
 class Finding:
     param: str
@@ -564,6 +673,19 @@ def main() -> int:
         help="with --discover, the base URL to print in the suggested next-step command "
         "(default: http://127.0.0.1:5000)",
     )
+    parser.add_argument(
+        "--crawl",
+        metavar="SEED_URL",
+        help="dynamic: browse the running app from this URL (GET requests only, no form "
+        "is submitted, no attack payload is sent) and list the pages/forms/params found. "
+        "Scope-checked the same way as a scan, unless --i-own-this-target is passed.",
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=25,
+        help="with --crawl, stop after visiting this many pages (default 25)",
+    )
     parser.add_argument("--url", help="e.g. http://127.0.0.1:5000/search")
     parser.add_argument(
         "--class",
@@ -596,8 +718,18 @@ def main() -> int:
         print_discovered_routes(routes, args.base_url.rstrip("/"))
         return 0
 
+    if args.crawl:
+        if not args.i_own_this_target:
+            allowed, reason = _is_allowed_target(args.crawl)
+            if not allowed:
+                print(f"Refusing to crawl: {reason}", file=sys.stderr)
+                return 2
+        pages = crawl(args.crawl, max_pages=args.max_pages)
+        print_crawled_pages(pages)
+        return 0
+
     if not args.url or not args.vuln_class_name or not args.fuzz:
-        parser.error("--url, --class and --fuzz are required unless --discover is used")
+        parser.error("--url, --class and --fuzz are required unless --discover/--crawl is used")
 
     if not args.i_own_this_target:
         allowed, reason = _is_allowed_target(args.url)
