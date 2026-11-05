@@ -579,6 +579,14 @@ python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/login --class sqli \
 python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/search --baseline q=zzz --fuzz q \
   --llm-class "XXE (XML外部実体参照)" --llm-model qwen2.5-coder:3b
 
+# 見つかった瞬間に、JSON Lines で1件ずつ出す(終わるまで待たない)。どこにも送信しない(読んだ側の役目)
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/login --class sqli \
+  --baseline username=zzz --baseline password=zzz --fuzz username --stream
+
+# 1件ごとに、構造化したMarkdownのレポート(ID・内容・影響・再現手順・修正方針)をファイルに出す
+python3 auto_vuln_scanner.py --url http://127.0.0.1:5000/login --class sqli \
+  --baseline username=zzz --baseline password=zzz --fuzz username --report-dir out/
+
 pip3 install --user requests
 
 # SQLi: 脆弱版 /login をスキャン
@@ -808,6 +816,21 @@ GET /login_safe?(同じペイロード全部)                      401  (全て�
 脆弱性パターンの自動検出)は、より簡単な方法で達成できた」というのが正確な位置づけ。
 「対象の自動発見」(`--discover`・`--crawl`)、「未知のパターンへの適応」(`--llm-payloads`)、
 「汎用性」(`--llm-class`)も、それぞれ限定した形でなら、同じ方針で足せた。
+
+- **2026-11-06追記(即時報告・構造化レポート)**: 商用の自動ペンテスト製品(例: supaattack)が
+  謳う「診断の途中でも、見つかった時点で報告する」「ID・内容・種類・重大度・影響・再現手順を
+  まとめたレポート」の 2 点のうち、**Slack 等への外部連携を除いた部分**を追加した。
+  - `--stream`: 見つかった瞬間(全ペイロードを撃ち終わる前)に、JSON Lines で 1 件ずつ標準出力に出す。
+    **このスクリプト自身は、どこにも送信しない**。行を読んで、好きな通知先に繋げるかどうかは、
+    使う側の判断に委ねる。
+  - `--report-dir DIR`: 1 件ごとに、`F-01.md` のような ID つきの構造化 Markdown レポートを、
+    見つかった瞬間にファイルへ書く。内容(影響・再現手順・修正方針)は、既存の `VulnClass` の
+    `title`/`impact`/`fix` と、その回の `Finding`(パラメータ・ペイロード・判定根拠)から組み立てる。
+    重大度は、この道具がクラス間の優劣をつけない方針のため、手動記入欄のまま残す。
+  - 自律型 AI エージェントが「攻撃者視点で自由に操作する」部分(supaattack の本体にあたる部分)は、
+    作っていない。Strix PoC が、ローカル LLM でこの部分に取り組んで壁に当たった記録がある
+    (`../strix-local-poc/`)。`--llm-payloads`/`--llm-class` は、その代わりではなく、固定の型に
+    はめた範囲でしか LLM を使わない、別の設計。
 
 > ⚠️ **`--llm-payloads`・`--llm-class`への注意**: どちらも、11個の組み込みクラスのように
 > 「既知の脆弱性を持つ対象で動作確認済み」ではない。この project 自身の`ai-sast-trial`での

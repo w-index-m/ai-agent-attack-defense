@@ -352,6 +352,11 @@ class VulnClass:
     # ../lineage.md). Left unset rather than guessed -- not every class here
     # has one.
     reference: str | None = None
+    # Below: used only by the structured per-finding report (--report-dir).
+    # Generic, class-level text -- not specific to any one finding's payload.
+    title: str = ""
+    impact: str = "この脆弱性クラスにより、攻撃者が意図しない形でアプリの挙動を変えられる可能性がある。"
+    fix: str = "入力を信頼せず、用途に合った対策(パラメータ化・エスケープ・許可リスト等)を行う。"
 
 
 VULN_CLASSES: dict[str, VulnClass] = {
@@ -364,11 +369,46 @@ VULN_CLASSES: dict[str, VulnClass] = {
             "used in the wild to place a webshell (Wiz, 2026-10). This repo's R13: "
             "../detections/sigma/r13_wp2shell_wordpress_batch_exploitation.yml"
         ),
+        title="SQL インジェクション",
+        impact="攻撃者が、DB に送る SQL 文の構造そのものを書き換えられる。認証の回避、他人のデータの"
+        "閲覧・窃取、データの改ざんにつながりうる。",
+        fix="SQL をパラメータ化クエリ(プレースホルダ)で組み立てる。文字列結合で値を埋め込まない。",
     ),
-    "xss": VulnClass(XSS_PAYLOADS, detect_xss),
-    "cmdi": VulnClass(CMDI_PAYLOADS, detect_cmdi),
-    "traversal": VulnClass(TRAVERSAL_PAYLOADS, detect_traversal),
-    "mass_assignment": VulnClass(MASS_ASSIGNMENT_PAYLOADS, detect_mass_assignment),
+    "xss": VulnClass(
+        XSS_PAYLOADS,
+        detect_xss,
+        title="反射型クロスサイトスクリプティング(XSS)",
+        impact="入力した値が、エスケープされずにそのまま応答の HTML に出る。閲覧者のブラウザで任意の"
+        "スクリプトが実行され、セッションの窃取などにつながりうる。",
+        fix="出力時に、文脈に合った方法でエスケープする(HTML エスケープ等)。テンプレートエンジンの"
+        "自動エスケープを無効化しない。",
+    ),
+    "cmdi": VulnClass(
+        CMDI_PAYLOADS,
+        detect_cmdi,
+        title="OS コマンドインジェクション",
+        impact="入力値が、シェルに渡すコマンドの一部として解釈される。サーバー上で任意のコマンドを"
+        "実行されうる(最も深刻な部類)。",
+        fix="シェルを経由せず、引数を配列で渡す API を使う。どうしてもシェル経由が必要なら、入力を"
+        "許可リストで厳しく制限する。",
+    ),
+    "traversal": VulnClass(
+        TRAVERSAL_PAYLOADS,
+        detect_traversal,
+        title="パストラバーサル",
+        impact="入力したファイル名が、`../` 等でディレクトリをまたぎ、意図しない場所のファイルを"
+        "読まれうる(設定ファイル・秘密情報など)。",
+        fix="ファイル名を正規化してから、許可したディレクトリの配下に収まっているか確認する"
+        "(`realpath` 等での比較)。",
+    ),
+    "mass_assignment": VulnClass(
+        MASS_ASSIGNMENT_PAYLOADS,
+        detect_mass_assignment,
+        title="マスアサインメント",
+        impact="利用者が送った余分なフィールド(`is_admin` 等)が、そのままモデルやレコードに"
+        "反映される。権限の昇格につながりうる。",
+        fix="受け取るフィールドを許可リストで明示する(全フィールドをそのまま代入しない)。",
+    ),
     "ssrf": VulnClass(
         SSRF_PAYLOADS,
         detect_ssrf,
@@ -378,8 +418,20 @@ VULN_CLASSES: dict[str, VulnClass] = {
             "for LLMjacking (Unit 42). This repo's R10: "
             "../detections/sigma/r10_metadata_service_credential_access.yml"
         ),
+        title="SSRF(サーバーサイドリクエストフォージェリ)",
+        impact="サーバー自身に、攻撃者が指定した URL への通信をさせられる。内部ネットワークや"
+        "クラウドのメタデータサービスへの到達につながりうる。",
+        fix="取得先の URL を許可リストで制限する。内部アドレス・メタデータサービスの"
+        "アドレスを明示的に拒否する。",
     ),
-    "account_enum": VulnClass(ACCOUNT_ENUM_PAYLOADS, detect_account_enum),
+    "account_enum": VulnClass(
+        ACCOUNT_ENUM_PAYLOADS,
+        detect_account_enum,
+        title="アカウント列挙",
+        impact="登録済みかどうかで応答が変わり、既存のメールアドレス・ユーザー名を外部から"
+        "特定されうる(標的型攻撃の下準備になる)。",
+        fix="登録済み・未登録にかかわらず、同じ応答(文言・応答時間)を返す。",
+    ),
 }
 
 
@@ -598,6 +650,8 @@ class Finding:
     payload: str
     reason: str
     response_snippet: str = field(repr=False)
+    status_code: int = 0
+    baseline_status_code: int = 0
 
 
 @dataclass
@@ -654,8 +708,16 @@ def probe(
 
 
 def scan(
-    url: str, base_params: dict[str, str], fuzz_params: list[str], vuln_class: VulnClass
+    url: str,
+    base_params: dict[str, str],
+    fuzz_params: list[str],
+    vuln_class: VulnClass,
+    on_finding: Callable[[Finding], None] | None = None,
 ) -> list[Finding]:
+    """on_finding, if given, is called the moment each finding is confirmed --
+    i.e. during the scan, not after it finishes (see --stream/--report-dir).
+    This is still only a local callback (print / write a file): no network
+    call to any third-party notification service is made here."""
     baseline = requests.get(url, params=base_params, timeout=10)
 
     findings: list[Finding] = []
@@ -664,9 +726,88 @@ def scan(
             resp = probe(url, base_params, param, payload)
             reason = vuln_class.detect(resp, baseline, payload)
             if reason:
-                findings.append(Finding(param, payload, reason, resp.text))
+                f = Finding(param, payload, reason, resp.text, resp.status_code, baseline.status_code)
+                findings.append(f)
+                if on_finding:
+                    on_finding(f)
 
     return findings
+
+
+# --------------------------------------------------------------------------
+# Streaming + structured report ("即時報告" / "構造化レポート"). Local only:
+# an event is a JSON Lines line (stdout, and/or a file under --report-dir);
+# forwarding it to Slack/a ticket system is left to whoever reads that line
+# or file -- this script does not call any such service itself.
+# --------------------------------------------------------------------------
+
+
+def make_finding_event(class_name: str, vuln_class: VulnClass, url: str, idx: int, f: Finding) -> dict:
+    return {
+        "id": f"F-{idx:02d}",
+        "type": "finding",
+        "class": class_name,
+        "title": vuln_class.title or class_name,
+        "url": url,
+        "param": f.param,
+        "payload": f.payload,
+        "reason": f.reason,
+        "status_code": f.status_code,
+        "baseline_status_code": f.baseline_status_code,
+    }
+
+
+def print_finding_event_line(event: dict) -> None:
+    """One compact JSON object per line (JSON Lines), printed the moment a
+    finding is confirmed -- not buffered until the scan ends. Pipe this to
+    whatever you want notified; this script itself sends it nowhere."""
+    print(json.dumps(event, ensure_ascii=False), flush=True)
+
+
+def render_finding_report_md(class_name: str, vuln_class: VulnClass, url: str, idx: int, f: Finding) -> str:
+    """A single finding as a structured Markdown report: ID, 内容, 種類,
+    重大度, 影響, 再現手順, 修正方針. 重大度 is not computed here (this tool
+    doesn't rank classes against each other) -- left as a field to fill in
+    by hand, same as this repo's other reports (SARIF/vuln_triage.html)."""
+    report_id = f"F-{idx:02d}"
+    title = vuln_class.title or class_name
+    payload_text = f.payload.replace("\n", "\\n")
+    repro = (
+        f"1. `{url}` に、`{f.param}={payload_text}` を含めて GET リクエストを送る\n"
+        f"2. 応答を確認する: ベースライン(通常の入力)は status={f.baseline_status_code}、"
+        f"この入力では status={f.status_code}\n"
+        f"3. 検出の根拠: {f.reason}"
+    )
+    lines = [
+        f"# {report_id}: {title}",
+        "",
+        f"- **対象 URL**: `{url}`",
+        f"- **パラメータ**: `{f.param}`",
+        f"- **種類**: {class_name}",
+        f"- **重大度**: (手動で記入。この道具は、クラス間の優劣をつけない)",
+        "",
+        "## 影響",
+        "",
+        vuln_class.impact,
+        "",
+        "## 再現手順",
+        "",
+        repro,
+        "",
+        "## 応答の抜粋(検出の根拠になった部分を含む可能性。中身は機微情報を含みうるので、"
+        "公開前に確認すること)",
+        "",
+        "```",
+        f.response_snippet[:800],
+        "```",
+        "",
+        "## 修正方針",
+        "",
+        vuln_class.fix,
+    ]
+    if vuln_class.reference:
+        lines += ["", "## 参考(実際の事例)", "", vuln_class.reference]
+    return "\n".join(lines) + "\n"
 
 
 # --------------------------------------------------------------------------
@@ -830,7 +971,13 @@ def llm_propose_class(base_url: str, model: str, api_key: str, class_name: str) 
             file=sys.stderr,
         )
         return None
-    return VulnClass(payloads, _make_llm_detect(detect_cfg))
+    return VulnClass(
+        payloads,
+        _make_llm_detect(detect_cfg),
+        title=class_name,
+        impact="LLM が提案した、未レビューのクラス。実際の影響は、指摘ごとに人が確認すること。",
+        fix="指摘ごとに、該当コードを読んで判断する(固定の対策は無い)。",
+    )
 
 
 def main() -> int:
@@ -912,6 +1059,20 @@ def main() -> int:
     parser.add_argument(
         "--llm-count", type=int, default=5, help="with --llm-payloads, how many extra payloads to request"
     )
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="print each finding as a JSON Lines event the moment it is confirmed, during the "
+        "scan -- not only in the summary printed after it finishes. This script sends the line "
+        "nowhere itself; pipe it to whatever you want notified.",
+    )
+    parser.add_argument(
+        "--report-dir",
+        metavar="DIR",
+        help="also write one structured Markdown report per finding into this directory "
+        "(F-01.md, F-02.md, ...: 内容/種類/影響/再現手順/修正方針), written as each finding is "
+        "confirmed, not only at the end. Directory is created if missing.",
+    )
     args = parser.parse_args()
 
     if args.discover:
@@ -961,7 +1122,10 @@ def main() -> int:
             if extra:
                 print(f"LLM suggested {len(extra)} extra payload(s) for {args.vuln_class_name}: {extra}")
                 print(f"*** {LLM_CAUTION_NOTE} (payloads only -- judgment is still {args.vuln_class_name}'s own rule) ***")
-                vuln_class = VulnClass(vuln_class.payloads + extra, vuln_class.detect, vuln_class.reference)
+                vuln_class = VulnClass(
+                    vuln_class.payloads + extra, vuln_class.detect, vuln_class.reference,
+                    vuln_class.title, vuln_class.impact, vuln_class.fix,
+                )
             else:
                 print("LLM suggested no usable extra payloads (empty/unparseable reply); using the fixed list only.")
 
@@ -980,7 +1144,26 @@ def main() -> int:
     print_target_assessment(assessment)
     print("-" * 60)
 
-    findings = scan(args.url, base_params, args.fuzz, vuln_class)
+    class_key = args.llm_class if args.llm_class else args.vuln_class_name
+    report_count = [0]  # mutable counter for closure; report IDs run 1.. across this scan
+
+    if args.report_dir:
+        os.makedirs(args.report_dir, exist_ok=True)
+
+    def on_finding(f: Finding) -> None:
+        report_count[0] += 1
+        idx = report_count[0]
+        if args.stream:
+            print_finding_event_line(make_finding_event(class_key, vuln_class, args.url, idx, f))
+        if args.report_dir:
+            path = os.path.join(args.report_dir, f"F-{idx:02d}.md")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(render_finding_report_md(class_key, vuln_class, args.url, idx, f))
+
+    findings = scan(
+        args.url, base_params, args.fuzz, vuln_class,
+        on_finding=on_finding if (args.stream or args.report_dir) else None,
+    )
 
     if not findings:
         print("No indicators found with this payload set.")
