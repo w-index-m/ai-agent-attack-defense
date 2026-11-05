@@ -15,6 +15,7 @@ in this same directory.
 from __future__ import annotations
 
 import argparse
+import ast
 import ipaddress
 import os
 import re
@@ -370,6 +371,107 @@ VULN_CLASSES: dict[str, VulnClass] = {
 }
 
 
+# --------------------------------------------------------------------------
+# Discovery (static only): read a Flask app's source and list its routes and
+# the GET params they read, instead of a human typing --url/--fuzz by hand.
+# This is the one part of "target auto-discovery" (see README.ja.md's "this
+# is not a lightweight Strix") that is reachable without firing any
+# payload: it just reads Python source with ast, it does not import or run
+# the app, and it sends no HTTP requests. It still cannot find params a
+# route reads by means this doesn't recognize (e.g. request.json, a helper
+# function), or routes defined dynamically (add_url_rule in a loop) --
+# those still need a human to add --fuzz by hand, same as before.
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class DiscoveredRoute:
+    path: str
+    methods: list[str]
+    func_name: str
+    params: list[str]
+
+
+def _route_decorator_info(dec: ast.AST) -> tuple[str, list[str]] | None:
+    """Pull (path, methods) out of an @app.route("/x", methods=[...]) call.
+    Returns None for anything that isn't shaped like that (e.g. @app.get)."""
+    if not isinstance(dec, ast.Call):
+        return None
+    func = dec.func
+    if not (isinstance(func, ast.Attribute) and func.attr == "route"):
+        return None
+    if not dec.args or not isinstance(dec.args[0], ast.Constant) or not isinstance(dec.args[0].value, str):
+        return None
+    path = dec.args[0].value
+    methods = ["GET"]
+    for kw in dec.keywords:
+        if kw.arg == "methods" and isinstance(kw.value, ast.List):
+            vals = [e.value for e in kw.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+            if vals:
+                methods = vals
+    return path, methods
+
+
+def _params_read_in(node: ast.AST) -> list[str]:
+    """Find request.args.get("x") / request.args["x"] / request.form.get("x")
+    style reads inside a route function body. Static text matching only --
+    a param read through a helper function, or built from a variable instead
+    of a string literal, will not show up here."""
+    names: list[str] = []
+    for sub in ast.walk(node):
+        src = None
+        key_node = None
+        if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Attribute) and sub.func.attr == "get":
+            inner = sub.func.value
+            if isinstance(inner, ast.Attribute) and inner.attr in ("args", "form", "values"):
+                src = inner.attr
+                if sub.args:
+                    key_node = sub.args[0]
+        elif isinstance(sub, ast.Subscript):
+            inner = sub.value
+            if isinstance(inner, ast.Attribute) and inner.attr in ("args", "form", "values"):
+                src = inner.attr
+                key_node = sub.slice
+        if src is not None and isinstance(key_node, ast.Constant) and isinstance(key_node.value, str):
+            if key_node.value not in names:
+                names.append(key_node.value)
+    return names
+
+
+def discover_routes(py_file: str) -> list[DiscoveredRoute]:
+    with open(py_file, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read(), filename=py_file)
+
+    routes: list[DiscoveredRoute] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for dec in node.decorator_list:
+            info = _route_decorator_info(dec)
+            if info is None:
+                continue
+            path, methods = info
+            routes.append(DiscoveredRoute(path, methods, node.name, _params_read_in(node)))
+    return routes
+
+
+def print_discovered_routes(routes: list[DiscoveredRoute], base_url: str) -> None:
+    print(f"Discovered {len(routes)} route(s) (static read of the source; nothing was run or requested):\n")
+    for r in routes:
+        params = ", ".join(r.params) if r.params else "(none found statically)"
+        print(f"  {'/'.join(r.methods):10} {r.path}  (def {r.func_name})")
+        print(f"    params: {params}")
+        if "GET" in r.methods and r.params:
+            fuzz = " ".join(f"--fuzz {p}" for p in r.params)
+            baseline = " ".join(f"--baseline {p}=zzz" for p in r.params)
+            print(
+                f"    next step (human decides --class; this prints the command, it does not run it):\n"
+                f"      python3 auto_vuln_scanner.py --url {base_url}{r.path} --class <sqli|xss|...> "
+                f"{baseline} {fuzz}"
+            )
+        print()
+
+
 @dataclass
 class Finding:
     param: str
@@ -449,11 +551,23 @@ def scan(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--url", required=True, help="e.g. http://127.0.0.1:5000/search")
+    parser.add_argument(
+        "--discover",
+        metavar="APP.PY",
+        help="static-only: read this Flask app's source and list its routes/params "
+        "(ast parse, no import, no HTTP request, no payload sent) instead of scanning. "
+        "All other flags except --base-url are ignored in this mode.",
+    )
+    parser.add_argument(
+        "--base-url",
+        default="http://127.0.0.1:5000",
+        help="with --discover, the base URL to print in the suggested next-step command "
+        "(default: http://127.0.0.1:5000)",
+    )
+    parser.add_argument("--url", help="e.g. http://127.0.0.1:5000/search")
     parser.add_argument(
         "--class",
         dest="vuln_class_name",
-        required=True,
         choices=sorted(VULN_CLASSES),
         help="vulnerability class to test for",
     )
@@ -467,7 +581,6 @@ def main() -> int:
     parser.add_argument(
         "--fuzz",
         action="append",
-        required=True,
         help="param name to fuzz, repeatable, e.g. --fuzz q",
     )
     parser.add_argument(
@@ -477,6 +590,14 @@ def main() -> int:
         "against a target you actually own or are explicitly authorized to test",
     )
     args = parser.parse_args()
+
+    if args.discover:
+        routes = discover_routes(args.discover)
+        print_discovered_routes(routes, args.base_url.rstrip("/"))
+        return 0
+
+    if not args.url or not args.vuln_class_name or not args.fuzz:
+        parser.error("--url, --class and --fuzz are required unless --discover is used")
 
     if not args.i_own_this_target:
         allowed, reason = _is_allowed_target(args.url)
