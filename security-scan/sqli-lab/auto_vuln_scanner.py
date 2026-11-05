@@ -1,12 +1,22 @@
 """
-Minimal, LLM-free, rule-based vulnerability auto-scanner.
+Minimal, rule-based vulnerability auto-scanner. LLM-free by default.
 
 Strix (AI-agent pentesting) uses an LLM to decide what to try next, and
 can look for many vulnerability classes (SQLi, XSS, SSRF, auth bugs, ...).
 This script replaces that decision-making with a fixed payload list PER
 vulnerability class, and deterministic response checks -- no LLM, no
-agent loop, no Docker. Adding a new class means adding a new entry to
-VULN_CLASSES below: a payload list + a detect() function.
+agent loop, no Docker, unless you opt into one of the two LLM-assisted
+modes below. Adding a new class means adding a new entry to VULN_CLASSES
+below: a payload list + a detect() function.
+
+Optional (off unless passed): --llm-payloads asks an LLM for EXTRA payload
+strings for an existing class (judgment stays with that class's own
+reviewed detect() -- see 2026-11-06 README note). --llm-class lets the LLM
+define a brand-new class by name, but only by filling in one of a small,
+fixed set of safe detection *types* -- never code that gets executed. Both
+are UNREVIEWED relative to the 11 built-in classes; see
+"補足: これは『Strixの簡易版』ではない" in README.ja.md and
+../ai-sast-trial-notes.md for why an LLM's own verdict is not trusted here.
 
 Scope: run only against targets you own/control, e.g. vulnerable_app.py
 in this same directory.
@@ -17,6 +27,7 @@ from __future__ import annotations
 import argparse
 import ast
 import ipaddress
+import json
 import os
 import re
 import socket
@@ -658,6 +669,170 @@ def scan(
     return findings
 
 
+# --------------------------------------------------------------------------
+# Optional LLM use ("未知のパターンへの適応" / "汎用性" in README.ja.md's
+# "this is not a lightweight Strix" section). Off by default -- nothing
+# above this point needs an LLM, and plain `--url/--class/--fuzz` behaves
+# exactly as before. This section is additive: it either (a) asks an LLM
+# for MORE payload strings for an EXISTING, already-reviewed class (the
+# verdict is still the existing deterministic detect_*() function -- see
+# ../ai-sast-trial-notes.md for why letting an LLM judge its own findings
+# is unreliable: it has dismissed real vulnerabilities as false positives
+# in repeated runs here), or (b) lets the LLM define a brand-new class by
+# name, but only by filling in a small, fixed set of safe, parametrized
+# detection *types* below -- it never supplies code that gets executed.
+# Treat any --llm-class result with the same caution as an AI-SAST verdict:
+# it is unreviewed and has not been checked against a known-vulnerable
+# target the way the 11 built-in classes have (see "実証した攻撃" above).
+# --------------------------------------------------------------------------
+
+LLM_CAUTION_NOTE = (
+    "caution: this class/these payloads came from an LLM and are UNREVIEWED -- "
+    "unlike the 11 built-in classes, nobody has confirmed them against a known-"
+    "vulnerable target. See ../ai-sast-trial-notes.md: this project's own trials "
+    "found LLM judgment unreliable (false positives, and real vulnerabilities "
+    "dismissed) across repeated runs of the same model."
+)
+
+
+def ask_llm(base_url: str, model: str, api_key: str, system: str, user: str, timeout: float = 120.0) -> str:
+    url = base_url.rstrip("/") + "/chat/completions"
+    if not url.lower().startswith(("http://", "https://")):  # file:// など、http 以外は拒否する
+        raise ValueError("--llm-url は http:// か https:// で始めてください: %s" % base_url)
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = "Bearer " + api_key
+    body = {
+        "model": model,
+        "stream": False,
+        "temperature": 0.2,
+        "max_tokens": 700,
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+    }
+    resp = requests.post(url, json=body, headers=headers, timeout=timeout)
+    resp.raise_for_status()
+    choices = resp.json().get("choices") or []
+    if not choices:
+        return ""
+    return (choices[0].get("message") or {}).get("content") or ""
+
+
+_JSON_FENCE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.S)
+_MAX_LLM_PAYLOADS = 10
+_MAX_PAYLOAD_LEN = 300
+_MAX_MARKER_LEN = 200
+
+
+def _extract_json(text: str) -> dict | None:
+    m = _JSON_FENCE.search(text or "")
+    candidate = m.group(1) if m else text
+    try:
+        return json.loads(candidate)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def llm_suggest_payloads(
+    base_url: str, model: str, api_key: str, class_name: str, existing_payloads: list[str], count: int = 5
+) -> list[str]:
+    """Ask the LLM for extra payload strings for an EXISTING class, to try
+    alongside (not instead of) the fixed list. Judgment still uses that
+    class's own deterministic detect_*() -- the LLM only supplies strings."""
+    system = (
+        "You suggest short HTTP query-parameter attack payload strings for an "
+        "authorized security test of a system the tester owns. Reply with ONLY "
+        "the payload strings, one per line, no numbering, no explanation, no code fences."
+    )
+    user = (
+        f"Vulnerability class: {class_name}\n"
+        f"Existing payloads already tested (do not repeat these): {existing_payloads}\n"
+        f"Give {count} different, short payload strings to additionally try for this class."
+    )
+    text = ask_llm(base_url, model, api_key, system, user)
+    out: list[str] = []
+    for line in text.splitlines():
+        p = line.strip().strip("`").lstrip("-*0123456789. ").strip()
+        if p and len(p) <= _MAX_PAYLOAD_LEN and p not in existing_payloads and p not in out:
+            out.append(p)
+        if len(out) >= count:
+            break
+    return out
+
+
+# Fixed, safe detection types an LLM-defined class can pick from. Each is
+# real, reviewed Python -- the LLM only supplies the small set of string/
+# number parameters named in SAFE_DETECT_TYPES below, never code.
+SAFE_DETECT_TYPES = {
+    "reflected_marker": "marker (str) appears verbatim in the response body but not the baseline",
+    "error_marker": "marker (str) appears in the response body but not the baseline (error/leak text)",
+    "status_flip": "response status code differs from the baseline's status code",
+    "length_diff": "response body length differs from the baseline's by more than ratio (float, default 0.5)",
+}
+
+
+def _make_llm_detect(cfg: dict) -> Callable[[requests.Response, requests.Response, str], str | None]:
+    dtype = cfg.get("type")
+    marker = cfg.get("marker")
+    if isinstance(marker, str):
+        marker = marker[:_MAX_MARKER_LEN]
+    try:
+        ratio = float(cfg.get("ratio", 0.5))
+    except (TypeError, ValueError):
+        ratio = 0.5
+
+    def detect(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+        if dtype in ("reflected_marker", "error_marker") and isinstance(marker, str) and marker:
+            if marker in resp.text and marker not in baseline.text:
+                kind = "reflected" if dtype == "reflected_marker" else "error/leak text"
+                return f"llm-defined ({kind}): {marker!r} seen in response, not in baseline"
+            return None
+        if dtype == "status_flip":
+            if resp.status_code != baseline.status_code:
+                return f"llm-defined (status flip): baseline={baseline.status_code} payload={resp.status_code}"
+            return None
+        if dtype == "length_diff":
+            base_len = max(len(baseline.content), 1)
+            if abs(len(resp.content) - base_len) / base_len > ratio:
+                return f"llm-defined (length diff): baseline={base_len}B payload={len(resp.content)}B"
+            return None
+        return None  # unknown/malformed type: never matches, rather than guessing
+
+    return detect
+
+
+def llm_propose_class(base_url: str, model: str, api_key: str, class_name: str) -> VulnClass | None:
+    """Ask the LLM to define a brand-new class: payload strings + ONE of the
+    SAFE_DETECT_TYPES above, as data. We never eval/exec anything the LLM
+    returns -- only the fixed, reviewed functions in _make_llm_detect()
+    actually run, parametrized by the (size-capped) strings the LLM gives."""
+    system = (
+        "You help define an authorized security test for a system the tester owns. "
+        "Reply with ONLY a single JSON object (no prose, no code fences), shaped exactly as:\n"
+        '{"payloads": ["...", "..."], "detect": {"type": "<one of: '
+        + ", ".join(SAFE_DETECT_TYPES) + '>", "marker": "...", "ratio": 0.5}}\n'
+        "\"marker\" is only used by reflected_marker/error_marker (a short string to look for "
+        "in the response, such as a canary value your payloads embed, or an error-message "
+        "fragment). \"ratio\" is only used by length_diff. Omit fields a type does not use."
+    )
+    user = f"Vulnerability class to test for: {class_name}\nGive up to {_MAX_LLM_PAYLOADS} payload strings."
+    text = ask_llm(base_url, model, api_key, system, user)
+    data = _extract_json(text)
+    if not isinstance(data, dict):
+        print(f"llm-class: model did not return parseable JSON, refusing to guess:\n{text[:500]}", file=sys.stderr)
+        return None
+    payloads = [p for p in data.get("payloads", []) if isinstance(p, str) and p][:_MAX_LLM_PAYLOADS]
+    payloads = [p[:_MAX_PAYLOAD_LEN] for p in payloads]
+    detect_cfg = data.get("detect")
+    if not payloads or not isinstance(detect_cfg, dict) or detect_cfg.get("type") not in SAFE_DETECT_TYPES:
+        print(
+            "llm-class: response missing payloads or a recognized detect.type "
+            f"(got: {detect_cfg!r}), refusing to guess.",
+            file=sys.stderr,
+        )
+        return None
+    return VulnClass(payloads, _make_llm_detect(detect_cfg))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -711,6 +886,32 @@ def main() -> int:
         help="override the localhost/RFC1918-only scope check; only use this "
         "against a target you actually own or are explicitly authorized to test",
     )
+    parser.add_argument(
+        "--llm-payloads",
+        action="store_true",
+        help="with --class, also ask the LLM for extra payload strings to try alongside the "
+        "fixed list. Judgment still uses that class's existing, reviewed detect_*() -- the "
+        "LLM only supplies strings, never a verdict. Requires --llm-url/--llm-model.",
+    )
+    parser.add_argument(
+        "--llm-class",
+        metavar="NAME",
+        help="instead of --class, give the LLM a free-text vulnerability class name/description "
+        "and let it define payloads + ONE of a fixed set of safe detection types (see "
+        f"SAFE_DETECT_TYPES: {', '.join(SAFE_DETECT_TYPES)}). UNREVIEWED -- see the caution "
+        "note this prints before any finding. Requires --llm-url/--llm-model.",
+    )
+    parser.add_argument(
+        "--llm-url",
+        default="http://127.0.0.1:11434/v1",
+        help="OpenAI-compatible chat/completions base URL for --llm-payloads/--llm-class "
+        "(default: a local Ollama server, http://127.0.0.1:11434/v1)",
+    )
+    parser.add_argument("--llm-model", default="qwen2.5-coder:3b", help="model name for the LLM endpoint")
+    parser.add_argument("--llm-api-key", default=os.environ.get("LLM_API_KEY", ""), help="optional bearer token")
+    parser.add_argument(
+        "--llm-count", type=int, default=5, help="with --llm-payloads, how many extra payloads to request"
+    )
     args = parser.parse_args()
 
     if args.discover:
@@ -728,8 +929,12 @@ def main() -> int:
         print_crawled_pages(pages)
         return 0
 
-    if not args.url or not args.vuln_class_name or not args.fuzz:
-        parser.error("--url, --class and --fuzz are required unless --discover/--crawl is used")
+    if not args.url or not (args.vuln_class_name or args.llm_class) or not args.fuzz:
+        parser.error(
+            "--url, (--class or --llm-class) and --fuzz are required unless --discover/--crawl is used"
+        )
+    if args.vuln_class_name and args.llm_class:
+        parser.error("--class and --llm-class are mutually exclusive")
 
     if not args.i_own_this_target:
         allowed, reason = _is_allowed_target(args.url)
@@ -738,10 +943,30 @@ def main() -> int:
             return 2
 
     base_params = dict(kv.split("=", 1) for kv in args.baseline)
-    vuln_class = VULN_CLASSES[args.vuln_class_name]
+
+    if args.llm_class:
+        vuln_class = llm_propose_class(args.llm_url, args.llm_model, args.llm_api_key, args.llm_class)
+        if vuln_class is None:
+            return 2
+        class_label = f"{args.llm_class} (llm-defined)"
+        print(f"*** {LLM_CAUTION_NOTE} ***")
+    else:
+        vuln_class = VULN_CLASSES[args.vuln_class_name]
+        class_label = args.vuln_class_name
+        if args.llm_payloads:
+            extra = llm_suggest_payloads(
+                args.llm_url, args.llm_model, args.llm_api_key, args.vuln_class_name,
+                vuln_class.payloads, args.llm_count,
+            )
+            if extra:
+                print(f"LLM suggested {len(extra)} extra payload(s) for {args.vuln_class_name}: {extra}")
+                print(f"*** {LLM_CAUTION_NOTE} (payloads only -- judgment is still {args.vuln_class_name}'s own rule) ***")
+                vuln_class = VulnClass(vuln_class.payloads + extra, vuln_class.detect, vuln_class.reference)
+            else:
+                print("LLM suggested no usable extra payloads (empty/unparseable reply); using the fixed list only.")
 
     print(f"Target: {args.url}")
-    print(f"Vulnerability class: {args.vuln_class_name}")
+    print(f"Vulnerability class: {class_label}")
     print(f"Baseline params: {base_params}")
     print(f"Fuzzing params: {args.fuzz}")
     print(f"Payload count: {len(vuln_class.payloads)}")
