@@ -126,7 +126,14 @@ def check_ports(server_port):
                 "local_scan_server.py を起動し直してください。" % (state, why or ""))
 
 
+def _require_http(url):
+    """http / https 以外(file:// など)は拒否する。"""
+    if not url.lower().startswith(("http://", "https://")):
+        raise ValueError("URL は http:// か https:// で始めてください: %s" % url)
+
+
 def post(url, path, body, timeout):
+    _require_http(url)
     req = urllib.request.Request(url + path, data=json.dumps(body).encode("utf-8"),
                                  headers={"Content-Type": "application/json"})
     try:
@@ -139,6 +146,7 @@ def post(url, path, body, timeout):
 
 
 def check_server(url, full):
+    _require_http(url)
     try:
         with urllib.request.urlopen(url + "/health", timeout=5) as r:
             row("OK", "サーバー疎通 /health", json.loads(r.read().decode("utf-8")).get("status", ""))
