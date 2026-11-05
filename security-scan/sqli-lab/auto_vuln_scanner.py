@@ -1,12 +1,22 @@
 """
-Minimal, LLM-free, rule-based vulnerability auto-scanner.
+Minimal, rule-based vulnerability auto-scanner. LLM-free by default.
 
 Strix (AI-agent pentesting) uses an LLM to decide what to try next, and
 can look for many vulnerability classes (SQLi, XSS, SSRF, auth bugs, ...).
 This script replaces that decision-making with a fixed payload list PER
 vulnerability class, and deterministic response checks -- no LLM, no
-agent loop, no Docker. Adding a new class means adding a new entry to
-VULN_CLASSES below: a payload list + a detect() function.
+agent loop, no Docker, unless you opt into one of the two LLM-assisted
+modes below. Adding a new class means adding a new entry to VULN_CLASSES
+below: a payload list + a detect() function.
+
+Optional (off unless passed): --llm-payloads asks an LLM for EXTRA payload
+strings for an existing class (judgment stays with that class's own
+reviewed detect() -- see 2026-11-06 README note). --llm-class lets the LLM
+define a brand-new class by name, but only by filling in one of a small,
+fixed set of safe detection *types* -- never code that gets executed. Both
+are UNREVIEWED relative to the 11 built-in classes; see
+"補足: これは『Strixの簡易版』ではない" in README.ja.md and
+../ai-sast-trial-notes.md for why an LLM's own verdict is not trusted here.
 
 Scope: run only against targets you own/control, e.g. vulnerable_app.py
 in this same directory.
@@ -15,14 +25,17 @@ in this same directory.
 from __future__ import annotations
 
 import argparse
+import ast
 import ipaddress
+import json
 import os
 import re
 import socket
 import sys
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from typing import Callable
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -370,6 +383,215 @@ VULN_CLASSES: dict[str, VulnClass] = {
 }
 
 
+# --------------------------------------------------------------------------
+# Discovery (static only): read a Flask app's source and list its routes and
+# the GET params they read, instead of a human typing --url/--fuzz by hand.
+# This is the one part of "target auto-discovery" (see README.ja.md's "this
+# is not a lightweight Strix") that is reachable without firing any
+# payload: it just reads Python source with ast, it does not import or run
+# the app, and it sends no HTTP requests. It still cannot find params a
+# route reads by means this doesn't recognize (e.g. request.json, a helper
+# function), or routes defined dynamically (add_url_rule in a loop) --
+# those still need a human to add --fuzz by hand, same as before.
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class DiscoveredRoute:
+    path: str
+    methods: list[str]
+    func_name: str
+    params: list[str]
+
+
+def _route_decorator_info(dec: ast.AST) -> tuple[str, list[str]] | None:
+    """Pull (path, methods) out of an @app.route("/x", methods=[...]) call.
+    Returns None for anything that isn't shaped like that (e.g. @app.get)."""
+    if not isinstance(dec, ast.Call):
+        return None
+    func = dec.func
+    if not (isinstance(func, ast.Attribute) and func.attr == "route"):
+        return None
+    if not dec.args or not isinstance(dec.args[0], ast.Constant) or not isinstance(dec.args[0].value, str):
+        return None
+    path = dec.args[0].value
+    methods = ["GET"]
+    for kw in dec.keywords:
+        if kw.arg == "methods" and isinstance(kw.value, ast.List):
+            vals = [e.value for e in kw.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+            if vals:
+                methods = vals
+    return path, methods
+
+
+def _params_read_in(node: ast.AST) -> list[str]:
+    """Find request.args.get("x") / request.args["x"] / request.form.get("x")
+    style reads inside a route function body. Static text matching only --
+    a param read through a helper function, or built from a variable instead
+    of a string literal, will not show up here."""
+    names: list[str] = []
+    for sub in ast.walk(node):
+        src = None
+        key_node = None
+        if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Attribute) and sub.func.attr == "get":
+            inner = sub.func.value
+            if isinstance(inner, ast.Attribute) and inner.attr in ("args", "form", "values"):
+                src = inner.attr
+                if sub.args:
+                    key_node = sub.args[0]
+        elif isinstance(sub, ast.Subscript):
+            inner = sub.value
+            if isinstance(inner, ast.Attribute) and inner.attr in ("args", "form", "values"):
+                src = inner.attr
+                key_node = sub.slice
+        if src is not None and isinstance(key_node, ast.Constant) and isinstance(key_node.value, str):
+            if key_node.value not in names:
+                names.append(key_node.value)
+    return names
+
+
+def discover_routes(py_file: str) -> list[DiscoveredRoute]:
+    with open(py_file, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read(), filename=py_file)
+
+    routes: list[DiscoveredRoute] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for dec in node.decorator_list:
+            info = _route_decorator_info(dec)
+            if info is None:
+                continue
+            path, methods = info
+            routes.append(DiscoveredRoute(path, methods, node.name, _params_read_in(node)))
+    return routes
+
+
+def print_discovered_routes(routes: list[DiscoveredRoute], base_url: str) -> None:
+    print(f"Discovered {len(routes)} route(s) (static read of the source; nothing was run or requested):\n")
+    for r in routes:
+        params = ", ".join(r.params) if r.params else "(none found statically)"
+        print(f"  {'/'.join(r.methods):10} {r.path}  (def {r.func_name})")
+        print(f"    params: {params}")
+        if "GET" in r.methods and r.params:
+            fuzz = " ".join(f"--fuzz {p}" for p in r.params)
+            baseline = " ".join(f"--baseline {p}=zzz" for p in r.params)
+            print(
+                f"    next step (human decides --class; this prints the command, it does not run it):\n"
+                f"      python3 auto_vuln_scanner.py --url {base_url}{r.path} --class <sqli|xss|...> "
+                f"{baseline} {fuzz}"
+            )
+        print()
+
+
+# --------------------------------------------------------------------------
+# Discovery (dynamic): actually browse the running app -- plain GET requests
+# only, following <a href> links and reading (never submitting) <form>
+# elements -- to find pages and GET params without reading the source. This
+# is the "crawling/browsing" half of Strix's auto-discovery that --discover
+# (static, source-only) cannot do: it only sees what a route handler
+# generates and links to at runtime, which can differ from what's in the
+# source (e.g. conditionally-rendered links). It still sends no attack
+# payload and submits no form, so it is not itself a vulnerability scan --
+# only an automated version of a human clicking around.
+# --------------------------------------------------------------------------
+
+
+class _LinkFormParser(HTMLParser):
+    """Pulls <a href=...> targets and <form> actions/methods/input-names out
+    of one page of HTML. Deliberately simple (stdlib only, no bs4): good
+    enough for this lab's plain HTML, not a full browser-grade parser."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.links: list[str] = []
+        self.forms: list[dict] = []
+        self._current_form: dict | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a = dict(attrs)
+        if tag == "a" and a.get("href"):
+            self.links.append(a["href"])
+        elif tag == "form":
+            self._current_form = {
+                "action": a.get("action", ""),
+                "method": (a.get("method") or "GET").upper(),
+                "inputs": [],
+            }
+            self.forms.append(self._current_form)
+        elif tag in ("input", "textarea", "select") and self._current_form is not None:
+            name = a.get("name")
+            if name:
+                self._current_form["inputs"].append(name)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "form":
+            self._current_form = None
+
+
+@dataclass
+class CrawledPage:
+    url: str
+    status: int
+    params: list[str]  # from this page's own URL query string, if any
+    forms: list[dict]
+
+
+def crawl(base_url: str, max_pages: int = 25) -> list[CrawledPage]:
+    """Breadth-first, same-host crawl starting at base_url. GET requests
+    only -- no form is ever submitted, no attack payload is ever sent.
+    Stays in scope (checked once up front by the caller via
+    _is_allowed_target, same guard as the payload-firing scan)."""
+    seen: set[str] = set()
+    queue: list[str] = [base_url]
+    host = urlparse(base_url).netloc
+    pages: list[CrawledPage] = []
+
+    while queue and len(pages) < max_pages:
+        url = queue.pop(0)
+        if url in seen:
+            continue
+        seen.add(url)
+        try:
+            resp = requests.get(url, timeout=5)
+        except requests.RequestException:
+            continue
+        parsed = urlparse(url)
+        own_params = sorted(set(p.split("=", 1)[0] for p in parsed.query.split("&") if p))
+        parser = _LinkFormParser()
+        if "html" in resp.headers.get("Content-Type", ""):
+            parser.feed(resp.text)
+        pages.append(CrawledPage(url, resp.status_code, own_params, parser.forms))
+        for href in parser.links:
+            next_url = urljoin(url, href)
+            if urlparse(next_url).netloc == host and next_url not in seen:
+                queue.append(next_url)
+
+    return pages
+
+
+def print_crawled_pages(pages: list[CrawledPage]) -> None:
+    print(
+        f"Crawled {len(pages)} page(s) (GET requests only, no form was submitted, "
+        "no attack payload was sent):\n"
+    )
+    for p in pages:
+        print(f"  {p.status} {p.url}")
+        if p.params:
+            print(f"    query params seen in this URL: {', '.join(p.params)}")
+        for f in p.forms:
+            inputs = ", ".join(f["inputs"]) if f["inputs"] else "(none found)"
+            print(f"    form: method={f['method']} action={f['action'] or '(same page)'} inputs: {inputs}")
+        print()
+    if len(pages) <= 1:
+        print(
+            "Note: this found nothing beyond the seed URL. A target with no navigable "
+            "<a href> links or <form> elements from its seed page (e.g. a flat set of "
+            "independent API-style endpoints, as in this lab's vulnerable_app.py) cannot "
+            "be discovered by browsing -- use --discover (reads the source) instead.\n"
+        )
+
+
 @dataclass
 class Finding:
     param: str
@@ -447,13 +669,202 @@ def scan(
     return findings
 
 
+# --------------------------------------------------------------------------
+# Optional LLM use ("未知のパターンへの適応" / "汎用性" in README.ja.md's
+# "this is not a lightweight Strix" section). Off by default -- nothing
+# above this point needs an LLM, and plain `--url/--class/--fuzz` behaves
+# exactly as before. This section is additive: it either (a) asks an LLM
+# for MORE payload strings for an EXISTING, already-reviewed class (the
+# verdict is still the existing deterministic detect_*() function -- see
+# ../ai-sast-trial-notes.md for why letting an LLM judge its own findings
+# is unreliable: it has dismissed real vulnerabilities as false positives
+# in repeated runs here), or (b) lets the LLM define a brand-new class by
+# name, but only by filling in a small, fixed set of safe, parametrized
+# detection *types* below -- it never supplies code that gets executed.
+# Treat any --llm-class result with the same caution as an AI-SAST verdict:
+# it is unreviewed and has not been checked against a known-vulnerable
+# target the way the 11 built-in classes have (see "実証した攻撃" above).
+# --------------------------------------------------------------------------
+
+LLM_CAUTION_NOTE = (
+    "caution: this class/these payloads came from an LLM and are UNREVIEWED -- "
+    "unlike the 11 built-in classes, nobody has confirmed them against a known-"
+    "vulnerable target. See ../ai-sast-trial-notes.md: this project's own trials "
+    "found LLM judgment unreliable (false positives, and real vulnerabilities "
+    "dismissed) across repeated runs of the same model."
+)
+
+
+def ask_llm(base_url: str, model: str, api_key: str, system: str, user: str, timeout: float = 120.0) -> str:
+    url = base_url.rstrip("/") + "/chat/completions"
+    if not url.lower().startswith(("http://", "https://")):  # file:// など、http 以外は拒否する
+        raise ValueError("--llm-url は http:// か https:// で始めてください: %s" % base_url)
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = "Bearer " + api_key
+    body = {
+        "model": model,
+        "stream": False,
+        "temperature": 0.2,
+        "max_tokens": 700,
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+    }
+    resp = requests.post(url, json=body, headers=headers, timeout=timeout)
+    resp.raise_for_status()
+    choices = resp.json().get("choices") or []
+    if not choices:
+        return ""
+    return (choices[0].get("message") or {}).get("content") or ""
+
+
+_JSON_FENCE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.S)
+_MAX_LLM_PAYLOADS = 10
+_MAX_PAYLOAD_LEN = 300
+_MAX_MARKER_LEN = 200
+
+
+def _extract_json(text: str) -> dict | None:
+    m = _JSON_FENCE.search(text or "")
+    candidate = m.group(1) if m else text
+    try:
+        return json.loads(candidate)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def llm_suggest_payloads(
+    base_url: str, model: str, api_key: str, class_name: str, existing_payloads: list[str], count: int = 5
+) -> list[str]:
+    """Ask the LLM for extra payload strings for an EXISTING class, to try
+    alongside (not instead of) the fixed list. Judgment still uses that
+    class's own deterministic detect_*() -- the LLM only supplies strings."""
+    system = (
+        "You suggest short HTTP query-parameter attack payload strings for an "
+        "authorized security test of a system the tester owns. Reply with ONLY "
+        "the payload strings, one per line, no numbering, no explanation, no code fences."
+    )
+    user = (
+        f"Vulnerability class: {class_name}\n"
+        f"Existing payloads already tested (do not repeat these): {existing_payloads}\n"
+        f"Give {count} different, short payload strings to additionally try for this class."
+    )
+    text = ask_llm(base_url, model, api_key, system, user)
+    out: list[str] = []
+    for line in text.splitlines():
+        p = line.strip().strip("`").lstrip("-*0123456789. ").strip()
+        if p and len(p) <= _MAX_PAYLOAD_LEN and p not in existing_payloads and p not in out:
+            out.append(p)
+        if len(out) >= count:
+            break
+    return out
+
+
+# Fixed, safe detection types an LLM-defined class can pick from. Each is
+# real, reviewed Python -- the LLM only supplies the small set of string/
+# number parameters named in SAFE_DETECT_TYPES below, never code.
+SAFE_DETECT_TYPES = {
+    "reflected_marker": "marker (str) appears verbatim in the response body but not the baseline",
+    "error_marker": "marker (str) appears in the response body but not the baseline (error/leak text)",
+    "status_flip": "response status code differs from the baseline's status code",
+    "length_diff": "response body length differs from the baseline's by more than ratio (float, default 0.5)",
+}
+
+
+def _make_llm_detect(cfg: dict) -> Callable[[requests.Response, requests.Response, str], str | None]:
+    dtype = cfg.get("type")
+    marker = cfg.get("marker")
+    if isinstance(marker, str):
+        marker = marker[:_MAX_MARKER_LEN]
+    try:
+        ratio = float(cfg.get("ratio", 0.5))
+    except (TypeError, ValueError):
+        ratio = 0.5
+
+    def detect(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+        if dtype in ("reflected_marker", "error_marker") and isinstance(marker, str) and marker:
+            if marker in resp.text and marker not in baseline.text:
+                kind = "reflected" if dtype == "reflected_marker" else "error/leak text"
+                return f"llm-defined ({kind}): {marker!r} seen in response, not in baseline"
+            return None
+        if dtype == "status_flip":
+            if resp.status_code != baseline.status_code:
+                return f"llm-defined (status flip): baseline={baseline.status_code} payload={resp.status_code}"
+            return None
+        if dtype == "length_diff":
+            base_len = max(len(baseline.content), 1)
+            if abs(len(resp.content) - base_len) / base_len > ratio:
+                return f"llm-defined (length diff): baseline={base_len}B payload={len(resp.content)}B"
+            return None
+        return None  # unknown/malformed type: never matches, rather than guessing
+
+    return detect
+
+
+def llm_propose_class(base_url: str, model: str, api_key: str, class_name: str) -> VulnClass | None:
+    """Ask the LLM to define a brand-new class: payload strings + ONE of the
+    SAFE_DETECT_TYPES above, as data. We never eval/exec anything the LLM
+    returns -- only the fixed, reviewed functions in _make_llm_detect()
+    actually run, parametrized by the (size-capped) strings the LLM gives."""
+    system = (
+        "You help define an authorized security test for a system the tester owns. "
+        "Reply with ONLY a single JSON object (no prose, no code fences), shaped exactly as:\n"
+        '{"payloads": ["...", "..."], "detect": {"type": "<one of: '
+        + ", ".join(SAFE_DETECT_TYPES) + '>", "marker": "...", "ratio": 0.5}}\n'
+        "\"marker\" is only used by reflected_marker/error_marker (a short string to look for "
+        "in the response, such as a canary value your payloads embed, or an error-message "
+        "fragment). \"ratio\" is only used by length_diff. Omit fields a type does not use."
+    )
+    user = f"Vulnerability class to test for: {class_name}\nGive up to {_MAX_LLM_PAYLOADS} payload strings."
+    text = ask_llm(base_url, model, api_key, system, user)
+    data = _extract_json(text)
+    if not isinstance(data, dict):
+        print(f"llm-class: model did not return parseable JSON, refusing to guess:\n{text[:500]}", file=sys.stderr)
+        return None
+    payloads = [p for p in data.get("payloads", []) if isinstance(p, str) and p][:_MAX_LLM_PAYLOADS]
+    payloads = [p[:_MAX_PAYLOAD_LEN] for p in payloads]
+    detect_cfg = data.get("detect")
+    if not payloads or not isinstance(detect_cfg, dict) or detect_cfg.get("type") not in SAFE_DETECT_TYPES:
+        print(
+            "llm-class: response missing payloads or a recognized detect.type "
+            f"(got: {detect_cfg!r}), refusing to guess.",
+            file=sys.stderr,
+        )
+        return None
+    return VulnClass(payloads, _make_llm_detect(detect_cfg))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--url", required=True, help="e.g. http://127.0.0.1:5000/search")
+    parser.add_argument(
+        "--discover",
+        metavar="APP.PY",
+        help="static-only: read this Flask app's source and list its routes/params "
+        "(ast parse, no import, no HTTP request, no payload sent) instead of scanning. "
+        "All other flags except --base-url are ignored in this mode.",
+    )
+    parser.add_argument(
+        "--base-url",
+        default="http://127.0.0.1:5000",
+        help="with --discover, the base URL to print in the suggested next-step command "
+        "(default: http://127.0.0.1:5000)",
+    )
+    parser.add_argument(
+        "--crawl",
+        metavar="SEED_URL",
+        help="dynamic: browse the running app from this URL (GET requests only, no form "
+        "is submitted, no attack payload is sent) and list the pages/forms/params found. "
+        "Scope-checked the same way as a scan, unless --i-own-this-target is passed.",
+    )
+    parser.add_argument(
+        "--max-pages",
+        type=int,
+        default=25,
+        help="with --crawl, stop after visiting this many pages (default 25)",
+    )
+    parser.add_argument("--url", help="e.g. http://127.0.0.1:5000/search")
     parser.add_argument(
         "--class",
         dest="vuln_class_name",
-        required=True,
         choices=sorted(VULN_CLASSES),
         help="vulnerability class to test for",
     )
@@ -467,7 +878,6 @@ def main() -> int:
     parser.add_argument(
         "--fuzz",
         action="append",
-        required=True,
         help="param name to fuzz, repeatable, e.g. --fuzz q",
     )
     parser.add_argument(
@@ -476,7 +886,55 @@ def main() -> int:
         help="override the localhost/RFC1918-only scope check; only use this "
         "against a target you actually own or are explicitly authorized to test",
     )
+    parser.add_argument(
+        "--llm-payloads",
+        action="store_true",
+        help="with --class, also ask the LLM for extra payload strings to try alongside the "
+        "fixed list. Judgment still uses that class's existing, reviewed detect_*() -- the "
+        "LLM only supplies strings, never a verdict. Requires --llm-url/--llm-model.",
+    )
+    parser.add_argument(
+        "--llm-class",
+        metavar="NAME",
+        help="instead of --class, give the LLM a free-text vulnerability class name/description "
+        "and let it define payloads + ONE of a fixed set of safe detection types (see "
+        f"SAFE_DETECT_TYPES: {', '.join(SAFE_DETECT_TYPES)}). UNREVIEWED -- see the caution "
+        "note this prints before any finding. Requires --llm-url/--llm-model.",
+    )
+    parser.add_argument(
+        "--llm-url",
+        default="http://127.0.0.1:11434/v1",
+        help="OpenAI-compatible chat/completions base URL for --llm-payloads/--llm-class "
+        "(default: a local Ollama server, http://127.0.0.1:11434/v1)",
+    )
+    parser.add_argument("--llm-model", default="qwen2.5-coder:3b", help="model name for the LLM endpoint")
+    parser.add_argument("--llm-api-key", default=os.environ.get("LLM_API_KEY", ""), help="optional bearer token")
+    parser.add_argument(
+        "--llm-count", type=int, default=5, help="with --llm-payloads, how many extra payloads to request"
+    )
     args = parser.parse_args()
+
+    if args.discover:
+        routes = discover_routes(args.discover)
+        print_discovered_routes(routes, args.base_url.rstrip("/"))
+        return 0
+
+    if args.crawl:
+        if not args.i_own_this_target:
+            allowed, reason = _is_allowed_target(args.crawl)
+            if not allowed:
+                print(f"Refusing to crawl: {reason}", file=sys.stderr)
+                return 2
+        pages = crawl(args.crawl, max_pages=args.max_pages)
+        print_crawled_pages(pages)
+        return 0
+
+    if not args.url or not (args.vuln_class_name or args.llm_class) or not args.fuzz:
+        parser.error(
+            "--url, (--class or --llm-class) and --fuzz are required unless --discover/--crawl is used"
+        )
+    if args.vuln_class_name and args.llm_class:
+        parser.error("--class and --llm-class are mutually exclusive")
 
     if not args.i_own_this_target:
         allowed, reason = _is_allowed_target(args.url)
@@ -485,10 +943,30 @@ def main() -> int:
             return 2
 
     base_params = dict(kv.split("=", 1) for kv in args.baseline)
-    vuln_class = VULN_CLASSES[args.vuln_class_name]
+
+    if args.llm_class:
+        vuln_class = llm_propose_class(args.llm_url, args.llm_model, args.llm_api_key, args.llm_class)
+        if vuln_class is None:
+            return 2
+        class_label = f"{args.llm_class} (llm-defined)"
+        print(f"*** {LLM_CAUTION_NOTE} ***")
+    else:
+        vuln_class = VULN_CLASSES[args.vuln_class_name]
+        class_label = args.vuln_class_name
+        if args.llm_payloads:
+            extra = llm_suggest_payloads(
+                args.llm_url, args.llm_model, args.llm_api_key, args.vuln_class_name,
+                vuln_class.payloads, args.llm_count,
+            )
+            if extra:
+                print(f"LLM suggested {len(extra)} extra payload(s) for {args.vuln_class_name}: {extra}")
+                print(f"*** {LLM_CAUTION_NOTE} (payloads only -- judgment is still {args.vuln_class_name}'s own rule) ***")
+                vuln_class = VulnClass(vuln_class.payloads + extra, vuln_class.detect, vuln_class.reference)
+            else:
+                print("LLM suggested no usable extra payloads (empty/unparseable reply); using the fixed list only.")
 
     print(f"Target: {args.url}")
-    print(f"Vulnerability class: {args.vuln_class_name}")
+    print(f"Vulnerability class: {class_label}")
     print(f"Baseline params: {base_params}")
     print(f"Fuzzing params: {args.fuzz}")
     print(f"Payload count: {len(vuln_class.payloads)}")
