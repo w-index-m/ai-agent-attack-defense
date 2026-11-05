@@ -166,6 +166,19 @@ jobs:
             --hbgpt-src /tmp/hbgpt-canary/src --out results/hackingbuddygpt_regression.json
           exit 0
 
+      # Semgrep の指摘の一覧(ルール ID・場所)をログに出す。結果の JSON を落とさなくても、中身が確認できる。
+      - name: Semgrep の指摘の一覧
+        if: always()
+        run: |
+          [ -f results/semgrep.json ] || exit 0
+          python3 -I - <<'PY'
+          import json
+          d = json.load(open("results/semgrep.json"))
+          for r in d.get("results", []):
+              x = r.get("extra", {})
+              print(f"{x.get('severity','?'):8} {r['check_id']} {r['path']}:{r['start']['line']}")
+          PY
+
       - name: 集計(要約を表示)
         run: |
           sudo chown -R "$(id -u):$(id -g)" results || true
