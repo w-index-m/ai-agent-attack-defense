@@ -31,6 +31,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
@@ -222,19 +223,68 @@ def _port_open(host, port, timeout=0.5):
         s.close()
 
 
+def _env_hint(name, unix_example, windows_example):
+    """環境変数の設定例を、実行中のOSのシェルに合わせて返す(WindowsはPowerShell構文)。"""
+    if os.name == "nt":
+        return '$env:%s="%s"(PowerShell)' % (name, windows_example)
+    return "export %s=%s" % (name, unix_example)
+
+
+# このサーバーが自動起動した子プロセス。サーバー終了時に止める(残すと次回ポートを塞ぐ)。
+_STARTED = []
+
+# 改ざんを検知できる監査ログ(scripts/audit_log.py)。全スキャン要求の「誰が・いつ・何に・
+# 同意フラグ付きで」と結果の概要を記録する。検証: python scripts/audit_log.py verify <このファイル>
+AUDIT = _load_module(os.path.join(HERE, "audit_log.py"), "audit_log_local")
+AUDIT_PATH = os.path.join(RESULTS_DIR, "audit.jsonl")
+
+
+def _audit_request(body):
+    """要求のうち、監査に必要な項目だけを残す(長さも制限する)。"""
+    body = body if isinstance(body, dict) else {}
+    out = {}
+    for k in ("targets", "module", "port", "ports"):
+        if k in body:
+            out[k] = str(body[k])[:300]
+    out["i_own_these"] = body.get("i_own_these") is True
+    return out
+
+
+def _audit_outcome(result):
+    if isinstance(result, dict) and "error" in result:
+        return {"error": str(result["error"])[:200]}
+    if isinstance(result, list):
+        return {"items": len(result)}
+    if isinstance(result, dict) and isinstance(result.get("runs"), list):
+        return {"items": sum(len(r.get("results", [])) for r in result["runs"] if isinstance(r, dict))}
+    if isinstance(result, dict) and isinstance(result.get("results"), list):
+        return {"items": len(result["results"])}
+    return {}
+
+
 def _ensure_background(cmd, cwd, env, host, port, wait_sec=20):
     """host:port が既に待ち受けていなければ、cmd をバックグラウンドで起動し、
     待ち受け開始まで待つ(最大 wait_sec 秒)。新規に起動したかどうかを返す。"""
     if _port_open(host, port):
         return False
-    subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                      stdin=subprocess.DEVNULL, start_new_session=True)
+    _STARTED.append(subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL,
+                                      start_new_session=True))
     deadline = time.monotonic() + wait_sec
     while time.monotonic() < deadline:
         if _port_open(host, port):
             return True
         time.sleep(0.5)
     return True  # 起動は試みた。疎通未確認のまま次に進み、Strix側のエラーに委ねる。
+
+
+WINDOWS_STRIX_MSG = (
+    "Strixは、Windows上で起動したlocal_scan_server.pyからは実行できません(Strixのlocalバックエンドが"
+    "Unix専用の部品を使うため。2026-11-02に実機で失敗を確認)。ブラウザとvuln_triage.htmlは"
+    "Windowsのままでかまいません。WSL2(Ubuntu)で、もう1つlocal_scan_server.pyを別ポートで起動し"
+    "(例: STRIX_LOCAL_DIR=~/strix VULN_APP_PORT=5100 python3 scripts/local_scan_server.py --port 8767)、"
+    "画面の接続設定の「Strix用エンドポイント」に http://localhost:8767 を入れてください。"
+    "手順: security-scan/strix-local-poc/README.md")
 
 
 def scan_strix(body):
@@ -249,6 +299,10 @@ def scan_strix(body):
     Strixの作業コピーのパスを設定しておく必要がある。
     """
     body = body or {}
+    # Windowsネイティブでは、Strixのlocalバックエンド(UnixLocalSandboxClient)がUnix専用のため動かない
+    # (2026-11-02の実機で失敗を確認)。数分待たせてから失敗させず、補助プロセスも起動せずに即座に知らせる。
+    if os.name == "nt" and os.environ.get("STRIX_ALLOW_WINDOWS", "").strip() != "1":
+        return {"error": WINDOWS_STRIX_MSG}
     if body.get("i_own_these") is not True:
         return {"error": "拒否: i_own_these(自社が管理している、または書面で許可を得た対象への"
                           "攻撃実行に同意すること)がtrueである必要があります。"}
@@ -262,10 +316,11 @@ def scan_strix(body):
     if not strix_dir or not os.path.isdir(strix_dir):
         return {"error": "STRIX_LOCAL_DIRが設定されていないか、ディレクトリが存在しません。"
                           "事前にsecurity-scan/strix-local-poc/README.mdの手順("
-                          "git clone https://github.com/usestrix/strix → "
+                          "git clone https://github.com/usestrix/strix → git checkout v1.7.0 → "
                           "strix-local-backend.patch等を適用 → uv sync)を済ませ、"
-                          "local_scan_server.pyを起動する前に "
-                          "STRIX_LOCAL_DIR=/path/to/strix を環境変数で指定してください。"}
+                          "local_scan_server.pyを起動する前に同じウィンドウで "
+                          + _env_hint("STRIX_LOCAL_DIR", "/path/to/strix", r"C:\path\to\strix")
+                          + " のように環境変数を指定してください。"}
     if _which("uv") is None:
         return {"error": "uvコマンドが見つかりません。https://docs.astral.sh/uv/ を参照してインストールしてください。"}
 
@@ -295,20 +350,42 @@ def scan_strix(body):
                           "既定ポートが他のソフトに使われている場合は、環境変数VULN_APP_PORTで"
                           "別のポートを指定できます。"}
 
+    # mock_llm_server.py は前回の実行から起動したまま使い回されることがある。台本の手数カウント
+    # (ログ行数)と対象を、今回の実行用にリセットしておく(しないと2回目以降は1手目から
+    # finish_scanが返って0件になり、対象を変えても前回の対象へ攻撃コマンドが向かう)。
+    mock_state_dir = os.path.join(tempfile.gettempdir(), "mock_llm")
+    os.makedirs(mock_state_dir, exist_ok=True)
+    open(os.path.join(mock_state_dir, "requests.jsonl"), "w", encoding="utf-8").close()
+    with open(os.path.join(mock_state_dir, "target.txt"), "w", encoding="utf-8") as f:
+        f.write(target)
+
     strix_env = dict(os.environ)
     strix_env["STRIX_RUNTIME_BACKEND"] = "local"
     strix_env["STRIX_LLM"] = "openai/mock-model"
     strix_env["OPENAI_API_BASE"] = "http://127.0.0.1:8899/v1"
     strix_env["OPENAI_API_KEY"] = "dummy-mock-key"
 
-    before_runs = set()
-    runs_dir = os.path.join(strix_dir, "strix_runs")
-    if os.path.isdir(runs_dir):
-        before_runs = set(os.listdir(runs_dir))
+    # Strixの「-t ./」は、カレントフォルダの中身を丸ごと実行環境へコピーする。Strixの作業コピー自身
+    # (STRIX_LOCAL_DIR)で実行すると、その中の.venvにあるシンボリックリンクをSDKが読めず
+    # (LocalDirReadError: symlink_not_supported)、必ず失敗する(2026-11-03、WSL2の実機で発見)。
+    # 毎回、シンボリックリンクの無い一時フォルダにsqli-labのコードだけをコピーし、そこから
+    # `uv run --project <STRIX_LOCAL_DIR>`で起動する(手動での検証で成功していた手順と同じ)。
+    work_dir = tempfile.mkdtemp(prefix="strix-gui-target-")
+    lab_dst = os.path.join(work_dir, "security-scan", "sqli-lab")
+    os.makedirs(lab_dst)
+    lab_src = os.path.dirname(vuln_app)
+    for name in sorted(os.listdir(lab_src)):
+        src = os.path.join(lab_src, name)
+        if name.endswith(".py") and os.path.isfile(src) and not os.path.islink(src):
+            shutil.copyfile(src, os.path.join(lab_dst, name))
 
-    cmd = ["uv", "run", "strix", "-n", "-t", "./", "--scan-mode", "quick", "--max-budget", "10"]
+    before_runs = set()
+    runs_dir = os.path.join(work_dir, "strix_runs")
+
+    cmd = ["uv", "run", "--project", strix_dir, "strix", "-n", "-t", "./",
+           "--scan-mode", "quick", "--max-budget", "10"]
     try:
-        p = subprocess.run(cmd, cwd=strix_dir, env=strix_env, capture_output=True,
+        p = subprocess.run(cmd, cwd=work_dir, env=strix_env, capture_output=True,
                             timeout=STRIX_TIMEOUT_SEC)
     except subprocess.TimeoutExpired:
         return {"error": "Strixの実行がタイムアウトしました(%d秒)。" % STRIX_TIMEOUT_SEC}
@@ -341,8 +418,14 @@ def scan_strix(body):
             if os.path.exists(log_path):
                 with open(log_path, encoding="utf-8", errors="replace") as f:
                     log_tail = f.read()[-2000:]
+            hint = ""
+            if os.name == "nt":
+                hint = ("Windowsで実行しています。strix-local-backend.patchのlocalバックエンドは"
+                        "OpenAI Agents SDKのUnixLocalSandboxClient(Unix専用)を使うため、Windowsでは"
+                        "サンドボックスの作成で失敗する可能性が高いです。WSL2(Ubuntu等)上での実行を推奨します。")
             return {"error": "Strixの実行自体が失敗しました(run.jsonのstatus=%s、run_id=%s)。"
-                              "sarifは0件のまま書き出されるため、これを無視すると見逃します。" % (status, run_id),
+                              "sarifは0件のまま書き出されるため、これを無視すると見逃します。ログ: %s。%s"
+                              % (status, run_id, os.path.join(runs_dir, run_id), hint),
                     "returncode": p.returncode,
                     "stderr": p.stderr.decode("utf-8", "replace")[-2000:],
                     "strix_log_tail": log_tail}
@@ -352,7 +435,10 @@ def scan_strix(body):
                           "脆弱性が検出されなかった可能性があります。" % run_id,
                 "returncode": p.returncode}
     with open(sarif_path, encoding="utf-8") as f:
-        return json.load(f)
+        result = json.load(f)
+    # 成功時だけ一時フォルダを消す(失敗時は、ログを調べられるよう残す)
+    shutil.rmtree(work_dir, ignore_errors=True)
+    return result
 
 
 CAIRN_SERVE_PORT = 8010  # このエンドポイント専用。他で手動起動したcairn serveと衝突しないよう固定ポート
@@ -392,8 +478,9 @@ def scan_cairn(body):
         return {"error": "CAIRN_LOCAL_DIRが設定されていないか、ディレクトリが存在しません。"
                           "事前にsecurity-scan/cairn-lab/cairn-authorized-lab-runbook.mdの手順("
                           "git clone https://github.com/oritera/Cairn → uv sync --project cairn)を"
-                          "済ませ、local_scan_server.pyを起動する前に "
-                          "CAIRN_LOCAL_DIR=/path/to/Cairn を環境変数で指定してください。"}
+                          "済ませ、local_scan_server.pyを起動する前に同じウィンドウで "
+                          + _env_hint("CAIRN_LOCAL_DIR", "/path/to/Cairn", r"C:\path\to\Cairn")
+                          + " のように環境変数を指定してください。"}
     if _which("uv") is None:
         return {"error": "uvコマンドが見つかりません。https://docs.astral.sh/uv/ を参照してインストールしてください。"}
 
@@ -656,7 +743,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            return self._send(200, {"status": "ok", "repo_root": REPO_ROOT})
+            return self._send(200, {"status": "ok", "repo_root": REPO_ROOT,
+                                    "platform": "windows" if os.name == "nt" else sys.platform,
+                                    "strix_supported": os.name != "nt"
+                                    or os.environ.get("STRIX_ALLOW_WINDOWS", "").strip() == "1"})
         self._send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -668,29 +758,69 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = json.loads(raw.decode("utf-8")) if raw else {}
         except ValueError:
             return self._send(400, {"error": "JSONの形式が不正です。"})
+        req = _audit_request(body)
+        # 実行前に記録する。書けない場合は実行しない(能動スキャンが記録なしで走らないように)。
+        try:
+            start = AUDIT.append(AUDIT_PATH, {"event": "scan_start", "endpoint": self.path,
+                                              "client": self.client_address[0],
+                                              "origin": self.headers.get("Origin", ""), "request": req})
+        except Exception as e:  # noqa
+            return self._send(500, {"error": "監査ログ(%s)に書き込めないため、実行しません: %s" % (AUDIT_PATH, e)})
+        t0 = time.monotonic()
         with _LOCK:
             try:
                 result = ROUTES[self.path](body)
             except Exception as e:  # noqa
-                return self._send(500, {"error": "内部エラー: %s" % e})
-        code = 400 if isinstance(result, dict) and "error" in result else 200
+                result, code = {"error": "内部エラー: %s" % e}, 500
+            else:
+                code = 400 if isinstance(result, dict) and "error" in result else 200
+        try:
+            AUDIT.append(AUDIT_PATH, {"event": "scan_end", "endpoint": self.path, "start_seq": start["seq"],
+                                      "status": code, "duration_ms": int((time.monotonic() - t0) * 1000),
+                                      "outcome": _audit_outcome(result)})
+        except Exception as e:  # noqa
+            sys.stderr.write("警告: 監査ログ(scan_end)の書き込みに失敗しました: %s\n" % e)
         self._send(code, result)
 
 
 def main():
+    global AUDIT_PATH
     ap = argparse.ArgumentParser(description="vuln_triage.html から、このリポジトリ自身を対象に"
                                               "各診断ツールを実際に呼び出す、ローカル専用の補助サーバー")
     ap.add_argument("--port", type=int, default=8766, help="待ち受けポート(既定 8766)")
     a = ap.parse_args()
     os.makedirs(RESULTS_DIR, exist_ok=True)
+    if a.port != 8766:
+        # 2つ目のサーバー(例: WSL2でStrix用に8767で起動)が同じ作業フォルダを使うと、同じ監査ログへ
+        # 別プロセスから同時に追記して番号が重複し、検証がNGになる(プロセス内のロックは効かない)。
+        # ポートごとに別ファイルへ記録する。
+        AUDIT_PATH = os.path.join(RESULTS_DIR, "audit-%d.jsonl" % a.port)
     httpd = http.server.ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
     print("local_scan_server: http://127.0.0.1:%d で待ち受け中(Ctrl+Cで終了)" % a.port)
     print("対象リポジトリ: %s" % REPO_ROOT)
+    for name in ("STRIX_LOCAL_DIR", "CAIRN_LOCAL_DIR"):
+        v = os.environ.get(name, "").strip()
+        state = ("OK: %s" % v) if v and os.path.isdir(v) else (
+            "フォルダが見つかりません: %s" % v if v else "未設定(このボタンは使えません)")
+        print("%s: %s" % (name, state))
+    if os.name == "nt":
+        print("注意: Windows上のこのサーバーではStrixを実行できません(他のボタンは使えます)。"
+              "StrixはWSL2で別ポートのサーバーを起動して使います(詳細はStrixボタンのエラー表示を参照)。")
+    print("sqli-labデモアプリのポート(VULN_APP_PORT): %d" % VULN_APP_PORT)
+    print("監査ログ: %s" % AUDIT_PATH)
     print("vuln_triage.html の「ローカルスキャナーを呼び出す」から利用してください。")
+    AUDIT.append(AUDIT_PATH, {"event": "server_start", "port": a.port, "vuln_app_port": VULN_APP_PORT,
+                              "strix_dir_set": bool(os.environ.get("STRIX_LOCAL_DIR")),
+                              "cairn_dir_set": bool(os.environ.get("CAIRN_LOCAL_DIR"))})
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
+    finally:
+        AUDIT.append(AUDIT_PATH, {"event": "server_stop"})
+        for p in _STARTED:
+            if p.poll() is None:
+                p.terminate()
 
 
 if __name__ == "__main__":
