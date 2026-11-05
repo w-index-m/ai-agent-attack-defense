@@ -55,7 +55,33 @@ English: [`artex-analysis.en.md`](artex-analysis.en.md)
 
 ## 5. 未確認の主張（鵜呑み禁止）
 
-- **韓国・金融機関（新韓銀行関連）の侵害に ARTEX の痕跡**（Web サーバの HTML タイトルに `ARTEX-自主渗透测试控制台`、DeepSeek 連携）との報道 → **“疑い・手がかり”段階で未確定**。
+- **韓国・金融機関 7 社の侵害に ARTEX の痕跡**との報道 → **2026-11-06追記: インフラ面での裏付けが進んだが、
+  「ARTEX が使われた」こと自体は、依然として未確定**。
+  - 2026-11-04、脅威インテリジェンス企業 **Hunt.io** が、香港の中継サーバー(`23.248.226[.]250`、
+    AS138415/Yancy Limited、`23.248.224.0/20`)の公開状態のディレクトリを発見。ポート 18099 配下に
+    42 ファイル(計 105MB)、ポート 8001 配下に **JNDI/LDAP の悪用ツール一式**を確認。資格情報ファイルから、
+    先に報道されていた ARTEX 管理コンソール(`38.244.50[.]120`)への接続情報(JUMPHOST 指定)が見つかり、
+    2 つのサーバーを紐づけた。
+  - 中身には、**Claude Code の設定、モデル振り分けスクリプト(複数 AI モデルへの接続設定)、リモートアクセス
+    ツール、19 種類の独自エージェント機能**が含まれていた(本書 §2 のスキル機構・MCP クライアントの構成と、
+    性質として整合する)。CrowdStrike は、バックエンドのメインを **DeepSeek v4.1-flash**(リセラー
+    `xcai[.]pro` 経由とみられる)、補助を **GLM-5.3・Grok 4.6** と分析(Claude Code のセッションを介して)。
+  - 暗号資産取引所へのアクセス・Linux の権限昇格・モバイル端末操作のツールも同じ基盤で見つかったが、
+    **今回の事件との直接的な関係は未確認**。
+  - 被害は、**新韓銀行・KB 国民銀行・ハナ銀行・BNK 釜山銀行・礼佳林貯蓄銀行・ウェルカム貯蓄銀行・
+    現代キャピタル**の計 7 社(複数の韓国メディア)。影響を受けた人数は、報道により 6 万 7,000〜6 万 8,000 人
+    (2026 年 9 月末〜10 月初めの侵害、WSJ/Korea Times 経由)。新韓銀行単独で約 2 万 5,000〜2 万 5,700 人、
+    礼佳林貯蓄銀行で約 4 万人、との個別開示もある。
+  - **AhnLab は、ARTEX の痕跡を約 600 の IP で確認**したと報道されている一方、**韓国警察は ARTEX の役割を
+    正式には確認していない**(「唯一使われたツールかは未確認」との専門家コメントもあり)。
+  - JNDI/LDAP の悪用ツール自体は、`welk1n/JNDI-Injection-Exploit` 系統によく似た、汎用の JNDI インジェクション
+    攻撃ツール(RMI/LDAP/HTTP サーバーを立てて、脆弱な Java アプリにペイロードを送る)。**Log4Shell
+    (CVE-2021-44228)系の、対象アプリ側の脆弱性を突く、既知の攻撃手法**であり、ARTEX や AI 特有の新手口
+    ではない。
+  - **本書の対応**: 上記を理由に、§5 の表記を「疑い・手がかり」から「インフラ面の裏付けあり、役割自体は
+    未確定」に更新した。検知への反映は、`detections/r29_jndi_ldap_rce_attempt.yml`(JNDI/LDAP 悪用の
+    通信パターン。ツールに依存しない、技術そのものの検知)として追加した。`shared/taxonomy.json` の
+    **R29** を参照。
 - 中文コミュニティの**「ゼロ人手で 0day 発見」**（金蝶/Kingdee）→ **未検証の転述**。
 
 ## 6. 出典
@@ -63,6 +89,9 @@ English: [`artex-analysis.en.md`](artex-analysis.en.md)
 - 本家リポジトリ（AGPL-3.0）: https://github.com/Autumn-27/ARTEX （静的レビュー）／英語UI版フォーク: https://github.com/hongvincent/ARTEX
 - 解説（国内）: https://piyolog.hatenadiary.jp/ の「ARTEX とは」
 - 解説（英語）: https://zendot.org/en/posts/autumn-27-artex
-- 報道（未確定）: SBS / Seoul Economic Daily / BigGo（韓国・金融機関関連）
+- インフラ解析: Hunt.io「ARTEX Exposed: Infrastructure Behind the South Korea Bank Hack」(2026-11-04、
+  このセッションのネットワーク制限で一次情報には未到達。複数の二次情報源で相互確認)
+- 報道: SBS / Seoul Economic Daily / BigGo / BleepingComputer / Korea JoongAng Daily / Cyber Magazine
+  (CrowdStrike 経由、WSJ 引用)/ runtimewire(AhnLab・韓国警察の捜査状況)（韓国・金融機関関連）
 
 > 本書は検知・防御の設計に限定。攻撃の実行手順・兵器化・安全機構の回避方法は含まない。

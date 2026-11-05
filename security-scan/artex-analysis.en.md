@@ -74,8 +74,34 @@ under authorization** should capture under **G1–G6**.
 
 ## 5. Unverified claims (do not take as fact)
 
-- Reports of **ARTEX traces in a Korean financial-sector breach** (Shinhan Bank-related; the string
-  `ARTEX-自主渗透测试控制台` in a web server's HTML title; DeepSeek integration) → **suspicion/clue, not confirmed**.
+- Reports of **ARTEX traces in a breach of seven South Korean financial firms** →
+  **2026-11-06 update: infrastructure-level corroboration has grown, but whether ARTEX was actually used
+  remains unconfirmed**.
+  - On 2026-11-04, threat-intel firm **Hunt.io** found an exposed directory on a Hong Kong relay server
+    (`23.248.226[.]250`, AS138415/Yancy Limited, `23.248.224.0/20`): 42 files (105MB) on port 18099, and a
+    **JNDI/LDAP exploitation toolset** on port 8001. A credentials file linked this host to a previously
+    reported ARTEX console (`38.244.50[.]120`, named as JUMPHOST).
+  - Contents included **Claude Code configuration, model-routing scripts (connections to multiple AI
+    models), remote-access tools, and 19 custom agent skills** — consistent in shape with this document's
+    §2 skill/MCP architecture. CrowdStrike reported the backend as primarily **DeepSeek v4.1-flash** (via
+    reseller `xcai[.]pro`), with **GLM-5.3 and Grok 4.6** as supporting models, routed through Claude Code
+    sessions.
+  - Crypto-exchange access, Linux privilege-escalation, and mobile-device tooling were also found on the
+    same infrastructure, but **their relation to this specific campaign is unconfirmed**.
+  - Named victims across Korean media: **Shinhan Bank, KB Kookmin Bank, Hana Bank, BNK Busan Bank, Yegaram
+    Savings Bank, Welcome Savings Bank, and Hyundai Capital** (7 firms). Reported exposure: roughly
+    67,000–68,000 people (late September–early October 2026, per WSJ/Korea Times coverage); individual
+    disclosures cite ~25,000–25,700 for Shinhan and ~40,000 for Yegaram.
+  - **AhnLab reportedly found ARTEX traces across ~600 IPs**, but **Korean police have not officially
+    confirmed ARTEX's role** (one cybersecurity professor cautioned it isn't confirmed as the only tool
+    used).
+  - The JNDI/LDAP toolset itself resembles the generic `welk1n/JNDI-Injection-Exploit` family (stands up
+    RMI/LDAP/HTTP servers to deliver a payload) — a **known, Log4Shell-class (CVE-2021-44228) RCE
+    technique against the target application**, not a novel AI-specific technique.
+  - **This document's response**: §5's wording moved from "suspicion/clue" to "infrastructure-level
+    corroboration, role still unconfirmed." Detection-side, added
+    `detections/r29_jndi_ldap_rce_attempt.yml` (detects the JNDI/LDAP technique itself, tool-agnostic). See
+    **R29** in `shared/taxonomy.json`.
 - Chinese-community claims of a **"0-day found with zero human intervention"** (Kingdee) → **unverified**.
 
 ## 6. Sources
@@ -83,6 +109,11 @@ under authorization** should capture under **G1–G6**.
 - Upstream repo (AGPL-3.0): https://github.com/Autumn-27/ARTEX (static review) · English-UI fork:
   https://github.com/hongvincent/ARTEX
 - Write-up (JP): https://piyolog.hatenadiary.jp/ — "ARTEX とは"
+- Infrastructure analysis: Hunt.io, "ARTEX Exposed: Infrastructure Behind the South Korea Bank Hack"
+  (2026-11-04; this session's network restrictions prevented fetching the primary source directly —
+  cross-checked across multiple independent secondary sources)
+- Coverage: SBS / Seoul Economic Daily / BigGo / BleepingComputer / Korea JoongAng Daily / Cyber Magazine
+  (via CrowdStrike, citing WSJ) / runtimewire (AhnLab and Korean police investigation status)
 - Write-up (EN): https://zendot.org/en/posts/autumn-27-artex
 - Reporting (unconfirmed): SBS / Seoul Economic Daily / BigGo (Korea, financial sector)
 

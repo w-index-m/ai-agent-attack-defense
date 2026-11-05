@@ -31,6 +31,7 @@
     "R26": {"kind": "detection", "name": "TCP SYN/SYNACK処理近傍でのLinuxカーネルUAF/KASANクラッシュ（CVE-2026-98432、CVSS 3.1 9.8・Critical、Ubuntu優先度High、2026-10-28時点で全リリース未修正・探索的ヒューリスティック）"},
     "R27": {"kind": "detection", "name": "CI/エージェントワークフローが、プライベートリポジトリの読み取り直後に、公開の出力先へ書き込む（GitLost: GitHub Agentic Workflowsへの間接プロンプトインジェクション、Noma Security 2026-07-06開示、未確証の探索的ヒューリスティック）"},
     "R28": {"kind": "detection", "name": "IDE/AIコーディング拡張機能のプロセスが、インストール・更新直後にSSH鍵を作成/authorized_keysを変更（Cursorマーケットプレイスの改ざんされたClaude Code拡張、2026-10-29、未確証の探索的ヒューリスティック）"},
+    "R29": {"kind": "detection", "name": "アプリケーションプロセスが、受信直後にLDAP/RMIへ新規アウトバウンド接続（JNDIインジェクション型RCEの兆候。Log4Shell(CVE-2021-44228)系。韓国7金融機関への侵害基盤でJNDI/LDAP悪用ツールセットが確認されたとの報道(Hunt.io、2026-11-04)に基づく）"},
     "③": {"kind": "control", "name": "攻撃面最小化（ネット直結の露出を断つ）"},
     "③CSP": {"kind": "control", "name": "CSP による読み込み制御"}
   },
@@ -92,7 +93,8 @@
       "R25": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R26": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
       "R27": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R28": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
+      "R28": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
+      "R29": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
     }
   }
 }

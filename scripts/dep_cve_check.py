@@ -3,7 +3,8 @@
 
 requirements.txt（pip、`==` で固定された行のみ）、npm の package-lock.json
 （lockfileVersion 1/2/3 に対応）、NuGet の packages.lock.json と .csproj（版が
-固定されている PackageReference のみ）、Python の poetry.lock / uv.lock、Go の go.sum を読み、各パッケージの正確なバージョンを、
+固定されている PackageReference のみ）、Python の poetry.lock / uv.lock、Go の go.sum、Maven の pom.xml
+（<dependencies> で版が分かるもののみ）を読み、各パッケージの正確なバージョンを、
 公開の脆弱性データベース OSV（https://osv.dev）に照合する。
 
 確認専用：
@@ -21,6 +22,7 @@ requirements.txt（pip、`==` で固定された行のみ）、npm の package-l
     python3 scripts/dep_cve_check.py --poetry-lock poetry.lock --out dep_cve.sarif
     python3 scripts/dep_cve_check.py --uv-lock uv.lock --out dep_cve.sarif
     python3 scripts/dep_cve_check.py --go-sum go.sum --out dep_cve.sarif
+    python3 scripts/dep_cve_check.py --pom pom.xml --out dep_cve.sarif
 （各オプションは繰り返し指定できる）
     python3 scripts/dep_cve_check.py --requirements requirements.txt --npm-lock package-lock.json
 
@@ -148,6 +150,61 @@ def parse_csproj(path):
             out.append((name, version))
         else:
             print("%s: 正確な版が分からないためスキップ: %s (Version=%s)" % (path, name, version), file=sys.stderr)
+    return out
+
+
+def parse_pom_xml(path):
+    """Maven の pom.xml から、<dependencies>/<dependency> の (groupId:artifactId, version) を
+    OSV の Maven エコシステム名(「groupId:artifactId」)で返す。<properties> で定義された単純な
+    ${プロパティ名} の版だけは展開する。プロパティ以外の式(${project.version} など、ビルドしないと
+    分からないもの)、<dependencyManagement> 経由で親 POM から継承される版(このファイル単体では
+    追えない)は、版が分からないためスキップし、stderr に出す。
+
+    安全のため、.csproj と同じ理由で、DTD（<!DOCTYPE / <!ENTITY）を含むファイルは読まずにスキップする。
+    pom.xml に DTD は不要。"""
+    out = []
+    with open(path, "rb") as f:
+        raw = f.read()
+    if re.search(rb"<!\s*(DOCTYPE|ENTITY)", raw, re.IGNORECASE):
+        print("%s: DTD（DOCTYPE / ENTITY）を含むため、安全のためスキップ" % path, file=sys.stderr)
+        return out
+    root = ET.fromstring(raw)  # nosemgrep: python.lang.security.use-defused-xml-parse.use-defused-xml-parse  (DTD は、上で除いてある)
+    ns = ""
+    if root.tag.startswith("{"):
+        ns = root.tag.split("}", 1)[0] + "}"
+
+    def find(parent, tag):
+        return parent.find(ns + tag)
+
+    properties = {}
+    props_el = find(root, "properties")
+    if props_el is not None:
+        for child in props_el:
+            tag = child.tag.rsplit("}", 1)[-1]
+            if child.text:
+                properties[tag] = child.text.strip()
+
+    deps_el = find(root, "dependencies")
+    if deps_el is None:
+        return out
+    for dep in deps_el.findall(ns + "dependency"):
+        group = find(dep, "groupId")
+        artifact = find(dep, "artifactId")
+        version = find(dep, "version")
+        if group is None or artifact is None or not group.text or not artifact.text:
+            continue
+        name = "%s:%s" % (group.text.strip(), artifact.text.strip())
+        v = version.text.strip() if version is not None and version.text else None
+        if v and v.startswith("${") and v.endswith("}"):
+            v = properties.get(v[2:-1])
+        if v and not v.startswith("${"):
+            out.append((name, v))
+        else:
+            print(
+                "%s: 正確な版が分からないためスキップ: %s (version=%s、親 POM 継承/ビルド時の式の可能性)"
+                % (path, name, version.text if version is not None else None),
+                file=sys.stderr,
+            )
     return out
 
 
@@ -365,6 +422,7 @@ def main():
     ap.add_argument("--uv-lock", action="append", default=[], help="Python の uv.lock（繰り返し指定可）")
     ap.add_argument("--go-sum", action="append", default=[], help="Go の go.sum（繰り返し指定可）")
     ap.add_argument("--csproj", action="append", default=[], help="NuGet の .csproj（版が固定された PackageReference のみ。繰り返し指定可）")
+    ap.add_argument("--pom", action="append", default=[], help="Maven の pom.xml（<dependencies> の、版が分かるものだけ。繰り返し指定可）")
     ap.add_argument("--out", default="dep_cve.sarif", help="SARIF の出力先")
     ap.add_argument("--timeout", type=float, default=TIMEOUT)
     args = ap.parse_args()
@@ -391,9 +449,12 @@ def main():
     for path in args.csproj:
         for name, version in parse_csproj(path):
             targets.append(("NuGet", path, name, version))
+    for path in args.pom:
+        for name, version in parse_pom_xml(path):
+            targets.append(("Maven", path, name, version))
 
     if not targets:
-        print("確認対象がありません。--requirements / --npm-lock / --nuget-lock / --csproj / --poetry-lock / --uv-lock / --go-sum のいずれかを指定してください。", file=sys.stderr)
+        print("確認対象がありません。--requirements / --npm-lock / --nuget-lock / --csproj / --poetry-lock / --uv-lock / --go-sum / --pom のいずれかを指定してください。", file=sys.stderr)
         return 1
 
     findings, errors = [], []

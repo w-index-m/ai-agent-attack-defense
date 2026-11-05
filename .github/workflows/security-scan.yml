@@ -77,7 +77,7 @@ jobs:
 
       # --- 依存関係の既知の脆弱性(OSV.dev に、版を照合する) ---------------------
       # git で管理されている requirements*.txt / package-lock.json / packages.lock.json /
-      # *.csproj / poetry.lock / uv.lock / go.sum を自動で探して照合する。パッケージ名と版を OSV.dev(読み取り専用の公開 API)に
+      # *.csproj / poetry.lock / uv.lock / go.sum / pom.xml を自動で探して照合する。パッケージ名と版を OSV.dev(読み取り専用の公開 API)に
       # 送るだけで、攻撃はしない。対象のファイルが無ければ、何もせず終わる。
       # 既定では CI を止めない(他の診断と同じ)。止めたいときは、リポジトリ変数
       # DEP_CVE_FAIL を true にする(脆弱性あり=1、確認できなかったものあり=2 で失敗)。
@@ -97,9 +97,10 @@ jobs:
               */poetry.lock|poetry.lock) args+=(--poetry-lock "$f") ;;
               */uv.lock|uv.lock) args+=(--uv-lock "$f") ;;
               */go.sum|go.sum) args+=(--go-sum "$f") ;;
+              */pom.xml|pom.xml) args+=(--pom "$f") ;;
               *) args+=(--requirements "$f") ;;
             esac
-          done < <(git ls-files | grep -E '(^|/)(requirements[^/]*\.txt|package-lock\.json|packages\.lock\.json|poetry\.lock|uv\.lock|go\.sum)$|\.csproj$')
+          done < <(git ls-files | grep -E '(^|/)(requirements[^/]*\.txt|package-lock\.json|packages\.lock\.json|poetry\.lock|uv\.lock|go\.sum|pom\.xml)$|\.csproj$')
           if [ "${#args[@]}" -eq 0 ]; then
             echo "依存関係の照合: 対象のファイルがありません(スキップ)" | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
