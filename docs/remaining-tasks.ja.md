@@ -27,7 +27,7 @@ CI への組み込み、AI-SAST の試験、PentestGPT の実機の準備)から
 |---|---|---|
 | ~~Semgrep の CI の修正~~ | **完了**(2026-10-31)。`--config p/default` を明示して、209 ファイルに 501 ルールを実行(13 件の指摘)。結果ファイルができないときは警告を出す。直後に、`dep_cve_check.py` の XML の読み取りの問題が見つかり、直した | 完了 |
 | **Semgrep の残りの指摘の確認** | 13 件のうち、緊急・高は 2 件(`dep_cve_check.py` の XML は修正済み。`worker-mock.Dockerfile` の root ユーザーは、Trivy と同じ指摘)。中 11 件の中身は、まだ見ていない | 中 |
-| **Dockerfile の指摘** | CI の Trivy が、「イメージのユーザーが root」を、高の重大度で 2 件報告(`Dockerfile`、`security-scan/cairn-lab/worker-mock.Dockerfile`) | 中 |
+| ~~Dockerfile の指摘~~ | **対応済み(2026-11-04)**。`Dockerfile`(`scanner`、uid 10001)と `worker-mock.Dockerfile`(`node`)を非 root にした。ビルドと動作を、クラウドの作業環境で確認(下記の注意あり)。PR の CI で、Trivy・Semgrep の指摘が消えるか確認する | 完了 |
 | **GitHub Actions の更新** | `actions/checkout@v4` などが Node.js 20 を使っており、廃止予定の警告が出ている | 低 |
 | **`crosscheck` の CI への組み込み** | 今は手動の試験用ワークフローだけ。`dep_cve_check` の後に、自動で突き合わせるか | 低(要検討) |
 | **`go.mod` への対応** | `go.sum` は、使われない古い版も含むため、誤検知が出る。`go.mod` のほうが、実際の版に近い | 低(要検討) |

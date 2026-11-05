@@ -268,6 +268,14 @@ curl -s -X POST http://127.0.0.1:8000/projects -H 'Content-Type: application/jso
 cairn dispatch --config dispatch_codex_mock.yaml
 ```
 
+> **2026-11-04 追記(ユーザーを root から `node` に変更)**: Trivy/Semgrep の「root で実行」の指摘を直すため、
+> `worker-mock.Dockerfile` に `USER node` を追加した。クラウド作業環境で、ビルドと、`node` ユーザーでの
+> `codex exec --dangerously-bypass-approvals-and-sandbox`（ディスパッチャと同じ形）の、モックの応答サーバーに対する
+> 実行（コマンド `pwd` が成功）を確認した。**`cairn dispatch` を通した全体の経路は、この変更後には未確認。**
+> また、既定のサンドボックスモードの `codex exec`（上の §6.3 の形）をコンテナ内の非 root で動かすと、
+> `bwrap: No permissions to create a new namespace` でコマンド実行が失敗する（ディスパッチャの呼び出しは、
+> `--dangerously-bypass-approvals-and-sandbox` なので、影響しない見込み）。
+
 `dispatch_codex_mock.yaml`は、コンテナからホストのモックサーバーへ到達させるため、
 `host.docker.internal`ではなく**Dockerブリッジの既定ゲートウェイIP(`172.17.0.1`)を直接指定**
 している(このバージョンのdockerd/ネットワーク構成では`--add-host`等のextra_hosts機構が
