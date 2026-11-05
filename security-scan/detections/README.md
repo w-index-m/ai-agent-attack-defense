@@ -9,6 +9,18 @@
 >
 > 「R」は検知ルール（Rule）番号の頭文字（`taxonomy.json`では`detection_tags`に属し、各ファイルも`r{番号}_*.yml`等の命名）。対になる「G」（G1–G6）はガバナンスイベント（Governance、`taxonomy.json`の`governance_events`）の頭文字。
 
+> **補足（2026-11-06）: R1–R7 は「別の一般化」ではなく、同じ定義を 3 つの形で持っているだけ**。
+> 1. `../defense-detection-notes.md`: Strix/Cairn/Hermes の攻撃連鎖を解析し、「何が観測できるか」を
+>    文章で説明したもの（最初の記述）。
+> 2. [`../../shared/taxonomy.json`](../../shared/taxonomy.json) の `detection_tags`: その正式な定義
+>    （識別子と名前）を 1 か所だけ持つ、**唯一の定義**。上の表は、これを人間向けに表しただけ。
+> 3. このディレクトリの `r{番号}_*.yml`: 同じ定義を、Sigma/Falco/Datadog/Elastic それぞれの
+>    **実際のクエリ文法**で書き起こしたもの（具体的な文言にしただけで、R番号・意味は増えていない）。
+>
+> 3 つがズレないよう、`tools/check_consistency.py` が CI で、`taxonomy.json` の一覧と、このディレクトリの
+> 実ファイルが一致しているかを検査する（定義だけ直してルールを直し忘れる／ルールだけ増やして定義に
+> 載せ忘れる、を機械的に検出する）。
+
 | ルール | 意味 | Sigma | Falco | Datadog | Elastic |
 |---|---|---|---|---|---|
 | R1 | サーバ系から LLM API への外向き通信 | ✅ | — | ✅ | ✅ |
