@@ -106,7 +106,10 @@ under authorization** should capture under **G1–G6**.
     unconfirmed) are likewise covered as **R30** (proxy-rotation detection), **R31** (server-to-crypto-
     exchange-API egress), and a reference addendum on the existing **R21** (generic unexplained-root
     heuristic), respectively. Mobile-device tooling was out of scope: this repo's existing scanners
-    (`dep_cve_check.py`, `netcheck`, `auto_vuln_scanner.py`) only cover web/host targets.
+    (`dep_cve_check.py`, `netcheck`, `auto_vuln_scanner.py`) only cover web/host targets. **R29, R30, and
+    R31 were actually exercised against one minimal app** in
+    [`artex-pattern-lab/`](artex-pattern-lab/README.ja.md) (all 7 checks pass; the detector logic there is
+    a hand-ported approximation, not a run against a real Sigma/Falco/Datadog engine).
 - Chinese-community claims of a **"0-day found with zero human intervention"** (Kingdee) → **unverified**.
 
 ## 6. Sources
