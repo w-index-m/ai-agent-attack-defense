@@ -165,9 +165,12 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
         <label>ポート(空欄で既定値)<input class="f" id="mp-port" placeholder="例: 22" inputmode="numeric"></label>
       </div>
       <div class="row" id="scan-buttons" style="margin-top:6px">
+        <button type="button" class="primary" id="run-all">まとめて実行(netcheck→依存関係→ARTEXパターン→gitleaks→Trivy→Semgrep)</button>
         <button type="button" data-tool="semgrep">Semgrepを実行</button>
         <button type="button" data-tool="trivy">Trivyを実行</button>
         <button type="button" data-tool="gitleaks">gitleaksを実行</button>
+        <button type="button" data-tool="dep_cve">依存関係の脆弱性を確認(dep_cve_check)</button>
+        <button type="button" data-tool="artex_pattern">ARTEXパターン(R29/R30/R31)を確認</button>
         <button type="button" id="nc-run">netcheckを実行</button>
         <button type="button" id="zg-run">zgrab2を実行</button>
         <button type="button" id="hl-run">HTTPバナー取得(軽量・zgrab2不要)</button>
@@ -176,6 +179,7 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
         <button type="button" id="cairn-run">Cairnを実行</button>
       </div>
       <div id="scan-status" class="note" role="status"></div>
+      <p class="note">「まとめて実行」=対象への能動的なスキャン(zgrab2・Strix・Cairn等)を含まない、読み取り専用の確認だけを順番にまとめて実行する(netcheckは127.0.0.1自身への受動確認)。依存関係の脆弱性の確認=<a class="src" href="security-scan/dep-cve-check-notes.md">dep_cve_check</a>(requirements.txt・pom.xml等をOSV.devに照合。このリポジトリは標準ライブラリのみで動くため、通常は対象ファイルが無く0件)。ARTEXパターンの確認=<a class="src" href="security-scan/artex-pattern-lab/README.ja.md">artex-pattern-lab</a>(R29/R30/R31の検知ロジックを、1つの最小アプリで動かして確認。ポート80の待ち受けに管理者/root権限が必要)。</p>
       <p class="note">Semgrep・Trivy・gitleaks=このリポジトリ自身のコードを確認(対象欄は使いません)。netcheck=対象への受動的なポート確認。zgrab2=対象への能動スキャナ(バナー取得、<a class="src" href="security-scan/zgrab2-notes.md">詳細ノート</a>)。HTTPバナー取得(軽量)=zgrab2本体が無くても使える代替。ポート80(HTTP)・443(HTTPS)へのGETだけをPython標準ライブラリで行い、結果はzgrab2互換として取り込む(SSH/TLS詳細など他プロトコルは非対応)。追加プロトコルを確認(軽量)=同じくzgrab2不要で、SSH/FTP/Telnet/SMTP/MySQL/SMBのバナー・応答取得、Redis/Memcached/SOCKS5/MQTTの最小限コマンド送信、PostgreSQL/RDPのプロトコルネゴシエーション確認、TLSのバージョン・証明書期限確認、SNMP(UDP、sysDescr取得)、AMQP/MongoDBの応答の簡易抽出、IPP(印刷サービス)、Modbus(読み取り専用コマンドのみ)ができる。MSSQL/Oracle/PPTPはプロトコル仕様どおり実装したが、このサンドボックスに実機が無く自作の模擬応答での自己テストのみ(実機と異なる可能性あり)。制御系(OT/ICS)はModbus以外(DNP3/BACnet/Siemens等)は、実機が無く誤判定リスクが高いため非対応。Strix・Cairn=自律型ペネトレーションAIエージェント(モックLLM版。既定で<code style="font-family:var(--font-mono)">sqli-lab</code>デモアプリへSQLi認証バイパスを実行)。Strixは事前に<a class="src" href="security-scan/strix-local-poc/README.md">strix-local-poc/README.md</a>の手順+<code style="font-family:var(--font-mono)">STRIX_LOCAL_DIR</code>環境変数の設定が必要。Cairnは事前に<a class="src" href="security-scan/cairn-lab/cairn-authorized-lab-runbook.md">cairn-authorized-lab-runbook.md</a>の手順+<code style="font-family:var(--font-mono)">CAIRN_LOCAL_DIR</code>環境変数の設定が必要。詳細: <a class="src" href="security-scan/local-scan-server-notes.md">local-scan-server-notes.md</a></p>
     </div>
     <div class="panel">
@@ -912,6 +916,26 @@ function llmContext(){
     var consent=$("target-consent").checked;
     if(!consent){setScanStatus("対象への攻撃実行への同意(チェックボックス)が必要です。","err");return}
     callScan("/scan/cairn",{targets:targets,i_own_these:true},"Cairn("+targets+")");
+  });
+  /* 「まとめて実行」: 対象への能動的なスキャン(zgrab2・Strix・Cairn)は含めず、読み取り専用の
+     確認だけを順番に実行する。callScan は1件ごとに scanRunning を立てて降ろすので、
+     await で直列に呼べば、1件ずつ安全に進む(途中の1件が失敗しても、続きは実行する)。 */
+  $("run-all").addEventListener("click",async function(){
+    if(scanRunning){setScanStatus("他のスキャンが実行中です。終わるまでお待ちください。","err");return}
+    var targets=targetValue();
+    var ports=$("nc-ports").value||"standard";
+    var steps=[
+      ["/scan/netcheck",{targets:targets,ports:ports},"netcheckを実行("+targets+")"],
+      ["/scan/dep_cve",{},"依存関係の脆弱性を確認(dep_cve_check)"],
+      ["/scan/artex_pattern",{},"ARTEXパターン(R29/R30/R31)を確認"],
+      ["/scan/gitleaks",{},"gitleaksを実行"],
+      ["/scan/trivy",{},"Trivyを実行"],
+      ["/scan/semgrep",{},"Semgrepを実行"]
+    ];
+    for(var i=0;i<steps.length;i++){
+      await callScan(steps[i][0],steps[i][1],"["+(i+1)+"/"+steps.length+"] "+steps[i][2]);
+    }
+    setScanStatus("✅ まとめて実行が完了しました(全"+steps.length+"件)。「2. 全体像」を確認してください。","ok");
   });
 })();
 

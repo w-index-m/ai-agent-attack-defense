@@ -4,7 +4,9 @@ English summary: see the bottom of this file.
 
 `vuln_triage.html`の「1. 診断結果を取り込む」は、これまで他で生成したJSONを貼り付ける/ファイルを選ぶ
 だけだった。これに、**このリポジトリ自身**を対象に、既存の診断ツール(Semgrep・Trivy・gitleaks・
-netcheck・zgrab2・Strix)をブラウザから直接呼び出すボタンを追加した。
+dep_cve_check・artex-pattern-lab・netcheck・zgrab2・Strix・Cairn)をブラウザから直接呼び出すボタンを
+追加した。2026-11-06追記: 対象への能動的なスキャン(zgrab2・Strix・Cairn)を含まない、読み取り専用の
+確認だけを順番にまとめて実行する「まとめて実行」ボタンも追加した。
 
 仕組みは、既存の「5. 自前LLMに質問する」機能（ブラウザから`http://localhost:11434`に直接fetchする）
 と同じパターン。`vuln_triage.html`自体は静的なページ(バックエンドを持たない)なので、ローカルで
@@ -23,6 +25,8 @@ POSTする。
 | `POST /scan/semgrep` | `semgrep scan --config p/default --exclude security-scan/sqli-lab/vulnerable_app.py --json`（CIの`.github/workflows/security-scan.yml`と同じコマンド） | ローカルに`semgrep`があればそれを優先、無ければDocker |
 | `POST /scan/trivy` | `trivy fs --scanners vuln,misconfig,secret --format json .`（CIと同じ） | ローカルに`trivy`があればそれを優先、無ければDocker |
 | `POST /scan/gitleaks` | `gitleaks detect --report-format=json --exit-code=0`（CIと同じ） | ローカルに`gitleaks`があればそれを優先、無ければDocker |
+| `POST /scan/dep_cve` | CIの「依存関係の既知の脆弱性(OSV)」ステップと同じ、`git ls-files`によるファイル自動探索＋`scripts/dep_cve_check.py`での照合 | 対象欄は使わない(このリポジトリ自身の依存関係ファイルに固定)。対象ファイルが無い場合(このリポジトリは標準ライブラリのみで動くため、通常はこれに該当)は、エラーではなく0件のSARIFを返す |
+| `POST /scan/artex_pattern` | `security-scan/artex-pattern-lab/check_detections.py`を実行し、「NG」の項目だけをSARIF形式に変換して返す | 対象は127.0.0.0/8に固定された、このラボ専用の模擬サーバーのみ(本物のLDAP・取引所には一切接続しない)。ポート80での待ち受けに管理者/root権限が必要(無い場合は、その旨を明確なエラーで返す) |
 | `POST /scan/netcheck` | `netcheck/netcheck.py`の設定・許可範囲判定・スキャンロジックをそのまま再利用（サーバーは別途立てず、同期的にジョブを実行） | 対象は既定で`127.0.0.1`。リクエストで変えられるが、netcheck自身の許可範囲（`netcheck/config.json`）を超えることはできない。`ports`（`"standard"`既定／`"extended"`）はGUIの「netcheckのポート範囲」セレクトから選べる |
 | `POST /scan/zgrab2` | `scripts/zgrab2_guard.py`と同じ許可範囲判定を通した後、`zgrab2`本体を実行 | ボディに`i_own_these: true`が無いと一切実行しない。`zgrab2`本体が未インストールなら、その旨を明確なエラーで返す。`zgrab2`自体はこのリポジトリに含まれない別のOSS（[zmap/zgrab2](https://github.com/zmap/zgrab2)）で、`pull`しただけでは入らず、別途ビルド・PATHへの配置が必要。`module`（既定`"http"`。`ssh`・`tls`・`ftp`など）はGUIの「zgrab2のモジュール」欄から選べる |
 | `POST /scan/httplite` | `scripts/http_lite_banner.py`(zgrab2が無くても使える軽量な代替)で、対象の80番(HTTP)・443番(HTTPS、証明書検証なし)へGETを送る | ボディに`i_own_these: true`が無いと一切実行しない。許可範囲判定はnetcheck/zgrab2と同じ。Python標準ライブラリのみで動き、外部バイナリ不要。出力はzgrab2の`http`モジュールと互換の形式で返すため、GUI側はzgrab2として自動判別する(SSH/TLS詳細など他プロトコルは非対応) |

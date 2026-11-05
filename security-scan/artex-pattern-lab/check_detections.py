@@ -108,7 +108,11 @@ def detect_r31(events: list[dict]) -> list[dict]:
 def main() -> int:
     EVENTS_PATH.write_text("")  # 前回分をクリア
     ldap_host, ldap_port = start_rogue_ldap_listener()
-    exch_host, exch_port = start_mock_exchange_api()
+    try:
+        exch_host, exch_port = start_mock_exchange_api()
+    except PermissionError:
+        print("エラー: ポート 80 で待ち受けできませんでした(管理者/root 権限が必要です)。", file=sys.stderr)
+        return 2
     time.sleep(0.2)
 
     client = app_module.app.test_client()
