@@ -65,6 +65,7 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/work" -w /work aquasec/trivy:latest \
             fs --scanners vuln,misconfig,secret --format json --output results/trivy.json . || true
+          [ -f results/trivy.json ] || echo "::warning::Trivy の結果ファイルができませんでした(診断が実行されていません)"
 
       # --- 秘密情報の混入(履歴を含む) -----------------------------------------
       - name: gitleaks
@@ -72,6 +73,7 @@ jobs:
           docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
             detect --source=/repo --report-format=json --report-path=/repo/results/gitleaks.json \
             --exit-code=0 --no-banner || true
+          [ -f results/gitleaks.json ] || echo "::warning::gitleaks の結果ファイルができませんでした(診断が実行されていません)"
 
       # --- 依存関係の既知の脆弱性(OSV.dev に、版を照合する) ---------------------
       # git で管理されている requirements*.txt / package-lock.json / packages.lock.json /
