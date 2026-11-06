@@ -29,8 +29,9 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
   自身のコードではない。そのため、CIの既存ステップ(Semgrep/Trivy/gitleaks)のような
   「このリポジトリの脆弱性を検出するゲート」としては組み込んでいない。組み込んだのは
   「このラボ自身の検出スクリプト(`auto_vuln_scanner.py`/`session_vuln_check.py`)が
-  壊れていないか」を確認する**回帰テスト**。`vulnerable_app.py`を起動し、全22パターン
-  (11クラス×脆弱/修正)を実行して、**脆弱版は必ずVULNERABLE、修正版は必ずsafeと
+  壊れていないか」を確認する**回帰テスト**。`vulnerable_app.py`を起動し、全24パターン
+  (12クラス×脆弱/修正。2026-11-06に`sqli_blind_time`を追加して11→12クラスに拡張)を
+  実行して、**脆弱版は必ずVULNERABLE、修正版は必ずsafeと
   判定されること**をアサートする。クラス自体や判定ロジックが壊れた場合にのみ、
   不一致として報告される(正常時は何も出力しない。他のパーサー(Semgrep等)と同じ、
   「問題があるものだけを報告する」という設計)。
@@ -541,9 +542,12 @@ curl -s "http://127.0.0.1:5000/register_safe?email=brand-new-unused@example.com"
 
 [`auto_vuln_scanner.py`](auto_vuln_scanner.py): Strixのように「次に何を試すかをLLMが判断する」のではなく、
 固定のペイロードリストを総当たりし、レスポンスを機械的に比較するだけの、LLM不要・ルールベースのスキャナー。
-**「GETパラメータにペイロードを注入してレスポンスを比較する」という型**に合う7クラス
-(`sqli`・`xss`・`cmdi`・`traversal`・`mass_assignment`・`ssrf`・`account_enum`)を
-`--class`で切り替え可能。
+**「GETパラメータにペイロードを注入してレスポンスを比較する」という型**に合う8クラス
+(`sqli`・`sqli_blind_time`・`xss`・`cmdi`・`traversal`・`mass_assignment`・`ssrf`・`account_enum`)を
+`--class`で切り替え可能。`sqli_blind_time`は2026-11-06追加。テキスト・ステータスに一切差が出ない
+(エラーも「Login OK」のような文言も出ない)場合でも、応答時間の差だけでSQLiの有無を判定する
+ブラインド(時間ベース)の検証。詳細は[`../nisc-2026-11-05-taiou-notes.ja.md`](../nisc-2026-11-05-taiou-notes.ja.md)
+§5参照。
 
 [`session_vuln_check.py`](session_vuln_check.py): 上記の型に合わない4クラス
 (`csrf`・`idor`・`deserialize`・`stored_xss`)をまとめた、もう1本のスクリプト。これらは
@@ -680,7 +684,7 @@ python3 session_vuln_check.py --class stored_xss --url http://127.0.0.1:5000 \
 
 ## まとめて1回で実行する
 
-[`scan_all.sh`](scan_all.sh): 上記22パターン(11クラス × それぞれ脆弱/修正)を1コマンドで
+[`scan_all.sh`](scan_all.sh): 上記24パターン(12クラス × それぞれ脆弱/修正)を1コマンドで
 実行するラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
 
 ```bash
@@ -832,7 +836,7 @@ GET /login_safe?(同じペイロード全部)                      401  (全て�
     (`../strix-local-poc/`)。`--llm-payloads`/`--llm-class` は、その代わりではなく、固定の型に
     はめた範囲でしか LLM を使わない、別の設計。
 
-> ⚠️ **`--llm-payloads`・`--llm-class`への注意**: どちらも、11個の組み込みクラスのように
+> ⚠️ **`--llm-payloads`・`--llm-class`への注意**: どちらも、12個の組み込みクラスのように
 > 「既知の脆弱性を持つ対象で動作確認済み」ではない。この project 自身の`ai-sast-trial`での
 > 複数回の試験(`../ai-sast-trial-notes.md`)で、**同じモデルを複数回動かしても判定がぶれ、
 > 本物の脆弱性を「誤検知」として打ち消すことがある**と分かっている。`--llm-payloads`は判定を

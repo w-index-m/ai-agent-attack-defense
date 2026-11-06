@@ -17,6 +17,8 @@ run() {
 
 run "SQLi: /login (vulnerable)"    --url "$BASE_URL/login"       --class sqli --baseline username=zzz --baseline password=zzz --fuzz username
 run "SQLi: /login_safe (fixed)"    --url "$BASE_URL/login_safe"  --class sqli --baseline username=zzz --baseline password=zzz --fuzz username
+run "SQLi (blind/time): /login (vulnerable)"    --url "$BASE_URL/login"       --class sqli_blind_time --baseline username=zzz --baseline password=zzz --fuzz username
+run "SQLi (blind/time): /login_safe (fixed)"    --url "$BASE_URL/login_safe"  --class sqli_blind_time --baseline username=zzz --baseline password=zzz --fuzz username
 run "XSS: /search (vulnerable)"    --url "$BASE_URL/search"      --class xss  --baseline q=zzz --fuzz q
 run "XSS: /search_safe (fixed)"    --url "$BASE_URL/search_safe" --class xss  --baseline q=zzz --fuzz q
 run "CMDi: /diag (vulnerable)"     --url "$BASE_URL/diag"        --class cmdi --baseline host=zzz --fuzz host

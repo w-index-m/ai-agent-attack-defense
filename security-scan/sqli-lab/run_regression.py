@@ -44,6 +44,7 @@ BASE_URL = "http://127.0.0.1:%s" % os.environ.get("VULN_APP_PORT", "5000")
 # (class_name, vulnerable_path, vulnerable_base_params, safe_path, safe_base_params, fuzz_param)
 SCANNER_CASES = [
     ("sqli", "/login", {"username": "zzz", "password": "zzz"}, "/login_safe", {"username": "zzz", "password": "zzz"}, "username"),
+    ("sqli_blind_time", "/login", {"username": "zzz", "password": "zzz"}, "/login_safe", {"username": "zzz", "password": "zzz"}, "username"),
     ("xss", "/search", {"q": "zzz"}, "/search_safe", {"q": "zzz"}, "q"),
     ("cmdi", "/diag", {"host": "zzz"}, "/diag_safe", {"host": "zzz"}, "host"),
     ("traversal", "/file", {"name": "public.txt"}, "/file_safe", {"name": "public.txt"}, "name"),

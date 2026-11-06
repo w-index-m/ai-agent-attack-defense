@@ -14,7 +14,7 @@ strings for an existing class (judgment stays with that class's own
 reviewed detect() -- see 2026-11-06 README note). --llm-class lets the LLM
 define a brand-new class by name, but only by filling in one of a small,
 fixed set of safe detection *types* -- never code that gets executed. Both
-are UNREVIEWED relative to the 11 built-in classes; see
+are UNREVIEWED relative to the 12 built-in classes; see
 "補足: これは『Strixの簡易版』ではない" in README.ja.md and
 ../ai-sast-trial-notes.md for why an LLM's own verdict is not trusted here.
 
@@ -225,6 +225,56 @@ def detect_sqli(resp: requests.Response, baseline: requests.Response, payload: s
 
 
 # --------------------------------------------------------------------------
+# SQLi, blind (time-based): the request's TEXT and STATUS are identical to
+# the baseline (no error leaked, no "login ok" flip) -- the only observable
+# difference is how long the DB took to answer. Unlike detect_sqli above,
+# this needs no text/status oracle at all, which is the point of this
+# technique (it's the fallback once error-based/boolean-with-visible-text
+# are both unavailable). See ../nisc-2026-11-05-taiou-notes.ja.md §5-1 and
+# the SQLi slide deck's "DB の種類による違い" slide: SQLite has no sleep()/
+# pg_sleep()/WAITFOR DELAY, so the payload below forces a delay with a
+# recursive CTE instead (empirically verified: ~1.0s for 8,000,000 rows on
+# this machine -- see the benchmark in that deck's dbms-differences notes).
+# A true blind-boolean class is deliberately NOT added alongside this one:
+# this lab's only injectable endpoint (/login) always leaks a text/status
+# difference on any true condition (SQL error or "Login OK"), so a
+# boolean-blind payload here would just re-trigger detect_sqli's existing
+# auth-bypass branch -- there is no silent-oracle case in this lab to
+# verify a separate detector against.
+# --------------------------------------------------------------------------
+
+# Iteration count tuned so the delay (~1s locally) clears typical HTTP/DB
+# noise by a wide margin without making the scan itself slow to run.
+_SQLITE_BLIND_DELAY_ROWS = 8_000_000
+
+SQLI_BLIND_TIME_PAYLOADS = [
+    "nonexistent' OR (CASE WHEN (1=1) THEN (SELECT count(*) FROM "
+    "(WITH RECURSIVE r(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM r WHERE i<"
+    f"{_SQLITE_BLIND_DELAY_ROWS}) SELECT i FROM r)) ELSE 0 END)=99999999 --",
+]
+
+# Flag only when the payload response takes meaningfully longer than BOTH
+# an absolute floor and a multiple of the baseline -- avoids false positives
+# from ordinary jitter on a fast baseline, without needing two payloads
+# (true-condition vs false-condition) the way a from-scratch timing attack
+# would use.
+_BLIND_TIME_ABS_FLOOR_S = 0.6
+_BLIND_TIME_RATIO = 4.0
+
+
+def detect_sqli_blind_time(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    resp_s = resp.elapsed.total_seconds()
+    base_s = baseline.elapsed.total_seconds()
+    threshold = max(_BLIND_TIME_ABS_FLOOR_S, base_s * _BLIND_TIME_RATIO)
+    if resp_s >= threshold:
+        return (
+            f"blind-time: response took {resp_s:.2f}s vs baseline {base_s:.2f}s "
+            f"(threshold {threshold:.2f}s) -- no text/status difference, timing only"
+        )
+    return None
+
+
+# --------------------------------------------------------------------------
 # Reflected XSS: payload reflected verbatim (unescaped) in the HTML body
 # --------------------------------------------------------------------------
 
@@ -373,6 +423,15 @@ VULN_CLASSES: dict[str, VulnClass] = {
         impact="攻撃者が、DB に送る SQL 文の構造そのものを書き換えられる。認証の回避、他人のデータの"
         "閲覧・窃取、データの改ざんにつながりうる。",
         fix="SQL をパラメータ化クエリ(プレースホルダ)で組み立てる。文字列結合で値を埋め込まない。",
+    ),
+    "sqli_blind_time": VulnClass(
+        SQLI_BLIND_TIME_PAYLOADS,
+        detect_sqli_blind_time,
+        title="SQL インジェクション(ブラインド・時間ベース)",
+        impact="エラーや画面の見た目に一切差が出なくても、応答時間の差だけで真偽を判定し、"
+        "SQL インジェクションの有無や、1 文字ずつのデータ抽出に悪用されうる。",
+        fix="SQL をパラメータ化クエリで組み立てる(他の SQLi と同じ対策で防げる)。加えて、"
+        "異常に遅い DB クエリを検知・アラートする監視があれば、悪用の試行自体にも気付ける。",
     ),
     "xss": VulnClass(
         XSS_PAYLOADS,
@@ -824,12 +883,12 @@ def render_finding_report_md(class_name: str, vuln_class: VulnClass, url: str, i
 # detection *types* below -- it never supplies code that gets executed.
 # Treat any --llm-class result with the same caution as an AI-SAST verdict:
 # it is unreviewed and has not been checked against a known-vulnerable
-# target the way the 11 built-in classes have (see "実証した攻撃" above).
+# target the way the 12 built-in classes have (see "実証した攻撃" above).
 # --------------------------------------------------------------------------
 
 LLM_CAUTION_NOTE = (
     "caution: this class/these payloads came from an LLM and are UNREVIEWED -- "
-    "unlike the 11 built-in classes, nobody has confirmed them against a known-"
+    "unlike the 12 built-in classes, nobody has confirmed them against a known-"
     "vulnerable target. See ../ai-sast-trial-notes.md: this project's own trials "
     "found LLM judgment unreliable (false positives, and real vulnerabilities "
     "dismissed) across repeated runs of the same model."
