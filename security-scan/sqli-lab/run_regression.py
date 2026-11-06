@@ -45,6 +45,7 @@ BASE_URL = "http://127.0.0.1:%s" % os.environ.get("VULN_APP_PORT", "5000")
 SCANNER_CASES = [
     ("sqli", "/login", {"username": "zzz", "password": "zzz"}, "/login_safe", {"username": "zzz", "password": "zzz"}, "username"),
     ("sqli_blind_time", "/login", {"username": "zzz", "password": "zzz"}, "/login_safe", {"username": "zzz", "password": "zzz"}, "username"),
+    ("sqli_blind_boolean", "/user_exists", {"username": "zzz"}, "/user_exists_safe", {"username": "zzz"}, "username"),
     ("xss", "/search", {"q": "zzz"}, "/search_safe", {"q": "zzz"}, "q"),
     ("cmdi", "/diag", {"host": "zzz"}, "/diag_safe", {"host": "zzz"}, "host"),
     ("traversal", "/file", {"name": "public.txt"}, "/file_safe", {"name": "public.txt"}, "name"),
@@ -70,6 +71,12 @@ SESSION_CASES = [
         {"post_path": "/review", "list_path": "/reviews"},
         {"post_path": "/review_safe", "list_path": "/reviews_safe"},
     ),
+    (
+        "second_order_sqli",
+        {"second_order_signup_path": "/second_order_signup", "second_order_audit_path": "/second_order_audit"},
+        {"second_order_signup_path": "/second_order_signup_safe", "second_order_audit_path": "/second_order_audit_safe"},
+    ),
+    ("bfla", {"admin_path": "/admin_secrets"}, {"admin_path": "/admin_secrets_safe"}),
 ]
 
 SESSION_DEFAULTS = {
@@ -91,7 +98,10 @@ def _session_args(class_name: str, overrides: dict) -> argparse.Namespace:
 
 
 def _path_from_overrides(overrides: dict) -> str:
-    for key in ("transfer_path", "account_path", "deserialize_path", "post_path"):
+    for key in (
+        "transfer_path", "account_path", "deserialize_path", "post_path",
+        "second_order_audit_path", "admin_path",
+    ):
         if key in overrides:
             return overrides[key]
     return "?"

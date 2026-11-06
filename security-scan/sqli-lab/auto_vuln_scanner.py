@@ -14,7 +14,7 @@ strings for an existing class (judgment stays with that class's own
 reviewed detect() -- see 2026-11-06 README note). --llm-class lets the LLM
 define a brand-new class by name, but only by filling in one of a small,
 fixed set of safe detection *types* -- never code that gets executed. Both
-are UNREVIEWED relative to the 12 built-in classes; see
+are UNREVIEWED relative to the 15 built-in classes; see
 "補足: これは『Strixの簡易版』ではない" in README.ja.md and
 ../ai-sast-trial-notes.md for why an LLM's own verdict is not trusted here.
 
@@ -275,6 +275,32 @@ def detect_sqli_blind_time(resp: requests.Response, baseline: requests.Response,
 
 
 # --------------------------------------------------------------------------
+# SQLi, blind (boolean): targets vulnerable_app.py's /user_exists, a
+# dedicated genuinely-silent oracle (only "Match."/"No match.", no error
+# text, no status-code change) -- unlike /login, which always leaks a
+# text/status difference on any true condition and so can't isolate this
+# technique from the existing auth-bypass check (see
+# ../nisc-2026-11-05-taiou-notes.ja.md §5-1).
+# --------------------------------------------------------------------------
+
+SQLI_BLIND_BOOLEAN_PAYLOADS = [
+    "' OR '1'='1' --",
+    "' OR 1=1 --",
+]
+
+
+def detect_sqli_blind_boolean(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    baseline_matched = baseline.text.strip() == "Match."
+    this_matched = resp.text.strip() == "Match."
+    if not baseline_matched and this_matched:
+        return (
+            "blind-boolean: baseline said 'No match.', injected TRUE condition "
+            "flipped it to 'Match.' -- no error, status, or row-content leak otherwise"
+        )
+    return None
+
+
+# --------------------------------------------------------------------------
 # Reflected XSS: payload reflected verbatim (unescaped) in the HTML body
 # --------------------------------------------------------------------------
 
@@ -432,6 +458,14 @@ VULN_CLASSES: dict[str, VulnClass] = {
         "SQL インジェクションの有無や、1 文字ずつのデータ抽出に悪用されうる。",
         fix="SQL をパラメータ化クエリで組み立てる(他の SQLi と同じ対策で防げる)。加えて、"
         "異常に遅い DB クエリを検知・アラートする監視があれば、悪用の試行自体にも気付ける。",
+    ),
+    "sqli_blind_boolean": VulnClass(
+        SQLI_BLIND_BOOLEAN_PAYLOADS,
+        detect_sqli_blind_boolean,
+        title="SQL インジェクション(ブラインド・真偽ベース)",
+        impact="エラーや画面の見た目に一切差が出なくても、「真偽」2値だけの応答から、"
+        "SQL インジェクションの有無や、1 文字ずつのデータ抽出に悪用されうる。",
+        fix="SQL をパラメータ化クエリで組み立てる(他の SQLi と同じ対策で防げる)。",
     ),
     "xss": VulnClass(
         XSS_PAYLOADS,
@@ -883,12 +917,12 @@ def render_finding_report_md(class_name: str, vuln_class: VulnClass, url: str, i
 # detection *types* below -- it never supplies code that gets executed.
 # Treat any --llm-class result with the same caution as an AI-SAST verdict:
 # it is unreviewed and has not been checked against a known-vulnerable
-# target the way the 12 built-in classes have (see "実証した攻撃" above).
+# target the way the 15 built-in classes have (see "実証した攻撃" above).
 # --------------------------------------------------------------------------
 
 LLM_CAUTION_NOTE = (
     "caution: this class/these payloads came from an LLM and are UNREVIEWED -- "
-    "unlike the 12 built-in classes, nobody has confirmed them against a known-"
+    "unlike the 15 built-in classes, nobody has confirmed them against a known-"
     "vulnerable target. See ../ai-sast-trial-notes.md: this project's own trials "
     "found LLM judgment unreliable (false positives, and real vulnerabilities "
     "dismissed) across repeated runs of the same model."

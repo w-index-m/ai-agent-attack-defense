@@ -1,8 +1,9 @@
 """
-Deliberately vulnerable demo app (SQLi, reflected XSS, OS command
-injection, path traversal, CSRF, IDOR/BOLA, insecure deserialization,
-stored XSS, mass assignment, SSRF, account enumeration), for
-local/offline testing only.
+Deliberately vulnerable demo app (SQLi -- incl. blind/boolean and
+second-order variants, reflected XSS, OS command injection, path
+traversal, CSRF, IDOR/BOLA, broken function-level authorization (BFLA),
+insecure deserialization, stored XSS, mass assignment, SSRF, account
+enumeration), for local/offline testing only.
 
 Scope: run only against this app, on localhost, in an isolated sandbox.
 Do not deploy this code anywhere reachable by anyone else.
@@ -97,6 +98,114 @@ def login_safe() -> tuple[str, int]:
     if rows:
         return f"Login OK. Rows: {rows}", 200
     return "Login failed.", 401
+
+
+@app.route("/user_exists", methods=["GET"])
+def user_exists() -> tuple[str, int]:
+    username = request.args.get("username", "")
+
+    # VULNERABLE: same injectable concatenation as /login, but this oracle
+    # leaks NOTHING except which of two fixed strings comes back -- no SQL
+    # error text, no row contents, no status-code change. This is the
+    # genuinely "blind" case: a true/false question answered only by
+    # "Match."/"No match.", the kind of oracle boolean-blind SQLi is
+    # actually for (see ../nisc-2026-11-05-taiou-notes.ja.md §5-1 for why
+    # /login's own text leak made this undetectable as a *separate*
+    # technique there).
+    query = f"SELECT 1 FROM users WHERE username = '{username}'"
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        row = conn.execute(query).fetchone()
+    except sqlite3.OperationalError:
+        row = None  # swallow errors silently -- stays a blind oracle
+    finally:
+        conn.close()
+    return ("Match.", 200) if row else ("No match.", 200)
+
+
+@app.route("/user_exists_safe", methods=["GET"])
+def user_exists_safe() -> tuple[str, int]:
+    username = request.args.get("username", "")
+
+    # FIXED: parameterized query, same behavior, not injectable.
+    query = "SELECT 1 FROM users WHERE username = ?"
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        row = conn.execute(query, (username,)).fetchone()
+    finally:
+        conn.close()
+    return ("Match.", 200) if row else ("No match.", 200)
+
+
+# Second-order SQLi: the payload is accepted and stored here with no SQL
+# touched at all (signup is just a Python dict write) -- the injection only
+# fires later, in a DIFFERENT request (second_order_audit), when a value
+# that was stored earlier gets concatenated into SQL for the first time.
+SECOND_ORDER_STORE: dict[str, str] = {}
+SECOND_ORDER_STORE_SAFE: dict[str, str] = {}
+
+
+@app.route("/second_order_signup", methods=["GET"])
+def second_order_signup() -> tuple[str, int]:
+    username = request.args.get("username", "")
+    password = request.args.get("password", "")
+    if not username:
+        return "username required", 400
+    SECOND_ORDER_STORE[username] = password
+    return f"Signed up: {username}", 200
+
+
+@app.route("/second_order_audit", methods=["GET"])
+def second_order_audit() -> tuple[str, int]:
+    username = request.args.get("username", "")
+    if username not in SECOND_ORDER_STORE:
+        return "Unknown user.", 404
+    stored_password = SECOND_ORDER_STORE[username]
+
+    # VULNERABLE: this request's own query string carries nothing
+    # malicious (just a plain, previously-signed-up username) -- the
+    # injected string came from the PASSWORD field of a different, earlier
+    # request (signup) and is only now concatenated into SQL, in a code
+    # path that never itself received attacker input directly.
+    query = f"SELECT id, username, is_admin FROM users WHERE password = '{stored_password}'"
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        rows = conn.execute(query).fetchall()
+    except sqlite3.OperationalError as exc:
+        return f"SQL error: {exc}", 500
+    finally:
+        conn.close()
+    return f"Audit rows: {rows}", 200
+
+
+@app.route("/second_order_signup_safe", methods=["GET"])
+def second_order_signup_safe() -> tuple[str, int]:
+    username = request.args.get("username", "")
+    password = request.args.get("password", "")
+    if not username:
+        return "username required", 400
+    SECOND_ORDER_STORE_SAFE[username] = password
+    return f"Signed up: {username}", 200
+
+
+@app.route("/second_order_audit_safe", methods=["GET"])
+def second_order_audit_safe() -> tuple[str, int]:
+    username = request.args.get("username", "")
+    if username not in SECOND_ORDER_STORE_SAFE:
+        return "Unknown user.", 404
+    stored_password = SECOND_ORDER_STORE_SAFE[username]
+
+    # FIXED: parameterized, even though the value came from storage rather
+    # than directly off this request -- second-order injection closes the
+    # same way as first-order: never string-concatenate untrusted data
+    # into SQL, no matter when or where it was first accepted.
+    query = "SELECT id, username, is_admin FROM users WHERE password = ?"
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        rows = conn.execute(query, (stored_password,)).fetchall()
+    finally:
+        conn.close()
+    return f"Audit rows: {rows}", 200
 
 
 @app.route("/search", methods=["GET"])
@@ -208,9 +317,9 @@ def csrf_transfer_safe() -> tuple[str, int]:
 
 # Private per-account data for the IDOR/BOLA demo, keyed by user id.
 IDOR_ACCOUNTS = {
-    1: {"username": "alice", "email": "alice@example.com", "private_note": "Alice's medical records are confidential."},
-    2: {"username": "bob", "email": "bob@example.com", "private_note": "Bob's salary is $75,000."},
-    3: {"username": "admin", "email": "admin@example.com", "private_note": "Admin recovery codes: 1234-5678"},
+    1: {"username": "alice", "email": "alice@example.com", "private_note": "Alice's medical records are confidential.", "is_admin": False},
+    2: {"username": "bob", "email": "bob@example.com", "private_note": "Bob's salary is $75,000.", "is_admin": False},
+    3: {"username": "admin", "email": "admin@example.com", "private_note": "Admin recovery codes: 1234-5678", "is_admin": True},
 }
 
 
@@ -252,6 +361,34 @@ def idor_account_safe() -> tuple[str, int]:
 
     account = IDOR_ACCOUNTS[requested_id]
     return f"Account {requested_id}: {account}", 200
+
+
+ADMIN_SECRET_NOTE = "Admin secret: a note only admins should ever see (demo marker)."
+
+
+@app.route("/admin_secrets", methods=["GET"])
+def admin_secrets() -> tuple[str, int]:
+    if "idor_user_id" not in session:
+        return "Not logged in.", 401
+
+    # VULNERABLE (BFLA, broken function-level authorization): checks only
+    # "is there a valid session", not "does THIS caller hold the admin
+    # role" -- any logged-in user (alice, bob) can call an admin-only
+    # function because the server never checks their own role, only that
+    # the client-side UI happens not to show them the button.
+    return f"Admin secrets: {ADMIN_SECRET_NOTE}", 200
+
+
+@app.route("/admin_secrets_safe", methods=["GET"])
+def admin_secrets_safe() -> tuple[str, int]:
+    if "idor_user_id" not in session:
+        return "Not logged in.", 401
+
+    # FIXED: checks the CALLER's own role before returning anything.
+    caller = IDOR_ACCOUNTS.get(session["idor_user_id"])
+    if not caller or not caller.get("is_admin"):
+        return "Forbidden: admin role required.", 403
+    return f"Admin secrets: {ADMIN_SECRET_NOTE}", 200
 
 
 @app.route("/deserialize", methods=["POST"])

@@ -29,9 +29,9 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
   自身のコードではない。そのため、CIの既存ステップ(Semgrep/Trivy/gitleaks)のような
   「このリポジトリの脆弱性を検出するゲート」としては組み込んでいない。組み込んだのは
   「このラボ自身の検出スクリプト(`auto_vuln_scanner.py`/`session_vuln_check.py`)が
-  壊れていないか」を確認する**回帰テスト**。`vulnerable_app.py`を起動し、全24パターン
-  (12クラス×脆弱/修正。2026-11-06に`sqli_blind_time`を追加して11→12クラスに拡張)を
-  実行して、**脆弱版は必ずVULNERABLE、修正版は必ずsafeと
+  壊れていないか」を確認する**回帰テスト**。`vulnerable_app.py`を起動し、全30パターン
+  (15クラス×脆弱/修正。2026-11-06に`sqli_blind_time`・`sqli_blind_boolean`・`second_order_sqli`・
+  `bfla`を追加して11→15クラスに拡張)を実行して、**脆弱版は必ずVULNERABLE、修正版は必ずsafeと
   判定されること**をアサートする。クラス自体や判定ロジックが壊れた場合にのみ、
   不一致として報告される(正常時は何も出力しない。他のパーサー(Semgrep等)と同じ、
   「問題があるものだけを報告する」という設計)。
@@ -542,21 +542,24 @@ curl -s "http://127.0.0.1:5000/register_safe?email=brand-new-unused@example.com"
 
 [`auto_vuln_scanner.py`](auto_vuln_scanner.py): Strixのように「次に何を試すかをLLMが判断する」のではなく、
 固定のペイロードリストを総当たりし、レスポンスを機械的に比較するだけの、LLM不要・ルールベースのスキャナー。
-**「GETパラメータにペイロードを注入してレスポンスを比較する」という型**に合う8クラス
-(`sqli`・`sqli_blind_time`・`xss`・`cmdi`・`traversal`・`mass_assignment`・`ssrf`・`account_enum`)を
-`--class`で切り替え可能。`sqli_blind_time`は2026-11-06追加。テキスト・ステータスに一切差が出ない
-(エラーも「Login OK」のような文言も出ない)場合でも、応答時間の差だけでSQLiの有無を判定する
-ブラインド(時間ベース)の検証。詳細は[`../nisc-2026-11-05-taiou-notes.ja.md`](../nisc-2026-11-05-taiou-notes.ja.md)
-§5参照。
+**「GETパラメータにペイロードを注入してレスポンスを比較する」という型**に合う9クラス
+(`sqli`・`sqli_blind_time`・`sqli_blind_boolean`・`xss`・`cmdi`・`traversal`・`mass_assignment`・
+`ssrf`・`account_enum`)を`--class`で切り替え可能。`sqli_blind_time`・`sqli_blind_boolean`は
+2026-11-06追加。前者は、テキスト・ステータスに一切差が出ない状況で応答時間の差だけでSQLiを検知
+(SQLiteには`sleep()`が無いため再帰CTEで代替)。後者は、新設の`/user_exists`エンドポイントで、
+「Match./No match.」という2値だけ(エラーも「Login OK」のような文言も出ない)からSQLiを検知する。
+詳細は[`../nisc-2026-11-05-taiou-notes.ja.md`](../nisc-2026-11-05-taiou-notes.ja.md)§5参照。
 
-[`session_vuln_check.py`](session_vuln_check.py): 上記の型に合わない4クラス
-(`csrf`・`idor`・`deserialize`・`stored_xss`)をまとめた、もう1本のスクリプト。これらは
-「ペイロードを工夫する」のではなく、**セッション状態を跨いだ判定**(CSRF: ログイン→Cookieのみで
-トークン無しの状態変更が通るか、IDOR: 正当な自分のセッションのまま他人のオブジェクトIDを
-指定して通るか)、**攻撃用バイト列の組み立て**(deserialize: 攻撃コード入りpickleペイロードを
-作って送信し、実行結果がレスポンスに現れるか)、または**2段階のリクエスト**(stored_xss:
-1回目でペイロードを投稿し、2回目の別リクエストで未エスケープのまま現れるか)が必要なため、
-`auto_vuln_scanner.py`とは別の仕組みになっている(同じスコープガードは共有)。
+[`session_vuln_check.py`](session_vuln_check.py): 上記の型に合わない6クラス
+(`csrf`・`idor`・`deserialize`・`stored_xss`・`second_order_sqli`・`bfla`)をまとめた、もう1本の
+スクリプト。これらは「ペイロードを工夫する」のではなく、**セッション状態を跨いだ判定**(CSRF: ログイン→
+Cookieのみでトークン無しの状態変更が通るか、IDOR: 正当な自分のセッションのまま他人のオブジェクトIDを
+指定して通るか、BFLA: 正当な非adminセッションのまま、admin専用機能を呼べるか。2026-11-06追加)、
+**攻撃用バイト列の組み立て**(deserialize: 攻撃コード入りpickleペイロードを作って送信し、実行結果が
+レスポンスに現れるか)、または**2段階のリクエスト**(stored_xss: 1回目でペイロードを投稿し、2回目の
+別リクエストで未エスケープのまま現れるか。second_order_sqli: 1回目(signup)でSQLに触れずpasswordを
+保存し、2回目の別リクエスト(audit)で初めてそのpasswordがSQLに使われ、他ユーザーの行が漏れるか。
+2026-11-06追加)が必要なため、`auto_vuln_scanner.py`とは別の仕組みになっている(同じスコープガードは共有)。
 
 **2026-11-06追記**: `--url`/`--fuzz`を人間が指定する前の「対象の自動発見」として、2つのモードを
 追加した。どちらも攻撃のペイロードは送らない(詳しくは下の「補足: これは『Strixの簡易版』ではない」
@@ -684,7 +687,7 @@ python3 session_vuln_check.py --class stored_xss --url http://127.0.0.1:5000 \
 
 ## まとめて1回で実行する
 
-[`scan_all.sh`](scan_all.sh): 上記24パターン(12クラス × それぞれ脆弱/修正)を1コマンドで
+[`scan_all.sh`](scan_all.sh): 上記30パターン(15クラス × それぞれ脆弱/修正)を1コマンドで
 実行するラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
 
 ```bash
@@ -836,7 +839,7 @@ GET /login_safe?(同じペイロード全部)                      401  (全て�
     (`../strix-local-poc/`)。`--llm-payloads`/`--llm-class` は、その代わりではなく、固定の型に
     はめた範囲でしか LLM を使わない、別の設計。
 
-> ⚠️ **`--llm-payloads`・`--llm-class`への注意**: どちらも、12個の組み込みクラスのように
+> ⚠️ **`--llm-payloads`・`--llm-class`への注意**: どちらも、15個の組み込みクラスのように
 > 「既知の脆弱性を持つ対象で動作確認済み」ではない。この project 自身の`ai-sast-trial`での
 > 複数回の試験(`../ai-sast-trial-notes.md`)で、**同じモデルを複数回動かしても判定がぶれ、
 > 本物の脆弱性を「誤検知」として打ち消すことがある**と分かっている。`--llm-payloads`は判定を
