@@ -9,6 +9,11 @@
 
 > 下記の試験結果を根拠に、「AIの判定を人がどう確認するか」を具体的な手順にした
 > [`ai-sast-review-checklist.ja.md`](ai-sast-review-checklist.ja.md)を2026-11-06に作成した。
+>
+> 2026-11-07追記: LLMを使わない**決定的**なSAST([lambdasec/frame](https://github.com/lambdasec/frame)、
+> SMTソルバーベース)を同じ的で試した結果は[`frame-sast-trial-notes.md`](frame-sast-trial-notes.md)。
+> 「判定のばらつき」は起きないが、taint解析が原理的に拾えない種類(業務ロジック系)はAI-SASTと
+> 同じく全滅、という対照的な結果になった。
 
 ## 何をするか
 
