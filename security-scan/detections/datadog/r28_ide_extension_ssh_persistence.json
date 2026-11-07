@@ -1,0 +1,16 @@
+{
+  "name": "[R28] IDE/AI-coding extension process creates SSH keys or edits authorized_keys",
+  "type": "log_detection",
+  "message": "Exploratory heuristic for the pattern reported around a tampered copy of Anthropic's \"Claude Code\" extension published to Cursor's VS Code Extension Marketplace (v2.1.312/2.1.313, live ~11 hours on 2026-10-29, up to ~5,000 users affected). The malicious code ran on extension load -- no agent interaction required -- and attempted to plant SSH keys for persistent remote access. Cursor warned uninstalling the extension may not remove already-dropped persistence scripts. No IOC (hash/C2 domain) has been published as of this writing; this is a behavioral proxy for the general technique, not a signature for this specific campaign.\n\nTreat every hit as a lead: remote-development extensions (Remote-SSH, devcontainers) legitimately manage SSH material as part of their normal function -- allowlist known extension IDs before trusting this alone.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1098.004", "technique:T1195.002", "tactic:persistence"],
+  "queries": [
+    {
+      "name": "ext_ssh_write",
+      "query": "source:file_event @process.parent.name:(*Cursor* OR *code* OR *extensionHost*) @file.path:(*\\/.ssh\\/authorized_keys OR *\\/.ssh\\/id_*)"
+    }
+  ],
+  "cases": [
+    { "name": "Editor/extension-host process wrote SSH key material", "status": "high", "condition": "ext_ssh_write > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

@@ -17,6 +17,10 @@ run() {
 
 run "SQLi: /login (vulnerable)"    --url "$BASE_URL/login"       --class sqli --baseline username=zzz --baseline password=zzz --fuzz username
 run "SQLi: /login_safe (fixed)"    --url "$BASE_URL/login_safe"  --class sqli --baseline username=zzz --baseline password=zzz --fuzz username
+run "SQLi (blind/time): /login (vulnerable)"    --url "$BASE_URL/login"       --class sqli_blind_time --baseline username=zzz --baseline password=zzz --fuzz username
+run "SQLi (blind/time): /login_safe (fixed)"    --url "$BASE_URL/login_safe"  --class sqli_blind_time --baseline username=zzz --baseline password=zzz --fuzz username
+run "SQLi (blind/boolean): /user_exists (vulnerable)"    --url "$BASE_URL/user_exists"       --class sqli_blind_boolean --baseline username=zzz --fuzz username
+run "SQLi (blind/boolean): /user_exists_safe (fixed)"    --url "$BASE_URL/user_exists_safe"  --class sqli_blind_boolean --baseline username=zzz --fuzz username
 run "XSS: /search (vulnerable)"    --url "$BASE_URL/search"      --class xss  --baseline q=zzz --fuzz q
 run "XSS: /search_safe (fixed)"    --url "$BASE_URL/search_safe" --class xss  --baseline q=zzz --fuzz q
 run "CMDi: /diag (vulnerable)"     --url "$BASE_URL/diag"        --class cmdi --baseline host=zzz --fuzz host
@@ -60,4 +64,20 @@ echo
 
 echo "=== Stored XSS: /reviews_safe (fixed) ==="
 python3 session_vuln_check.py --class stored_xss --url "$BASE_URL" --post-path /review_safe --list-path /reviews_safe || true
+echo
+
+echo "=== Second-order SQLi: /second_order_audit (vulnerable) ==="
+python3 session_vuln_check.py --class second_order_sqli --url "$BASE_URL" --second-order-signup-path /second_order_signup --second-order-audit-path /second_order_audit || true
+echo
+
+echo "=== Second-order SQLi: /second_order_audit_safe (fixed) ==="
+python3 session_vuln_check.py --class second_order_sqli --url "$BASE_URL" --second-order-signup-path /second_order_signup_safe --second-order-audit-path /second_order_audit_safe || true
+echo
+
+echo "=== BFLA: /admin_secrets (vulnerable) ==="
+python3 session_vuln_check.py --class bfla --url "$BASE_URL" --admin-path /admin_secrets || true
+echo
+
+echo "=== BFLA: /admin_secrets_safe (fixed) ==="
+python3 session_vuln_check.py --class bfla --url "$BASE_URL" --admin-path /admin_secrets_safe || true
 echo

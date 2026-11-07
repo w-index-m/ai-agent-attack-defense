@@ -79,3 +79,15 @@ Trivy/gitleaks/Semgrep の CI 警告、`netcheck`・`sqli-lab` の実機検証�
   パラメータのみ。コードの `eval`/`exec` はしない)
 - 検知タグ(R1–R17)が、`defense-detection-notes.md`(説明文)・`shared/taxonomy.json`(唯一の定義)・
   `detections/`(実ルール)という、同じ定義の 3 つの形態であることを明記
+
+### PR #143(2026-11-05、マージ済み)の確認記録
+
+CI の結果: 成功。緊急 0、高 0、中 15、低 2、秘密情報 0 件(`main` と同じ水準で、この PR による増加なし)。
+
+実際に確認した中身:
+- URL スキームの検査(`http`/`https` 以外を拒否)
+- 突き合わせ不可 2 件の原因の記録
+- `netcheck` の実機検証(Apache・nginx・sshd・Chromium)
+- `sqli-lab` の `--discover`・`--crawl`・`--llm-payloads`・`--llm-class`(すべて実行して確認済み)
+- `docs/how-we-built-this.ja.md`・`docs/remaining-tasks.ja.md` の更新
+- `detections/README.md`・`defense-detection-notes.md` の R1〜R7 の整理

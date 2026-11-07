@@ -28,6 +28,7 @@ import http.server
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -169,6 +170,91 @@ def scan_gitleaks():
     with open(out_path, encoding="utf-8") as f:
         text = f.read().strip()
         return json.loads(text) if text else []
+
+
+_DEP_MANIFEST_RE = re.compile(
+    r"(^|/)(requirements[^/]*\.txt|package-lock\.json|packages\.lock\.json|poetry\.lock|uv\.lock|go\.sum|pom\.xml)$"
+    r"|\.csproj$"
+)
+
+
+def scan_dep_cve():
+    """CI(security-scan.yml)の「依存関係の既知の脆弱性(OSV)」ステップと同じ、ファイルの
+    自動探索+照合をそのまま再利用する。読み取り専用(OSV.devへの問い合わせのみ)。対象は
+    このリポジトリ自身の依存関係ファイルに固定(リクエストでパスは指定できない)。"""
+    out_path = os.path.join(RESULTS_DIR, "dep_cve.json")
+    rc, out, err = _run(["git", "ls-files"], cwd=REPO_ROOT)
+    if rc != 0:
+        return {"error": "git ls-files に失敗しました: %s" % err}
+    args = []
+    for f in out.decode("utf-8", "replace").splitlines():
+        if not _DEP_MANIFEST_RE.search(f):
+            continue
+        if f.endswith("package-lock.json"):
+            args += ["--npm-lock", f]
+        elif f.endswith("packages.lock.json"):
+            args += ["--nuget-lock", f]
+        elif f.endswith(".csproj"):
+            args += ["--csproj", f]
+        elif f.endswith("poetry.lock"):
+            args += ["--poetry-lock", f]
+        elif f.endswith("uv.lock"):
+            args += ["--uv-lock", f]
+        elif f.endswith("go.sum"):
+            args += ["--go-sum", f]
+        elif f.endswith("pom.xml"):
+            args += ["--pom", f]
+        else:
+            args += ["--requirements", f]
+    if not args:
+        # CIの「依存関係の照合: 対象のファイルがありません(スキップ)」と同じ扱い。このリポジトリ
+        # 自身は標準ライブラリのみで動くため、通常はここに該当する(エラーではない)。
+        return {"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "dep_cve_check", "rules": []}},
+                "results": []}], "_skip_reason": "対象ファイル(requirements*.txt・pom.xml等)が見つかりません。"}
+    cmd = [sys.executable, os.path.join(HERE, "dep_cve_check.py")] + args + ["--out", out_path]
+    rc, _out, err = _run(cmd, cwd=REPO_ROOT)
+    if not os.path.exists(out_path):
+        return {"error": "dep_cve_check の結果ファイルができませんでした。", "returncode": rc,
+                "stderr": err[-2000:]}
+    with open(out_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+_ARTEX_RESULT_LINE = re.compile(r"^(OK|NG)\s+(.*)$")
+
+
+def scan_artex_pattern():
+    """security-scan/artex-pattern-lab/check_detections.py を実行し、結果をSARIF形式に
+    変換して返す(「NG」の項目だけを指摘として載せる)。対象は127.0.0.0/8に固定された、
+    このラボ専用の模擬サーバーのみ(本物のLDAP・取引所には一切接続しない。詳細はラボの
+    README.ja.md参照)。ポート80での待ち受けに管理者/root権限が必要。"""
+    lab_dir = os.path.join(REPO_ROOT, "security-scan", "artex-pattern-lab")
+    cmd = [sys.executable, os.path.join(lab_dir, "check_detections.py")]
+    rc, out, err = _run(cmd, cwd=lab_dir, timeout=60)
+    text = out.decode("utf-8", "replace") if out else ""
+    lines = [m.group(1, 2) for l in text.splitlines() if (m := _ARTEX_RESULT_LINE.match(l))]
+    if not lines:
+        return {"error": "artex-pattern-lab の結果を読み取れませんでした"
+                          "(Flaskが入っているか、ポート80が使えるかを確認してください)。",
+                "returncode": rc, "stderr": err[-2000:], "stdout": text[-2000:]}
+    results = []
+    for status, label in lines:
+        if status == "NG":
+            results.append({
+                "ruleId": "artex-pattern-lab/ng", "level": "warning",
+                "message": {"text": label},
+                "properties": {"title": "ARTEXパターンラボ: " + label},
+                "locations": [{"physicalLocation": {"artifactLocation":
+                    {"uri": "security-scan/artex-pattern-lab/check_detections.py"}}}],
+            })
+    return {
+        "version": "2.1.0",
+        "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/Schemata/sarif-schema-2.1.0.json",
+        "runs": [{
+            "tool": {"driver": {"name": "artex-pattern-lab", "rules": []}},
+            "results": results,
+        }],
+    }
 
 
 def scan_netcheck(body):
@@ -689,6 +775,8 @@ ROUTES = {
     "/scan/semgrep": lambda body: scan_semgrep(),
     "/scan/trivy": lambda body: scan_trivy(),
     "/scan/gitleaks": lambda body: scan_gitleaks(),
+    "/scan/dep_cve": lambda body: scan_dep_cve(),
+    "/scan/artex_pattern": lambda body: scan_artex_pattern(),
     "/scan/netcheck": lambda body: scan_netcheck(body),
     "/scan/zgrab2": lambda body: scan_zgrab2(body),
     "/scan/httplite": lambda body: scan_httplite(body),

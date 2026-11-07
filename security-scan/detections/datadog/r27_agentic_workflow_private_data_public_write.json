@@ -1,0 +1,20 @@
+{
+  "name": "[R27] CI/agentic-workflow private-repo read followed by public-facing write",
+  "type": "log_detection",
+  "message": "Exploratory heuristic for the pattern disclosed as \"GitLost\" (Noma Security, 2026-07-06): a public GitHub Issue's body contained hidden instructions that steered GitHub's Agentic Workflows into reading private-repository data and posting it back into a public thread. Noma gave no reusable signature for this; this rule is this repository's own constructed proxy -- a CI/agent-runner reading private-repo/secret-scoped context, then writing to a public-facing output (issue comment, PR comment, published artifact) within the same run.\n\nTreat every hit as a lead, not a confirmation: this needs sequence correlation (same run_id, read-then-write) that this single query cannot fully express on its own -- build the join on run_id in your SIEM. Correlate with R9 (steered egress) and R11 (tool call with no direct user instruction) before escalating.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1567", "technique:T1195.002", "tactic:exfiltration"],
+  "queries": [
+    {
+      "name": "private_read",
+      "query": "source:github @event_type:(repo.content.read OR actions.workflow_run) @repository.visibility:private"
+    },
+    {
+      "name": "public_write",
+      "query": "source:github @event_type:(issue_comment.create OR pull_request_comment.create OR pages.publish OR artifact.publish) @output.visibility:public"
+    }
+  ],
+  "cases": [
+    { "name": "Private-repo read and public-facing write seen from the same run_id within one workflow run (needs SIEM-side join on @run_id -- see rule message)", "status": "medium", "condition": "private_read > 0 && public_write > 0" }
+  ],
+  "options": { "evaluationWindow": 900, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

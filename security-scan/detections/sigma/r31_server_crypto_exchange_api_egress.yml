@@ -1,0 +1,52 @@
+title: Server/production host connects to a cryptocurrency exchange API
+id: 3e9d2b74-6c1a-4f58-b2e9-r31cryptoapi0
+status: experimental
+description: >
+  Exploratory heuristic for the "cryptocurrency exchange access" tooling
+  Hunt.io found on attacker infrastructure tied to a campaign against seven
+  South Korean banks (2026-11-04, alongside the R29 JNDI/LDAP toolset and
+  R30 proxy pool). Hunt.io explicitly said this tooling's relation to the
+  specific bank-breach campaign is unconfirmed -- this rule targets the
+  general technique it suggests (a compromised server/production host, not
+  a user's own trading client, reaching a cryptocurrency exchange's API),
+  which is a common later-stage monetization step after a breach
+  (attacker-controlled withdrawal/transfer, or abusing stolen API keys),
+  not specific to this campaign or to ARTEX.
+references:
+  - https://hunt.io/blog/artex-south-korea-bank-infrastructure
+  - ../artex-analysis.ja.md
+author: ai-agent-attack-defense
+date: 2026/11/06
+logsource:
+  category: proxy
+detection:
+  selection_server_zone:
+    src_zone:
+      - 'server'
+      - 'production'
+      - 'backend'
+  selection_exchange_api:
+    dest_host|contains:
+      - 'api.binance.'
+      - 'api.coinbase.'
+      - 'api.kraken.'
+      - 'api.upbit.'
+      - 'api.bithumb.'
+      - 'api.okx.'
+      - 'api.bybit.'
+  condition: selection_server_zone and selection_exchange_api
+fields:
+  - src_ip
+  - src_zone
+  - dest_host
+  - process_name
+  - user
+falsepositives:
+  - Legitimate backend services that are supposed to integrate with a crypto exchange (a payments/trading feature of your own product) -- allowlist the specific hosts/service accounts that do this for your environment; this rule assumes exchange access from a server zone is otherwise unexpected.
+  - This list of exchange API hostnames is illustrative, not exhaustive, and will need to be extended/tuned (and re-checked periodically, since exchange domains change) for your threat model.
+level: medium
+tags:
+  - attack.exfiltration
+  - attack.t1020
+  - attack.impact
+  - attack.t1657

@@ -1,0 +1,52 @@
+title: Single account/session authenticates from many distinct source IPs in a short window (proxy-rotation infrastructure)
+id: 1c7f4a62-9b3d-4e85-a0f2-r30proxyrot00
+status: experimental
+description: >
+  Exploratory heuristic for the "rotating egress IP" pattern described on the
+  attacker infrastructure Hunt.io tied to a campaign against seven South
+  Korean banks (2026-11-04): alongside the JNDI/LDAP exploitation toolset
+  (see R29), the exposed relay server hosted a proxy infrastructure using
+  ~79 distinct egress IPs. Hunt.io's write-up did not confirm this proxy
+  pool's direct role in the bank breaches specifically -- this rule targets
+  the general technique (an operator spreading requests/logins for one
+  account or session across many source IPs to evade per-IP rate limits,
+  geo/velocity checks, and IP-based blocklists), not this one campaign.
+  Needs SIEM-side aggregation (distinct source IP count per account/session
+  in a short window), which a single Sigma selection cannot express alone
+  -- see r12_dns_water_torture.yml / r20_agent_markdown_handoff_burst.yml
+  for the same caveat and pattern in this repo.
+references:
+  - https://hunt.io/blog/artex-south-korea-bank-infrastructure
+  - ../artex-analysis.ja.md
+author: ai-agent-attack-defense
+date: 2026/11/06
+logsource:
+  category: authentication
+detection:
+  selection_auth_event:
+    event_type:
+      - 'authentication'
+      - 'login'
+  condition: selection_auth_event
+  # The per-event selection above only scopes to auth events; the actual
+  # signal is the AGGREGATE shape, built in the SIEM: group by (account_id
+  # or session_id), 5-15 minute window, alert when distinct_source_ip_count
+  # exceeds your baseline (e.g. > 10 in 10 minutes for a single account) AND
+  # those IPs span multiple ASNs/geolocations inconsistent with normal use.
+fields:
+  - account_id
+  - session_id
+  - src_ip
+  - src_asn
+  - src_country
+  - user_agent
+falsepositives:
+  - Large organizations behind carrier-grade NAT or corporate egress pools that legitimately present many source IPs for the same set of users; baseline your own environment's normal per-account IP cardinality before setting a threshold.
+  - Mobile users roaming across cell towers/networks can show several IPs for one account in a session; correlate with velocity (impossible-travel) checks rather than IP count alone.
+  - Legitimate third-party scanning/monitoring services and corporate VPN exit pools can also present as "one logical actor, many IPs" -- allowlist known service accounts.
+level: medium
+tags:
+  - attack.defense_evasion
+  - attack.t1090
+  - attack.credential_access
+  - attack.t1110

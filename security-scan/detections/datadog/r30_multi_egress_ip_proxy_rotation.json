@@ -1,0 +1,19 @@
+{
+  "name": "[R30] Single account/session seen from many distinct source IPs in a short window (proxy rotation)",
+  "type": "log_detection",
+  "message": "Exploratory heuristic for the \"rotating egress IP\" pattern described on attacker infrastructure Hunt.io tied to a campaign against seven South Korean banks (2026-11-04): alongside the R29 JNDI/LDAP toolset, the exposed relay hosted a proxy pool of ~79 distinct egress IPs. Hunt.io did not confirm this pool's direct role in the bank breaches -- this rule targets the general technique (spreading one account/session's traffic across many source IPs to evade per-IP rate limits and blocklists), not this one campaign.\n\nNeeds SIEM-side aggregation: group by account/session, short window, alert on distinct source-IP count exceeding your baseline. Large NAT pools, mobile roaming, and known VPN/monitoring services can look similar -- tune before trusting this alone.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1090", "technique:T1110", "tactic:defense_evasion"],
+  "queries": [
+    {
+      "name": "auth_event",
+      "query": "source:authentication @event_type:(authentication OR login)",
+      "aggregation": "cardinality",
+      "aggregationField": "@network.client.ip",
+      "groupByFields": ["@usr.id"]
+    }
+  ],
+  "cases": [
+    { "name": "Single account authenticated from an unusually high number of distinct source IPs in a short window (needs SIEM-side baseline tuning -- see rule message)", "status": "medium", "condition": "auth_event > 10" }
+  ],
+  "options": { "evaluationWindow": 600, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

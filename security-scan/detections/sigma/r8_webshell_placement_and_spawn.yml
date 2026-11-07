@@ -7,8 +7,17 @@ description: >
   as such a file on a server reachable from a public web server (JPCERT/CC
   advisory of 2026-10-08/09 reports a WAR file with a JSP acting as a simple web
   shell). Correlate with who wrote the file and with R8 (spawn) below.
+
+  2026-11 addendum: a 2026-09〜10 campaign reported by Reuters/NorForge used the open-source
+  Cairn agent framework (this repo's own cairn-lab/ tracks the same tool, for authorized-lab
+  use only) to probe ~1,200 sites and breach 100+, planting web shells for persistent access
+  (named victims include John Deere, SharkNinja). No CVE/CMS was published for the exact
+  exploited flaw, so this rule's existing PHP/JSP/WAR coverage is believed to apply but is
+  not confirmed against this specific campaign -- treat as a plausibility match, not a
+  verified one.
 references:
   - https://www.jpcert.or.jp/at/2026/at260030.html
+  - ../cairn-lab/cairn-authorized-lab-runbook.md
 author: ai-agent-attack-defense
 date: 2026/10/11
 logsource:

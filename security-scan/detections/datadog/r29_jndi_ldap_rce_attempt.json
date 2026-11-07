@@ -1,0 +1,16 @@
+{
+  "name": "[R29] Application process (Java/Tomcat) opens outbound LDAP/RMI connection (possible JNDI injection RCE)",
+  "type": "log_detection",
+  "message": "Classic JNDI-injection RCE pattern (Log4Shell-class, CVE-2021-44228 and the general family): a server-side process opens an outbound LDAP (389/636) or RMI (1099) connection, typically right after handling an inbound request. Standalone JNDI exploitation toolkits for this were found, alongside Claude Code/DeepSeek/GLM/Grok model-routing config and 19 custom agent skills, on infrastructure Hunt.io (2026-11-04) tied to a campaign against seven South Korean banks using the ARTEX autonomous-pentest agent (see ../artex-analysis.ja.md -- ARTEX's exact role in that campaign remains unconfirmed). This rule detects the RCE technique itself.\n\nTune: allowlist your organization's real LDAP/AD and JMX/RMI server hostnames before relying on this.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1190", "technique:T1059", "tactic:initial_access"],
+  "queries": [
+    {
+      "name": "app_ldap_rmi_egress",
+      "query": "source:network_connection @process.name:(*java OR *tomcat OR *catalina.sh) @destination.port:(389 OR 636 OR 1099) -@destination.hostname:*.internal.example"
+    }
+  ],
+  "cases": [
+    { "name": "Java/Tomcat process opened an outbound LDAP/RMI connection", "status": "high", "condition": "app_ldap_rmi_egress > 0" }
+  ],
+  "options": { "evaluationWindow": 300, "keepAlive": 3600, "maxSignalDuration": 86400 }
+}

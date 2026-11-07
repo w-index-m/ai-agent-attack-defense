@@ -20,10 +20,22 @@ description: >
   authentication event in between). That shape is consistent with
   (but not proof of) a successful local kernel exploit of any kind,
   Infinity Core included.
+
+  2026-11 addendum: Hunt.io (2026-11-04) reported Linux privilege-escalation
+  tooling found on the same exposed relay server tied to a campaign against
+  seven South Korean banks, alongside the R29 JNDI/LDAP toolset and R30
+  proxy pool -- but explicitly said this tooling's relation to that specific
+  campaign is unconfirmed, and no specific technique/CVE was named for it.
+  This rule's outcome-based detection (unexplained root transition) is
+  believed to be a reasonable generic proxy for that case too, since it
+  does not depend on knowing the exploit technique in advance -- but this
+  is not a verified match to that reporting.
 references:
   - https://github.com/V4bel/InfinityCore
   - https://tuxcare.com/blog/infinity-core-linux-kernel-root/
   - ../../scripts/linux_kernel_infinitycore_check.py
+  - https://hunt.io/blog/artex-south-korea-bank-infrastructure
+  - ../artex-analysis.ja.md
 author: ai-agent-attack-defense
 date: 2026-10-23
 logsource:
