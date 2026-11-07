@@ -37,6 +37,8 @@
     - "api.anthropic.com"
     - "api.openrouter.ai"
     - "api.deepseek.com"
+    - "api.groq.com"
+    - "generativelanguage.googleapis.com"
     - "api.telegram.org"
     - "discord.com"
     - "hooks.slack.com"

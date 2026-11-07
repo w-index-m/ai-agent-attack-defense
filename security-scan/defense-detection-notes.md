@@ -112,9 +112,13 @@ detection:
     - api.openrouter.ai
     - api.deepseek.com
     - "*.openrouter.ai"
+    - api.groq.com                 # 推論ホスト(モデルではない)。Llama/Gemma/Mixtral等を提供
+    - generativelanguage.googleapis.com  # Google Gemini/Gemma の公開API
   src_zone: server|production|dmz   # 開発者端末ゾーンは除外
 condition: dest_domain AND src_zone
-note: 正規業務でLLMを使うホストは allowlist 化し、それ以外からの通信を異常として上げる。
+note: 正規業務でLLMを使うホストは allowlist 化し、それ以外からの通信を異常として上げる。どのLLMベンダー・
+  推論ホストを使うかは無関係(判断の主体がLLMであれば検知対象)。ただし完全にローカルで動くモデルは
+  そもそも外向き通信が発生しないため、このルールでは原理的に検知できない(R7側が残る手がかり)。
 ```
 
 **R2. 特権 cap / host ネットのコンテナ起動**

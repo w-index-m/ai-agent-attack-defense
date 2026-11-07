@@ -44,6 +44,23 @@ python3 scripts/proxy_egress_check.py --log-path proxy.jsonl --format jsonl --se
 - `--exclude-cidr 10.0.0.9/32`で除外すると、同様に`10.0.0.9`由来の分だけ除外されることを確認。
 - ヒットが無いログでは、終了コード0・「見つかりませんでした」の表示を確認。
 
+## 2026-11-07追記: Groq・Google Gemini/Gemmaのドメインを追加
+
+会話での指摘(「Gemma や Groq 経由でもAIエージェント攻撃になるか」)をきっかけに、R1のドメイン
+一覧に`api.groq.com`(Groq、モデルではなく推論ホスト。Llama/Gemma/Mixtral等を高速提供)と
+`generativelanguage.googleapis.com`(Google Gemini/Gemmaの公開API)を追加した。
+
+「どのLLMベンダー・推論ホストを使うか」は検知の本質とは無関係(判断の主体がLLMであれば対象)。
+ただし、**完全にローカルで動くモデル(Ollama等)を使われた場合、そもそも外向き通信が発生しない
+ため、このルール(R1)では原理的に検知できない**(`strix-local-poc/`で実際に確認済みの限界。
+その場合に残る手がかりはR7「多数のツールの短時間連続実行」)。
+
+sigma(`r1_llm_api_egress_from_servers.yml`)・datadog・elastic(単体ファイルとndjson両方)・
+falco(`cairn-ai-agent.yaml`)・`proxy_egress_check.py`の計6箇所を同時に更新し、ズレが無いことを
+確認(JSON/NDJSONはパース確認、`tools/check_consistency.py`もOK)。`proxy_egress_check.py`は、
+合成ログ(`api.groq.com`・`generativelanguage.googleapis.com`・無関係1件)で、新しい2ドメインを
+正しく検出し、無関係な宛先での誤検知が無いことを確認した。
+
 ## 確認していないこと
 
 - 実際に稼働しているSquid(またはその他のフォワードプロキシ製品)が出力する**本物の**アクセス

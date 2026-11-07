@@ -51,6 +51,8 @@ R1_LLM_API_DOMAINS = {
     "api.openrouter.ai",
     "openrouter.ai",
     "api.deepseek.com",
+    "api.groq.com",  # Groq is an inference host, not a model -- serves Llama/Gemma/Mixtral etc.
+    "generativelanguage.googleapis.com",  # Google Gemini/Gemma public API
 }
 
 # r4_messaging_api_c2.yml の selection_domain.dest_host と完全に同じ。
