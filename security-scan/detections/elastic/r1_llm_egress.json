@@ -4,7 +4,7 @@
   "description": "Outbound to an external LLM API from a server/production host. Autonomous AI-agent harnesses need continuous LLM inference; egress from a host with no approved LLM use is high-signal. Tune labels.src_zone and the domain allowlist to your environment.",
   "type": "query",
   "language": "kuery",
-  "query": "destination.domain:(\"api.openai.com\" or \"api.anthropic.com\" or \"api.openrouter.ai\" or \"openrouter.ai\" or \"api.deepseek.com\") and labels.src_zone:(\"server\" or \"production\" or \"dmz\")",
+  "query": "destination.domain:(\"api.openai.com\" or \"api.anthropic.com\" or \"api.openrouter.ai\" or \"openrouter.ai\" or \"api.deepseek.com\" or \"api.groq.com\" or \"generativelanguage.googleapis.com\") and labels.src_zone:(\"server\" or \"production\" or \"dmz\")",
   "index": ["logs-network.*", "logs-*", "filebeat-*", "packetbeat-*"],
   "from": "now-10m",
   "interval": "5m",

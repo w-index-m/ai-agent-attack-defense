@@ -6,7 +6,7 @@
   "queries": [
     {
       "name": "llm_egress",
-      "query": "source:(proxy OR firewall OR dns) @network.destination.name:(api.openai.com OR api.anthropic.com OR api.openrouter.ai OR openrouter.ai OR api.deepseek.com) @network.client.zone:(server OR production OR dmz)",
+      "query": "source:(proxy OR firewall OR dns) @network.destination.name:(api.openai.com OR api.anthropic.com OR api.openrouter.ai OR openrouter.ai OR api.deepseek.com OR api.groq.com OR generativelanguage.googleapis.com) @network.client.zone:(server OR production OR dmz)",
       "aggregation": "count",
       "groupByFields": ["@network.client.ip"]
     }
