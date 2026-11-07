@@ -24,6 +24,8 @@ Use these **only on systems you own or are authorized to test**.
 
 ("R" is short for **Rule** — detection rule number; "G" (G1–G6, a separate list) is short for **Governance** event.)
 
+![What "AI-agent attack" actually means: the LLM only judges (decides what to try next); an ordinary tool (nmap/ffuf/curl) does the actual execution; MCP-style wiring is just a thin bridge between the two — the tools themselves are unmodified](ai-agent-attack-concept.png)
+
 Legend: **本リポ** = implemented in this repository · **外部案** = external roadmap idea, evaluated in [`defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) and not yet implemented (the `本リポ` / `外部案` labels are kept in Japanese to match the figure).
 
 > Big picture: countermeasures form one set across **prevent (③) → detect (R1–R7) → respond → recover**. Step-by-step defense along the attack chain: [`security-scan/defense-playbook.en.md`](security-scan/defense-playbook.en.md). See [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) for the mapping and [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) for plain-language term definitions.
@@ -85,6 +87,8 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 ![検知ルール R1–R7 が一目でわかる図：どの攻撃段階で、どのルールが観測点になるか、R6がそれらを束ねる様子](r1-r7-overview.png)
 
 (「R」は検知ルール（**Rule**）番号の頭文字。対になる「G」（G1–G6、別の一覧）はガバナンスイベント（**Governance**）の頭文字。)
+
+![「AIエージェント攻撃」とは：LLMは「判断」(次に何を試すか考える)だけ、実際の実行はnmap/ffuf/curl等の普通のツールが行う。MCP等の橋渡し層は、その間を繋ぐだけでツール自体は無改造](ai-agent-attack-concept.png)
 
 凡例：**本リポ** ＝このリポジトリで実装済み ／ **外部案** ＝外部ロードマップの案。[`defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) で評価したもので、未実装。
 
