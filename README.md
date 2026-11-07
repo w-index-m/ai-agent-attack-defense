@@ -20,6 +20,8 @@ Use these **only on systems you own or are authorized to test**.
 
 ![Defense overview: the seven-step attack chain and the four defense layers (prevent / detect / respond / recover), with the tools for each](defense-overview.png)
 
+![R1-R7 detection rules at a glance: which attack stage each rule observes, and R6 correlating them into one incident](r1-r7-overview.png)
+
 Legend: **本リポ** = implemented in this repository · **外部案** = external roadmap idea, evaluated in [`defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) and not yet implemented (the `本リポ` / `外部案` labels are kept in Japanese to match the figure).
 
 > Big picture: countermeasures form one set across **prevent (③) → detect (R1–R8) → respond → recover**. Step-by-step defense along the attack chain: [`security-scan/defense-playbook.en.md`](security-scan/defense-playbook.en.md). See [`security-scan/defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) for the mapping and [`security-scan/glossary.ja.md`](security-scan/glossary.ja.md) for plain-language term definitions.
@@ -76,6 +78,8 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 ![攻撃の概要：AI エージェントの役割と攻撃連鎖7段（高レベル。手順は含まない）](attack-overview.png)
 
 ![防御全体像：攻撃連鎖7段と、防御の4層（予防・検知・応答・復旧）、各層のツール](defense-overview.png)
+
+![検知ルール R1–R7 が一目でわかる図：どの攻撃段階で、どのルールが観測点になるか、R6がそれらを束ねる様子](r1-r7-overview.png)
 
 凡例：**本リポ** ＝このリポジトリで実装済み ／ **外部案** ＝外部ロードマップの案。[`defense-layers-and-roadmap.md`](security-scan/defense-layers-and-roadmap.md) で評価したもので、未実装。
 
