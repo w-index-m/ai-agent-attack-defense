@@ -9,6 +9,7 @@
   --hand:#c0511d; --hand-bg:#fbe9dd;
   --result:#0f6f68; --result-bg:#e3f0ef;
   --guard:#3f6f94; --guard-bg:#e1ecf5;
+  --mcp:#8a6d1d; --mcp-bg:#f8efd2;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--fg);font-family:var(--font);padding:28px 30px}
@@ -32,6 +33,14 @@ h1 small{font-size:13px;color:var(--mu);font-weight:400;display:block;margin-top
 .guardband{background:var(--guard-bg);border:1px solid var(--guard);border-radius:10px;padding:14px 18px;display:flex;align-items:center;gap:16px}
 .guardband .lbl{font-size:13px;font-weight:700;color:var(--guard);white-space:nowrap}
 .guardband .txt{font-size:12.5px;color:var(--fg);line-height:1.6}
+.mcpband{background:var(--mcp-bg);border:1px solid var(--mcp);border-radius:10px;padding:14px 18px;display:flex;flex-direction:column;gap:8px}
+.mcpband .head{display:flex;align-items:center;gap:12px}
+.mcpband .lbl{font-size:13px;font-weight:700;color:var(--mcp);white-space:nowrap}
+.mcpband .txt{font-size:12.5px;color:var(--fg);line-height:1.6}
+.mcpsteps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-left:42px}
+.mcpstep{background:#fff;border:1px solid var(--ln);border-radius:8px;padding:8px 10px}
+.mcpstep .st{font-size:11px;font-weight:700;color:var(--mcp)}
+.mcpstep .sd{font-size:11px;color:var(--fg);line-height:1.5;margin-top:2px}
 .compare{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .ccard{border:1px solid var(--ln);border-radius:10px;padding:14px 16px;background:var(--sf)}
 .ccard .ct{font-size:13px;font-weight:700;margin-bottom:6px}
@@ -89,6 +98,19 @@ h1 small{font-size:13px;color:var(--mu);font-weight:400;display:block;margin-top
     <div class="cap">結果を見て、また次の判断へ（OODAループ：観察→判断→行動の繰り返し）</div>
   </div>
 
+  <div class="mcpband">
+    <div class="head">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#8a6d1d" stroke-width="2"><rect x="3" y="7" width="7" height="7" rx="1"/><rect x="14" y="7" width="7" height="7" rx="1"/><path d="M10 10.5h4"/></svg>
+      <div class="lbl">「指示(テキスト)」と「実行」の間 ── MCP(Model Context Protocol)等の橋渡し層</div>
+      <div class="txt" style="margin-left:auto;max-width:560px">nmap・ffuf 自体は<b>無改造</b>（人間が使うのと同じバイナリ）。LLMが呼び出せるように後付けされるのは、この橋渡し層だけ。</div>
+    </div>
+    <div class="mcpsteps">
+      <div class="mcpstep"><div class="st">① 入力スキーマ</div><div class="sd">「このツールは target という文字列引数を取る」等、LLMが読める形式の説明書</div></div>
+      <div class="mcpstep"><div class="st">② 呼び出し窓口</div><div class="sd">LLMの「このツールをこの引数で」をsubprocess実行に変換</div></div>
+      <div class="mcpstep"><div class="st">③ 出力の整形</div><div class="sd">ツールの生出力を、LLMが解釈しやすい形に整える</div></div>
+    </div>
+  </div>
+
   <div class="guardband">
     <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#3f6f94" stroke-width="2"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
     <div class="lbl">防御はここを見る</div>
@@ -107,6 +129,6 @@ h1 small{font-size:13px;color:var(--mu);font-weight:400;display:block;margin-top
     </div>
   </div>
 
-  <div class="note">同じ「脆弱性を見つける」という結果でも、<b>判断の主体がLLMかどうか</b>で「エージェント攻撃」かただの「スキャナー」かが分かれる。詳細は <span style="font-family:'JetBrains Mono',monospace">security-scan/glossary.ja.md</span> 「『AIエージェント攻撃』とは」を参照。</div>
+  <div class="note">同じ「脆弱性を見つける」という結果でも、<b>判断の主体がLLMかどうか</b>で「エージェント攻撃」かただの「スキャナー」かが分かれる。MCPで150+ツールを統括する基盤・フレームワーク型(HexStrike AI・CAI・TARS等)の実例は <span style="font-family:'JetBrains Mono',monospace">security-scan/defense-detection-notes.md</span> §「攻撃用AIエージェントの広域マップ」を参照。詳細は <span style="font-family:'JetBrains Mono',monospace">security-scan/glossary.ja.md</span> 「『AIエージェント攻撃』とは」を参照。</div>
 
 </div></body></html>
