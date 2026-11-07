@@ -34,6 +34,7 @@ Legend: **本リポ** = implemented in this repository · **外部案** = extern
 | `.github/workflows/security-scan.yml` + `scripts/summarize.py` | CI scan set: Semgrep, Trivy, gitleaks (+ ZAP baseline if `STAGING_URL` is set). | See "CI scan" below. |
 | `netcheck/` | Confirmation-only checker (ports, banners, headers, TLS, admin-like URLs, exposed config/backup files). Private ranges only by default. Cannot judge SQL injection. | `python3 netcheck/netcheck.py` then open the printed URL. |
 | `scripts/dep_cve_check.py` | Checks your own `requirements.txt` / npm `package-lock.json` against the public OSV.dev vulnerability database; outputs SARIF (`dep` = dependency); also reads NuGet `packages.lock.json` / `.csproj`, `poetry.lock`, `uv.lock`, `go.sum` and Maven `pom.xml`, and runs in CI (non-blocking by default). Known-vulnerability lookup only — it does not see flaws in your own code, unpublished vulnerabilities, or whether you actually use the affected feature. | See [`security-scan/dep-cve-check-notes.md`](security-scan/dep-cve-check-notes.md). |
+| `scripts/proxy_egress_check.py` | Reads a forward-proxy access log (Squid native or JSON Lines) and flags R1 (LLM-API egress) / R4 (messaging-API egress, possible C2) style destinations — the same domain list as the Sigma rules, but as a standalone script for environments without a SIEM. Read-only; no network calls. | See [`security-scan/proxy-egress-check-notes.md`](security-scan/proxy-egress-check-notes.md). |
 | `deck/` | Generator scripts for the JP/EN slide decks (pptxgenjs). | See `deck/README.md`. |
 
 ## CI scan
@@ -97,6 +98,7 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 | `.github/workflows/security-scan.yml` + `scripts/summarize.py` | CI スキャン一式：Semgrep・Trivy・gitleaks（`STAGING_URL` を設定すれば ZAP ベースラインも）。 | 下の「CI スキャン」を参照。 |
 | `netcheck/` | 確認専用のチェッカー（ポート・バナー・ヘッダ・TLS・管理画面らしき URL・設定/バックアップの露出）。ブラウザ UI 付き。既定ではプライベート範囲のみ。SQL インジェクションの有無は判定しない。 | `python3 netcheck/netcheck.py` を実行し、表示された URL を開く。 |
 | `scripts/dep_cve_check.py` | 自分の `requirements.txt` / npm `package-lock.json` を、公開の脆弱性データベース OSV.dev に照合。SARIF を出力（`dep` = dependency）。NuGet の `packages.lock.json` / `.csproj`、`poetry.lock`、`uv.lock`、`go.sum`、Maven の `pom.xml` にも対応し、CI でも動く（既定では CI を止めない）。確認できるのは既知の脆弱性との照合のみで、自分のコードの欠陥・未公開の脆弱性・影響を受ける機能を実際に使っているか、は対象外。 | [`security-scan/dep-cve-check-notes.md`](security-scan/dep-cve-check-notes.md) を参照。 |
+| `scripts/proxy_egress_check.py` | フォワードプロキシのアクセスログ（Squid native形式 / JSON Lines）を読み、R1（LLM APIへの外向き通信）・R4（メッセージングAPIへの外向き通信、C2的チャネル）相当の宛先を検出。ドメイン一覧はSigmaルールと同じだが、SIEMを持たない環境向けの独立スクリプト。読み取り専用、通信は一切しない。 | [`security-scan/proxy-egress-check-notes.md`](security-scan/proxy-egress-check-notes.md) を参照。 |
 | `deck/` | 日英スライドの生成スクリプト（pptxgenjs）。 | `deck/README.md` を参照。 |
 
 ## CI スキャン

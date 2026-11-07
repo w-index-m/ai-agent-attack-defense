@@ -33,10 +33,10 @@ Gambit レポート由来の帰属であり、検知条件そのものに特定�
 
 | ルール | 検知ログ源 | 想定ツール(Gambit内での担当) | 備考 |
 |---|---|---|---|
-| R1 | フォワードプロキシ / NetFlow / DNS ログ | 3 ツール共通の土台(Strix/Cairn/Hermes いずれも LLM API への継続的 egress を持つ) | 最も安定した観測点。送信先ドメイン(`api.openai.com`等)への通信を見る |
+| R1 | フォワードプロキシ / NetFlow / DNS ログ | 3 ツール共通の土台(Strix/Cairn/Hermes いずれも LLM API への継続的 egress を持つ) | 最も安定した観測点。送信先ドメイン(`api.openai.com`等)への通信を見る。実際にログを読む独立ツールは `scripts/proxy_egress_check.py`(SIEM不要。[`../proxy-egress-check-notes.md`](../proxy-egress-check-notes.md)参照) |
 | R2 | コンテナランタイム監査(Docker events / containerd / Falco / auditd) | **Cairn**(探索的侵入。per-project ワーカーを `NET_RAW`/`NET_ADMIN` 付きで起動) | 未知イメージ名(`cairn-worker-container`等)との相関で確度が上がる |
 | R3 | Web/WAF アクセスログ | **Strix**(偵察・スキャン。`nmap`/`ffuf`/`playwright`を同梱) | 同一送信元IPからの管理画面系パスへの高速な総当たりを見る。詳細はこのREADMEの上の図、および会話での質疑を参照 |
-| R4 | フォワードプロキシ / NetFlow(メッセージングAPI宛) | **Hermes**(統括・事後。Telegram/Discord/Slackゲートウェイを持つ) | サーバ/本番ホストからの通信は強い異常シグナル |
+| R4 | フォワードプロキシ / NetFlow(メッセージングAPI宛) | **Hermes**(統括・事後。Telegram/Discord/Slackゲートウェイを持つ) | サーバ/本番ホストからの通信は強い異常シグナル。R1と同じ`scripts/proxy_egress_check.py`で読み取り確認できる |
 | R5 | ホスト永続化(cron / systemd timer / 自動起動) | **Hermes**(統括・事後。cron による永続化) | 新規スケジュール・サービスの作成を見る |
 | R6 | SIEM相関(複数データソースを横断) | 特定のツールではなく、**複数のRの組み合わせ**を束ねる仕組み自体 | R1〜R5・R7のうち複数が、同じ送信元・時間帯で同時に発火した場合に相関 |
 | R7 | EDR / プロセステレメトリ(Sysmon / auditd / eBPF) | 特定のツールではなく、**多数のツールを統括する構成(フレームワーク型)なら共通して出る** | HexStrike AI・CAI等の「攻撃基盤・フレームワーク型」で特に顕著。ローカルLLM型でも残る数少ない兆候 |
