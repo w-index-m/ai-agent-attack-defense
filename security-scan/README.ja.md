@@ -137,6 +137,7 @@ CVEではなく未適用更新の一般的な棚卸し)、`scripts/dep_cve_check
 | [`defense-playbook.ja.md`](defense-playbook.ja.md) / [`.en.md`](defense-playbook.en.md) | **AI エージェント攻撃 防御プレイブック**。Strix / Cairn / Hermes / ARTEX の見える動きを前提に、攻撃連鎖の7段ごとの予防・検知・応答・確認、インシデント対応、罠（ハニートークン）の設計メモ、最初の1週間、**未実装の一覧**。 |
 | [`defense-layers-and-roadmap.md`](defense-layers-and-roadmap.md) | 防御の4層（予防・検知・応答・復旧）と、外部ロードマップ案の対応づけ・評価・不足分の補い方。R1–R8 と ③ の区別、カーネルFIM 解説つき。 |
 | [`glossary.ja.md`](glossary.ja.md) / [`.en.md`](glossary.en.md) (EN) | 用語集（やさしい日本語）。FIM / CSP / WORM / egress / C2 / RCE / IAM などを1行ずつ。新語が出たら追記する。 |
+| [`verification-gates.md`](verification-gates.md) | **本リポジトリの検証方針**。「機械的に反応するか→脆弱版/修正版のペアで検証したか→実機・実データで再現したか→一次情報で裏取りしたか」という4段階と、通らなかった主張を消さずに「誤り」として明記する、という一貫した姿勢を、実例つきで棚卸しした横断ノート。 |
 
 ### AIエージェントが攻撃する側（Gambit系：Strix / Cairn / Hermes / ARTEX）
 
