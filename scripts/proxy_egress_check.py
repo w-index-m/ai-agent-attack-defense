@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
 """proxy_egress_check: フォワードプロキシのアクセスログを読み、R1(LLM APIへの外向き通信)・
 R4(メッセージングAPIへの外向き通信、C2的チャネル)・R9(許可リスト外ドメインへのエージェント
-egress)・R10(クラウドメタデータサービスへのアクセス)相当の宛先への通信が無いかを確認する
-(確認専用、読み取りのみ)。
+egress)・R10(クラウドメタデータサービスへのアクセス)・R31(暗号資産取引所APIへの通信)
+相当の宛先への通信が無いかを確認する(確認専用、読み取りのみ)。
+
+R31は2026-11-08追加: サーバ/本番ホストから、暗号資産取引所(Binance・Coinbase・Kraken・
+Upbit・Bithumb・OKX・Bybit)のAPIへの通信を見る(`r31_server_crypto_exchange_api_egress.yml`)。
+Hunt.ioが韓国7金融機関への侵害基盤で確認したツール群の1つだが、事件との直接的な関係は
+未確認の探索的ヒューリスティック。
 
 R9・R10は2026-11-08追加:
   - R9は`python-requests`/`node-fetch`/`LangChain`等のエージェント系User-Agentから、
@@ -97,6 +102,18 @@ R10_METADATA_PATH_SUBSTRINGS = (
     "/computeMetadata/v1/instance/service-accounts/",
     "/latest/meta-data/iam/security-credentials/",
     "/metadata/identity/oauth2/token",
+)
+
+# r31_server_crypto_exchange_api_egress.yml の selection_exchange_api.dest_host|contains と完全に同じ
+# (末尾の"."まで含めた部分一致。.com/.usなどTLD違いもまとめて拾うための意図的なcontains)。
+R31_CRYPTO_EXCHANGE_DOMAIN_SUBSTRINGS = (
+    "api.binance.",
+    "api.coinbase.",
+    "api.kraken.",
+    "api.upbit.",
+    "api.bithumb.",
+    "api.okx.",
+    "api.bybit.",
 )
 
 
@@ -238,6 +255,11 @@ def _is_r10_metadata_access(dest_host: str, url: str | None) -> bool:
     return any(s in url for s in R10_METADATA_PATH_SUBSTRINGS)
 
 
+def _is_r31_crypto_exchange(dest_host: str) -> bool:
+    dest_host = dest_host.lower()
+    return any(s in dest_host for s in R31_CRYPTO_EXCHANGE_DOMAIN_SUBSTRINGS)
+
+
 def scan_log(
     log_path: str,
     fmt: str,
@@ -276,11 +298,14 @@ def scan_log(
             parsed.dest_host, r9_allowlist_suffixes
         ):
             hits.append(ProxyHit(parsed.src_ip, parsed.dest_host, "R9", i, raw))
+        if _is_r31_crypto_exchange(parsed.dest_host):
+            hits.append(ProxyHit(parsed.src_ip, parsed.dest_host, "R31", i, raw))
 
     return hits, len(lines), None
 
 
 _RULE_LABELS = {
+    "R31": "暗号資産取引所APIへの通信",
     "R1": "LLM API への外向き通信",
     "R4": "メッセージング API への外向き通信(C2的チャネル)",
     "R9": "エージェント系User-Agentから許可リスト外ドメインへのegress(IDPIの兆候)",

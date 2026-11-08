@@ -30,6 +30,20 @@ python3 scripts/file_event_check.py --log-path file_events.jsonl
   書き込み1件)で、該当3件を正しく検出。正規デプロイツール(`dpkg`)による`.php`ファイル
   書き込みは正しく除外(誤検知0件)。
 
+## 2026-11-08追記: R20(Markdown散発書き込み)・R28(エディタ拡張機能のSSH鍵作成)を追加
+
+「gate0止まりのしょり」の指示で追加。どちらも`status: experimental`で、ルール自体に「二次情報源
+からの推測で、確認済みのシグネチャではない」と明記されている。
+
+- **R20**: 同一プロセス(`process_guid`/`host`でグループ化)が、既知ドキュメントパス(`/docs/`等)
+  以外で、異なる.mdファイルを4個超・異なるディレクトリに2個超、散発的に書き込むパターン。
+- **R28**: `Cursor`・`Code - Insiders`・`code`・`extensionHost`を含む親プロセスが、SSH鍵や
+  `authorized_keys`を作成・変更するパターン。
+
+合成ログ(R20該当: 5個の.mdファイルを3ディレクトリに散発書き込み・既知docsパス配下の.mdは
+除外対象として6件/R28該当: Cursor extensionHostによるauthorized_keys作成1件・通常のターミナル
+からのssh-keygenは対象外)で正しく検出し、誤検知0件を確認。
+
 ## 確認していないこと
 
 - 実際のauditd等が出力する**本物の**ファイルイベントログでの動作(今回はすべて合成ログでの

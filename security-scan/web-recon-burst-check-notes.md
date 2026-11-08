@@ -37,6 +37,15 @@ python3 scripts/web_recon_burst_check.py --log-path access.jsonl --format jsonl 
   (`198.51.100.9`、10件・閾値未満)・無関係な正常アクセス(200応答)では誤検知0件。
 - JSON Lines形式の合成ログで、32件の列挙を正しく検出。
 
+## 2026-11-08追記: R18(PHPUnit eval-stdin.php)・R19(ThinkPHP invokefunction)を追加
+
+「gate0止まりのしょり」の指示で、`r18_phpunit_eval_stdin_rce.yml`・`r19_thinkphp_invokefunction_rce.yml`
+を追加した。どちらも`status: stable`(確定済みの脆弱性パターン)で、R3と同じWebアクセスログの
+URIへの単純な文字列一致(閾値・時間窓は不要、1件でも即検知)。
+
+合成ログ(PHPUnitパスへのリクエスト1件・ThinkPHPのinvokefunction+call_user_func_arrayを含む
+リクエスト1件・無関係な正常リクエスト1件)で正しく検出し、誤検知0件を確認。
+
 ## 確認していないこと
 
 - 実際に稼働しているApache/Nginxが出力する**本物の**アクセスログでの動作(今回はすべて

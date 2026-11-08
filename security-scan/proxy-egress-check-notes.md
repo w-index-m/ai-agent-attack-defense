@@ -86,6 +86,16 @@ falco(`cairn-ai-agent.yaml`)・`proxy_egress_check.py`の計6箇所を同時に�
 - Squid native形式の合成ログ(平文HTTPのGET)で、R10を正しく検出。
 - R1/R4の既存の検出が、この拡張後も変わらず正しく動作することを再確認(回帰なし)。
 
+## 2026-11-08追記その2: R31(暗号資産取引所APIへの通信)を追加
+
+「gate0止まりのしょり」の指示で、`r31_server_crypto_exchange_api_egress.yml`を追加した。
+Binance・Coinbase・Kraken・Upbit・Bithumb・OKX・Bybitのドメインへの通信を見る、既存のR1/R4/
+R9/R10と同じ「ドメインリスト+contains一致」の仕組みで、追加は容易だった。
+
+合成ログ(`api.binance.com`・`api.bybit.com`の2件・無関係な宛先1件)で正しく検出し、誤検知0件を
+確認。R31自体は「事件との直接的な関係は未確認」という探索的ヒューリスティックであり、
+実装できたことと実際の攻撃を正しく言い当てられることは別の軸の話である点は変わらない。
+
 ## 確認していないこと
 
 - 実際に稼働しているSquid(またはその他のフォワードプロキシ製品)が出力する**本物の**アクセス

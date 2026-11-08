@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """web_recon_burst_check: Webサーバーのアクセスログを読み、R3(偵察的Webアクセス、
-管理画面系パスへの列挙バースト)相当のパターンを確認する(確認専用、読み取りのみ)。
+管理画面系パスへの列挙バースト)・R18(PHPUnit eval-stdin.php、CVE-2017-9841)・
+R19(ThinkPHP invokefunction、CVE-2018-20062)相当のパターンを確認する(確認専用、読み取りのみ)。
+
+R18・R19は2026-11-08追加: どちらも`status: stable`(確定済みの脆弱性パターン)で、
+R3と同じWebアクセスログの、URIへの単純な文字列一致(閾値・時間窓は不要、1件でも即検知)。
 
 背景:
   - `security-scan/detections/sigma/r3_recon_enumeration_burst.yml`は、「管理画面・機微な
@@ -52,6 +56,14 @@ R3_SENSITIVE_PATH_SUBSTRINGS = (
 
 # r3_recon_enumeration_burst.yml の selection_status.status_code と完全に同じ。
 R3_STATUS_CODES = {401, 403, 404}
+
+# r18_phpunit_eval_stdin_rce.yml の selection.cs-uri-stem|contains と完全に同じ。
+# status: stable(確定済みの脆弱性パターン)。閾値・時間窓は不要、1件でも即検知。
+R18_PHPUNIT_PATH_SUBSTRING = "vendor/phpunit/phpunit/src/Util/PHP/eval-stdin.php"
+
+# r19_thinkphp_invokefunction_rce.yml の selection_invokefunction / selection_invoke_func と
+# 完全に同じ(両方が同じリクエストに含まれる場合のみ検知)。status: stable。
+R19_THINKPHP_SUBSTRINGS = (r"think\app/invokefunction", "call_user_func_array")
 
 
 @dataclass
@@ -140,50 +152,81 @@ def _is_sensitive_path(path: str) -> bool:
     return any(s in path for s in R3_SENSITIVE_PATH_SUBSTRINGS)
 
 
+def _matches_r18(path: str) -> bool:
+    return R18_PHPUNIT_PATH_SUBSTRING in path
+
+
+def _matches_r19(path: str) -> bool:
+    return all(s in path for s in R19_THINKPHP_SUBSTRINGS)
+
+
+@dataclass
+class KnownRceHit:
+    rule: str  # "R18" or "R19"
+    src_ip: str
+    path: str
+    line_no: int
+
+
 def scan_log(
     log_path: str,
     fmt: str,
     window_seconds: int,
-) -> tuple[dict[tuple[str, int], int], int, str | None]:
+) -> tuple[dict[tuple[str, int], int], list[KnownRceHit], int, str | None]:
     try:
         with open(log_path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
     except OSError as exc:
-        return {}, 0, "%s の読み取りに失敗しました: %s" % (log_path, exc)
+        return {}, [], 0, "%s の読み取りに失敗しました: %s" % (log_path, exc)
 
     if fmt == "auto":
         fmt = "jsonl" if lines and lines[0].strip().startswith("{") else "combined"
     parser = parse_jsonl_line if fmt == "jsonl" else parse_combined_line
 
     counts: dict[tuple[str, int], int] = defaultdict(int)
-    for line in lines:
+    known_rce_hits: list[KnownRceHit] = []
+    for i, line in enumerate(lines, start=1):
         parsed = parser(line, window_seconds)
         if not parsed:
             continue
-        if parsed.status not in R3_STATUS_CODES:
-            continue
-        if not _is_sensitive_path(parsed.path):
-            continue
-        counts[(parsed.src_ip, parsed.window)] += 1
+        if parsed.status in R3_STATUS_CODES and _is_sensitive_path(parsed.path):
+            counts[(parsed.src_ip, parsed.window)] += 1
+        if _matches_r18(parsed.path):
+            known_rce_hits.append(KnownRceHit("R18", parsed.src_ip, parsed.path, i))
+        elif _matches_r19(parsed.path):
+            known_rce_hits.append(KnownRceHit("R19", parsed.src_ip, parsed.path, i))
 
-    return dict(counts), len(lines), None
+    return dict(counts), known_rce_hits, len(lines), None
 
 
 def print_report(
-    counts: dict[tuple[str, int], int], total_lines: int, log_path: str, fmt: str, threshold: int
-) -> list[tuple[str, int, int]]:
+    counts: dict[tuple[str, int], int],
+    known_rce_hits: list[KnownRceHit],
+    total_lines: int,
+    log_path: str,
+    fmt: str,
+    threshold: int,
+) -> list:
     print("対象ログ: %s (形式: %s、%d行)" % (log_path, fmt, total_lines))
     print("-" * 60)
 
-    hits = [(src_ip, window, n) for (src_ip, window), n in counts.items() if n > threshold]
-    if not hits:
-        print("R3(偵察的Webアクセス、列挙バースト)相当のパターンは見つかりませんでした。")
-        return hits
+    r3_hits = [(src_ip, window, n) for (src_ip, window), n in counts.items() if n > threshold]
+    all_hits = list(r3_hits) + list(known_rce_hits)
+    if not all_hits:
+        print("R3(列挙バースト)・R18(PHPUnit eval-stdin.php)・R19(ThinkPHP invokefunction)相当の"
+              "パターンは見つかりませんでした。")
+        return all_hits
 
-    print("%d 件の(送信元IP, 時間窓)でR3相当のパターンが見つかりました:\n" % len(hits))
-    for src_ip, window, n in sorted(hits, key=lambda h: -h[2]):
-        print("  [R3] %s (時間窓#%d): 管理画面系パスへの401/403/404が %d 件" % (src_ip, window, n))
-    return hits
+    if r3_hits:
+        print("%d 件の(送信元IP, 時間窓)でR3相当のパターンが見つかりました:\n" % len(r3_hits))
+        for src_ip, window, n in sorted(r3_hits, key=lambda h: -h[2]):
+            print("  [R3] %s (時間窓#%d): 管理画面系パスへの401/403/404が %d 件" % (src_ip, window, n))
+    if known_rce_hits:
+        print("%d 件のR18/R19相当のリクエストが見つかりました:\n" % len(known_rce_hits))
+        for hit in known_rce_hits:
+            label = "PHPUnit eval-stdin.php (CVE-2017-9841)" if hit.rule == "R18" else "ThinkPHP invokefunction (CVE-2018-20062)"
+            print("  [%s] %s -> %s (行 %d、%s)" % (hit.rule, hit.src_ip, hit.path, hit.line_no, label))
+    return all_hits
 
 
 def main() -> int:
@@ -203,7 +246,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    counts, total_lines, err = scan_log(args.log_path, args.fmt, args.window_seconds)
+    counts, known_rce_hits, total_lines, err = scan_log(args.log_path, args.fmt, args.window_seconds)
     if err:
         print(err, file=sys.stderr)
         return 2
@@ -214,7 +257,7 @@ def main() -> int:
             first = f.readline()
         fmt_used = "jsonl" if first.strip().startswith("{") else "combined"
 
-    hits = print_report(counts, total_lines, args.log_path, fmt_used, args.threshold)
+    hits = print_report(counts, known_rce_hits, total_lines, args.log_path, fmt_used, args.threshold)
     return 1 if hits else 0
 
 
