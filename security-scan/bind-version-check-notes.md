@@ -86,3 +86,10 @@ python3 scripts/bind_version_check.py --journalctl-unit named
   未実施(実機のBINDが無いため)。
 
 > 確認・検知の設計に限定。攻撃の実行手順やエクスプロイトコードは含めない。
+
+## 2026-11-08追記: R22をGate 3に区分(`verification-gates.md`棚卸しとの整合)
+
+R22の`references`はISC公式KB(`kb.isc.org`、BIND 9の開発元自身のセキュリティアドバイザリ)を
+直接引用している。脆弱性の当事者ベンダー自身の一次情報源にあたるため、`verification-gates.md`
+の棚卸しでR22をGate 3に区分した。クラッシュ検知ロジック自体(assertion failure検知)は
+依然として本リポジトリ独自の構成のままで、この限界は変わらない。

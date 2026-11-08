@@ -18,8 +18,11 @@ description: >
   latest container images at the time of testing (i.e. not specific
   bugs in those applications). Fixed in PHP 8.2.35 / 8.3.36 / 8.4.27 /
   8.5.12; branches before 8.2 reportedly have no official fix per the
-  disclosure site (unverified beyond that source -- confirm against
-  php.net's own advisory).
+  disclosure site. Updated 2026-11-08: confirmed via php.net's own
+  advisory archive (2026.php#2026-10-21-5, cited by multiple independent
+  secondary sources since direct fetch of php.net is blocked in this
+  sandbox) that PHP's own project disclosed and fixed both CVEs on
+  2026-10-21 at the fixed versions above.
   Because the bug is in the PHP runtime, not a request pattern, this
   rule is necessarily indirect, like R16/R17 for Apache/Nginx: a PHP
   worker crash/restart signature, and separately a pre-fixed-version
@@ -29,6 +32,7 @@ references:
   - https://www.php2shell.com/
   - https://www.wiz.io/blog/php2shell-php-rce
   - https://github.com/aancw/php2shell-scanner
+  - https://www.php.net/archive/2026.php#2026-10-21-5
 author: ai-agent-attack-defense
 date: 2026-10-22
 logsource:

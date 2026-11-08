@@ -74,3 +74,12 @@ python3 scripts/java_cacerts_emudhra_check.py --log-path /var/log/myapp/applicat
   (`specific`/`generic`の分類、SARIF出力への反映を含む)。
 
 > 確認・検知の設計に限定。攻撃の実行手順や安全機構の回避方法は含めない。
+
+## 2026-11-08追記: R14をGate 3に区分(`verification-gates.md`棚卸しとの整合)
+
+R14の`references`は元々Mozilla Bugzilla `#2083449`(eMudhra CA失効を審議したMozilla自身の
+公式チケット)を直接引用していた。これは脆弱性の当事者(Mozilla/CA信頼ストアの管理元)自身の
+一次情報源にあたるため、`verification-gates.md`の棚卸しでR14をGate 3に区分した
+(R18・R19・R22・R23・R24・R26と同じ理由)。本ノートの検知ロジック自体(cacerts照合)が
+確認済みシグネチャであるという意味ではなく、「模している事象が実在するか」の裏取りが
+一次情報元まで届いている、という意味である。

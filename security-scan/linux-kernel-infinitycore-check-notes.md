@@ -72,3 +72,11 @@ python3 scripts/linux_kernel_infinitycore_check.py --journalctl-kernel
   検証は未実施(公開PoCを実行していないため)。
 
 > 確認・検知の設計に限定。攻撃の実行手順やエクスプロイトコードは含めない。
+
+## 2026-11-08追記: R21をGate 3に区分(`verification-gates.md`棚卸しとの整合)
+
+Infinity Coreの発見自体は、発見者V4bel自身の一次公開(`github.com/V4bel/InfinityCore`)が
+出典であり、研究者自身の一次情報源にあたる。これにより`verification-gates.md`の棚卸しで
+R21をGate 3に区分した。ただし、R21のSigma記述が追記しているHunt.io/ARTEXとの関連
+(2026-11 addendum)は依然未確認のままで、この区別は変わらない。「既知の昇格経路なしに
+rootへ遷移」という検知ロジック自体も本リポジトリ独自のヒューリスティックのままである。

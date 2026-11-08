@@ -73,3 +73,12 @@ python3 scripts/node_version_check.py --log-path /var/log/myapp/node.log
 - SARIF出力が有効なJSONとしてパースできることを確認した。
 
 > 確認・検知の設計に限定。攻撃の実行手順やエクスプロイトコードは含めない。
+
+## 2026-11-08追記: R25をGate 3に区分(`verification-gates.md`棚卸しとの整合)
+
+`r25_nodejs_brotli_node2shell.yml`の`references`に、Node.js公式アドバイザリ
+(`nodejs.org/en/blog/vulnerability/october-2026-security-releases`)を追加した。直接fetchは
+ブロックされているため本文は読めていないが、複数の独立した二次情報源がこのURLの存在と
+CVE-2026-111497・修正バージョン(22.23.4/24.22.1/26.12.1)を一致して報告していることを
+確認した。これにより`verification-gates.md`の棚卸しでR25をGate 3に区分した。クラッシュ
+検知ロジック自体は依然として未確証の探索的ヒューリスティックのままで、この限界は変わらない。

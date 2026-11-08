@@ -30,6 +30,15 @@ description: >
   believed to be a reasonable generic proxy for that case too, since it
   does not depend on knowing the exploit technique in advance -- but this
   is not a verified match to that reporting.
+
+  2026-11-08 note: the "Infinity Core" disclosure itself (independent of
+  the unconfirmed ARTEX/Hunt.io addendum above) is sourced from the
+  discovering researcher's own publication (github.com/V4bel/InfinityCore)
+  plus independent secondary corroboration (tuxcare.com and others) of
+  the CVE numbers and fixed kernel versions -- this is the researcher's
+  own primary disclosure, not a secondary news report, so the underlying
+  vulnerability's existence is well-sourced even though this rule's
+  outcome-based detection logic remains this repo's own heuristic.
 references:
   - https://github.com/V4bel/InfinityCore
   - https://tuxcare.com/blog/infinity-core-linux-kernel-root/
