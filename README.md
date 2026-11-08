@@ -42,6 +42,9 @@ Legend: **本リポ** = implemented in this repository · **外部案** = extern
 | `scripts/container_privilege_check.py` | Reads a container runtime event log (JSON Lines) and flags R2 (privileged / NET_RAW / NET_ADMIN / host-network container starts). | See [`security-scan/container-privilege-check-notes.md`](security-scan/container-privilege-check-notes.md). |
 | `scripts/file_event_check.py` | Reads a file-write event log (JSON Lines) and flags R5 (new cron/systemd persistence) and R8-placement (executable content written under a web root). | See [`security-scan/file-event-check-notes.md`](security-scan/file-event-check-notes.md). |
 | `scripts/process_tool_check.py` | Reads a process-execution event log (JSON Lines) and flags R6 (recon tool followed by another tool, correlated), R7 (one parent spawning many distinct security tools), and R8-spawn (a webserver process spawning a shell). | See [`security-scan/process-tool-check-notes.md`](security-scan/process-tool-check-notes.md). |
+| `scripts/jndi_rce_check.py` | Reads a network-connection event log (JSON Lines) and flags R29 (JNDI/LDAP injection RCE pattern: a Java/Tomcat process opening an outbound LDAP/RMI connection). | See [`security-scan/jndi-rce-check-notes.md`](security-scan/jndi-rce-check-notes.md). |
+| `scripts/auth_proxy_rotation_check.py` | Reads an authentication event log (JSON Lines) and flags R30 (proxy-rotation infrastructure: one account/session authenticating from many distinct source IPs within a time window). | See [`security-scan/auth-proxy-rotation-check-notes.md`](security-scan/auth-proxy-rotation-check-notes.md). |
+| `scripts/github_workflow_leak_check.py` | Reads a GitHub Actions/agentic-workflow event log (JSON Lines) and flags R27 ("GitLost"-style pattern: a private-repo read followed by a public-facing write within the same run). | See [`security-scan/github-workflow-leak-check-notes.md`](security-scan/github-workflow-leak-check-notes.md). |
 | `deck/` | Generator scripts for the JP/EN slide decks (pptxgenjs). | See `deck/README.md`. |
 
 ## CI scan
@@ -113,6 +116,9 @@ Gambit Security レポート（2026-09-22）の、オンライン小売を狙っ
 | `scripts/container_privilege_check.py` | コンテナランタイムのイベントログ（JSON Lines）を読み、R2（特権cap / NET_RAW / NET_ADMIN / hostネットワークでのコンテナ起動）を検出。 | [`security-scan/container-privilege-check-notes.md`](security-scan/container-privilege-check-notes.md) を参照。 |
 | `scripts/file_event_check.py` | ファイル書き込みイベントログ（JSON Lines）を読み、R5（cron/systemd永続化の新規作成）・R8設置側（Webルート配下への実行可能コンテンツの書き込み）を検出。 | [`security-scan/file-event-check-notes.md`](security-scan/file-event-check-notes.md) を参照。 |
 | `scripts/process_tool_check.py` | プロセス実行イベントログ（JSON Lines）を読み、R6（偵察ツールのあと別ツールが実行される相関）・R7（1親プロセスが多数のセキュリティツールを連続実行）・R8起動側（Webサーバーがシェルを起動）を検出。 | [`security-scan/process-tool-check-notes.md`](security-scan/process-tool-check-notes.md) を参照。 |
+| `scripts/jndi_rce_check.py` | ネットワーク接続イベントログ（JSON Lines）を読み、R29（JNDI/LDAPインジェクション型RCE。Java/TomcatプロセスがLDAP/RMIへアウトバウンド接続）を検出。 | [`security-scan/jndi-rce-check-notes.md`](security-scan/jndi-rce-check-notes.md) を参照。 |
+| `scripts/auth_proxy_rotation_check.py` | 認証イベントログ（JSON Lines）を読み、R30（プロキシローテーション。単一アカウント/セッションが短時間に多数の異なる送信元IPから認証）を検出。 | [`security-scan/auth-proxy-rotation-check-notes.md`](security-scan/auth-proxy-rotation-check-notes.md) を参照。 |
+| `scripts/github_workflow_leak_check.py` | GitHub Actions/エージェントワークフローのイベントログ（JSON Lines）を読み、R27（GitLost型。プライベートリポジトリ読み取り直後に公開出力へ書き込み）を検出。 | [`security-scan/github-workflow-leak-check-notes.md`](security-scan/github-workflow-leak-check-notes.md) を参照。 |
 | `deck/` | 日英スライドの生成スクリプト（pptxgenjs）。 | `deck/README.md` を参照。 |
 
 ## CI スキャン
