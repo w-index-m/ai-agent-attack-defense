@@ -94,3 +94,10 @@ python3 scripts/f5_bigip_apm_check.py --version 17.1.2 --apm-log /path/to/export
   にBIG-IP実機が無いため)。上記の「できないこと・正直な限界」を参照。
 
 > 確認・検知の設計に限定。攻撃の実行手順やエクスプロイトコードは含めない。
+
+## 2026-11-08追記: R23をGate 3に区分(`verification-gates.md`棚卸しとの整合)
+
+R23の`references`はF5公式KB(`my.f5.com`、F5自身のセキュリティアドバイザリ)を直接引用している。
+脆弱性の当事者ベンダー自身の一次情報源にあたるため、`verification-gates.md`の棚卸しでR23を
+Gate 3に区分した。異常ヘッダー検知等のロジック自体は依然として本リポジトリ独自の構成のままで、
+この限界は変わらない。

@@ -89,3 +89,10 @@ python3 scripts/python_brotli_check.py --log-path /var/log/myapp/gunicorn.log
 ([`brotli-node2shell-radar-notes.md`](brotli-node2shell-radar-notes.md)に利用ノート)。
 
 > 確認・検知の設計に限定。攻撃の実行手順やエクスプロイトコードは含めない。
+
+## 2026-11-08追記: R24をGate 3に区分(`verification-gates.md`棚卸しとの整合)
+
+R24の`references`はGitHub Security Advisory(`GHSA-9v8h-qqgm-4m35`、GitHubの公式脆弱性
+データベース)を直接引用している。脆弱性の当事者(パッケージ生態系の公式データベース)自身の
+一次情報源にあたるため、`verification-gates.md`の棚卸しでR24をGate 3に区分した。クラッシュ
+検知自体は依然として未確証の探索的ヒューリスティックのままで、この限界は変わらない。
