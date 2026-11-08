@@ -12,7 +12,8 @@ This case differs: it is a primary report of a **real-world incident where such 
 
 ## 1. Overview
 
-- This happened **during a ransomware attack** (Unit 42's own text: "during a ransomware attack" -- confirmed via a WebSearch excerpt of the primary source; multiple independent secondary sources (piyolog, The Register, ThreatCluster, CyberNetSec) agree).
+- This happened **during a ransomware attack**, per the article's initial framing (Unit 42's own text: "during a ransomware attack" -- confirmed via a WebSearch excerpt of the primary source; multiple independent secondary sources (piyolog, The Register, ThreatCluster, CyberNetSec) agree).
+  **Correction (2026-11-08, found during Gate 3 follow-up research)**: Unit 42's own article carries an editor's note: **"Updated Sept. 3, 2026, at 5:25 a.m. PT to clarify that the attack was an intrusion, and not a ransomware attack."** So the primary source itself retracted the "ransomware" framing in favor of "intrusion." Neither this document's analysis nor `r20_agent_markdown_handoff_burst.yml`'s detection logic depends on the ransomware label, so nothing downstream needs changing -- but the correct description of the incident is "AI-assisted intrusion," not "ransomware attack."
 - A human attacker told the victim, during negotiations, that they used a **frontier AI model plus an attack-specific agentic framework** to automate the intrusion.
 - Work that would normally take multiple red teams **about two weeks** was completed in **under 10 hours**, using **more than 50 MITRE ATT&CK techniques** (confirmed from Unit 42's own text).
 - The attacker left the entire intrusion to agents, with **humans setting objectives and making key decisions only** (per Unit 42's Figure 1).

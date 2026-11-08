@@ -5,21 +5,32 @@ description: >
   Exploratory heuristic for the pattern reported around a tampered copy of
   Anthropic's "Claude Code" extension published to Cursor's VS Code
   Extension Marketplace (versions 2.1.312/2.1.313, live for roughly 11
-  hours on 2026-10-29, up to ~5,000 users affected per Cursor's notice).
-  The malicious code ran on extension load -- no interaction with the AI
-  agent itself was required -- and attempted to plant SSH keys/establish a
-  persistent remote-access backdoor; Cursor warned that uninstalling the
-  extension may not remove already-dropped standalone persistence scripts.
-  Anthropic said it did not build or publish the tampered version and that
-  its own systems were not compromised; how the marketplace listing itself
-  was tampered with was not disclosed. No IOC (hash/C2 domain) has been
-  published by either party as of this writing -- this rule is a
-  behavioral proxy for the general technique (editor-extension-host
-  process writing SSH persistence material), not a signature for this
-  specific campaign.
+  hours on 2026-10-29 02:27-13:35 PT, up to ~5,000 users affected per
+  Cursor's own official security notice). The malicious code ran on
+  extension load -- no interaction with the AI agent itself was required
+  -- and appended an attacker ssh-ed25519 public key (labeled
+  "svc-telemetry") to authorized_keys, then enabled the local SSH service
+  and attempted a reverse SSH tunnel to attacker IP 134.209.82.225 on
+  ports 22/8099; Cursor noted this persistence step fails on a normal
+  host without administrator privileges. Cursor warned that uninstalling
+  the extension may not remove already-dropped standalone persistence
+  scripts (macOS LaunchAgents/~/.config files, Windows scheduled
+  tasks/startup scripts -- specific paths published in Cursor's notice).
+  Anthropic said it did not build or publish the tampered version and
+  that its own systems were not compromised; how the marketplace listing
+  itself was tampered with was not disclosed. Cursor has since published
+  IOCs (SHA-256 hashes, the attacker IP, the "svc-telemetry" key label,
+  and the persistence artifact paths above) -- updated 2026-11-08 from
+  the original "no IOC published" note. This rule remains a behavioral
+  proxy for the general technique (editor-extension-host process writing
+  SSH persistence material), not a signature match on those specific
+  IOCs.
 references:
+  - https://cursor.com/blog/claude-code-extension-security-notice
   - https://www.bleepingcomputer.com/news/security/malicious-claude-code-extension-on-cursor-planted-ssh-backdoors/
   - https://www.csoonline.com/article/4243210/cursor-removes-malicious-claude-code-extension-after-ssh-backdoor-attempt.html
+  - https://thehackernews.com/2026/10/official-claude-code-vs-code-extension.html
+  - https://www.helpnetsecurity.com/2026/10/30/claude-code-extension-ssh-backdoor/
 author: ai-agent-attack-defense
 date: 2026/11/06
 logsource:

@@ -12,7 +12,8 @@ Palo Alto Networks Unit 42 が公開した実インシデント報告
 
 ## 1. 概要
 
-- これは**ランサムウェア攻撃**の最中に発生した事案(Unit 42本文: "during a ransomware attack"。WebSearch経由で本文抜粋を確認、piyolog・The Register・ThreatCluster・CyberNetSec等、複数の独立した二次情報源も一致)。
+- これは**ランサムウェア攻撃**の最中に発生した事案として最初に報じられた(Unit 42本文: "during a ransomware attack"。WebSearch経由で本文抜粋を確認、piyolog・The Register・ThreatCluster・CyberNetSec等、複数の独立した二次情報源も一致)。
+  **訂正(2026-11-08、Gate 3再調査で判明)**: Unit 42自身が記事に **"Updated Sept. 3, 2026, at 5:25 a.m. PT to clarify that the attack was an intrusion, and not a ransomware attack."** という訂正を加えている。つまり**一次情報元が自ら「ランサムウェアではなく侵入事案」と訂正済み**であり、上の「ランサムウェア攻撃」という記述は訂正前の初期報道に基づく誤り。本書・`r20_agent_markdown_handoff_burst.yml`の説明文はいずれも「ランサムウェア」という語を検知ロジックの前提にしていないため実害は無いが、事実としては「侵入事案(intrusion)」と呼ぶのが正しい。
 - 人間の攻撃者が、**frontier AI モデル＋攻撃特化型 agentic フレームワーク**を用いて、企業ネットワークへの侵入を自動化したと交渉の場で自認した。
 - 通常は複数のレッドチームが**約2週間**かけるような規模の作業を、**10時間未満**で完了。**50以上のMITRE ATT&CK手法**を用いた(Unit 42本文で確認)。
 - 攻撃者はエージェントに侵入の全工程を任せ、**人間は目標設定と重要な意思決定のみ**を行った（Unit 42 の図1が示す構造）。

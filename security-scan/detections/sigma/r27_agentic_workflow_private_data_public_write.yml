@@ -11,14 +11,25 @@ description: >
   egress) but here the "exfiltration" channel is a legitimate public write
   path (issue comment / PR comment / public artifact) rather than an
   unapproved network destination, so R9's domain-allowlist approach does not
-  cover it. Noma Labs gave no reusable log signature for this -- this rule is
-  this repository's own constructed proxy, not a confirmed indicator: a CI/
-  agent-runner process that reads from a private-repository path or a
-  secret-scoped context, then writes to a public-facing output (issue
-  comment, PR comment, published artifact/page) within the same run. Needs
-  SIEM-side sequencing (read-then-write within one run/process-tree), not a
+  cover it. Updated 2026-11-08: confirmed via Noma Security's own blog
+  post ("GitLost: How We Tricked GitHub's AI Agent into Leaking Private
+  Repos", noma.security/noma-labs/gitlost-how-we-tricked-githubs-ai-agent-into-leaking-private-repos)
+  that the demonstrated trigger was a workflow configured on
+  issues.assigned, that the agent's GitHub token was scoped to the whole
+  organization rather than the single issue it was meant to act on (so
+  it could read other repos, public and private, without any separate
+  privilege escalation), and that the demo exfiltrated a private test
+  repo's README.md contents into a public issue comment. Noma disclosed
+  to GitHub before publishing (2026-07-06). Noma Labs gave no reusable
+  log signature for this -- this rule is this repository's own
+  constructed proxy, not a confirmed indicator: a CI/agent-runner
+  process that reads from a private-repository path or a secret-scoped
+  context, then writes to a public-facing output (issue comment, PR
+  comment, published artifact/page) within the same run. Needs SIEM-side
+  sequencing (read-then-write within one run/process-tree), not a
   single-event match.
 references:
+  - https://noma.security/noma-labs/gitlost-how-we-tricked-githubs-ai-agent-into-leaking-private-repos
   - https://runtimewire.com/article/gitlost-github-agentic-workflows-private-repos
   - https://aviatrix.ai/threat-research-center/gitlost-leaks-private-data-github-agentic-workflows-2026
 author: ai-agent-attack-defense

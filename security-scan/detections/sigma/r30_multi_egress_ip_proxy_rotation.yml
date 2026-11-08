@@ -6,8 +6,15 @@ description: >
   attacker infrastructure Hunt.io tied to a campaign against seven South
   Korean banks (2026-11-04): alongside the JNDI/LDAP exploitation toolset
   (see R29), the exposed relay server hosted a proxy infrastructure using
-  ~79 distinct egress IPs. Hunt.io's write-up did not confirm this proxy
-  pool's direct role in the bank breaches specifically -- this rule targets
+  ~79 distinct egress IPs. Updated 2026-11-08: this figure is confirmed
+  precisely -- Hunt.io found a proxy service at 154.201.79.246:443 that
+  returned 79 unique exit IPs out of the first 100 identities tested.
+  Hunt.io's write-up did not confirm this proxy
+  pool's direct role in the bank breaches specifically (and, per
+  secondary coverage, CrowdStrike has reportedly attributed the
+  intrusions to a China-based operator via a separate, independent
+  attribution chain from Hunt.io's own console-to-relay-server
+  inference, still not confirmed by Korean police) -- this rule targets
   the general technique (an operator spreading requests/logins for one
   account or session across many source IPs to evade per-IP rate limits,
   geo/velocity checks, and IP-based blocklists), not this one campaign.
