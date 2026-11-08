@@ -35,7 +35,7 @@ Gambit レポート由来の帰属であり、検知条件そのものに特定�
 |---|---|---|---|
 | R1 | フォワードプロキシ / NetFlow / DNS ログ | 3 ツール共通の土台(Strix/Cairn/Hermes いずれも LLM API への継続的 egress を持つ) | 最も安定した観測点。送信先ドメイン(`api.openai.com`等)への通信を見る。実際にログを読む独立ツールは `scripts/proxy_egress_check.py`(SIEM不要。[`../proxy-egress-check-notes.md`](../proxy-egress-check-notes.md)参照) |
 | R2 | コンテナランタイム監査(Docker events / containerd / Falco / auditd) | **Cairn**(探索的侵入。per-project ワーカーを `NET_RAW`/`NET_ADMIN` 付きで起動) | 未知イメージ名(`cairn-worker-container`等)との相関で確度が上がる |
-| R3 | Web/WAF アクセスログ | **Strix**(偵察・スキャン。`nmap`/`ffuf`/`playwright`を同梱) | 同一送信元IPからの管理画面系パスへの高速な総当たりを見る。詳細はこのREADMEの上の図、および会話での質疑を参照 |
+| R3 | Web/WAF アクセスログ | **Strix**(偵察・スキャン。`nmap`/`ffuf`/`playwright`を同梱) | 同一送信元IPからの管理画面系パスへの高速な総当たりを見る。実際にログを読む独立ツールは `scripts/web_recon_burst_check.py`(SIEM不要。[`../web-recon-burst-check-notes.md`](../web-recon-burst-check-notes.md)参照) |
 | R4 | フォワードプロキシ / NetFlow(メッセージングAPI宛) | **Hermes**(統括・事後。Telegram/Discord/Slackゲートウェイを持つ) | サーバ/本番ホストからの通信は強い異常シグナル。R1と同じ`scripts/proxy_egress_check.py`で読み取り確認できる |
 | R5 | ホスト永続化(cron / systemd timer / 自動起動) | **Hermes**(統括・事後。cron による永続化) | 新規スケジュール・サービスの作成を見る |
 | R6 | SIEM相関(複数データソースを横断) | 特定のツールではなく、**複数のRの組み合わせ**を束ねる仕組み自体 | R1〜R5・R7のうち複数が、同じ送信元・時間帯で同時に発火した場合に相関 |
@@ -43,18 +43,18 @@ Gambit レポート由来の帰属であり、検知条件そのものに特定�
 
 | ルール | 意味 | Sigma | Falco | Datadog | Elastic | 到達ゲート([`verification-gates.md`](../verification-gates.md)参照) |
 |---|---|---|---|---|---|---|
-| R1 | サーバ系から LLM API への外向き通信 | ✅ | — | ✅ | ✅ | Gate 0(egressルール。ペア検証の概念なし) |
+| R1 | サーバ系から LLM API への外向き通信 | ✅ | — | ✅ | ✅ | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証) |
 | R2 | 特権 cap / host ネット / privileged コンテナ起動 | ✅(aux) | ✅ | — | ✅ | Gate 0(同上) |
-| R3 | 偵察的 Web 列挙バースト | ✅ | — | ✅ | ✅(threshold) | Gate 0(同上) |
-| R4 | サーバからのメッセージング API（C2 的） | ✅ | — | ✅ | ✅ | Gate 0(同上) |
+| R3 | 偵察的 Web 列挙バースト | ✅ | — | ✅ | ✅(threshold) | Gate 2(`scripts/web_recon_burst_check.py`を合成ログで検証) |
+| R4 | サーバからのメッセージング API（C2 的） | ✅ | — | ✅ | ✅ | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証) |
 | R5 | 永続化（cron / systemd timer）の新規作成 | ✅ | ✅ | — | ✅ | Gate 0(同上) |
 | R6 | 相関（連鎖を束ねる） | — | — | — | ✅(EQL seq) | Gate 0(相関ルール自体は未実機検証) |
 | R7 | 1 親プロセスが多種のセキュリティツールを短時間に連続実行（ローカルLLM型でも残る） | ✅ | ✅(aux) | — | ✅(threshold+card) | Gate 0(同上) |
 | R8 | Web シェルの設置（Web ルート配下への JSP/WAR/PHP 等）と、Web サーバーからのシェル起動 | ✅(2 ルール) | ✅(2 ルール) | — | — | Gate 0(ルール自体は未実機検証。wp2shell[R13]等の実例とは整合) |
-| R9 | LLM/エージェントが、取得した外部コンテンツ由来の指示で、許可リスト外ドメインへ送信（IDPIの兆候） | ✅ | — | ✅ | — | Gate 0(IDPIテレメトリ分析を参照するが、ルール自体は未実機検証) |
-| R10 | AIワークロードから、クラウドメタデータサービスの資格情報エンドポイントへのアクセス | ✅ | — | ✅ | — | Gate 0(同上) |
+| R9 | LLM/エージェントが、取得した外部コンテンツ由来の指示で、許可リスト外ドメインへ送信（IDPIの兆候） | ✅ | — | ✅ | — | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証。Squid native形式はUser-Agent非対応のためJSON Linesのみ) |
+| R10 | AIワークロードから、クラウドメタデータサービスの資格情報エンドポイントへのアクセス | ✅ | — | ✅ | — | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証) |
 | R11 | マルチエージェントのセッション内で、ユーザーの直接指示のないツール呼び出し（セッション密輸の兆候） | — | — | ✅(要アプリ計装) | — | Gate 0(アプリ計装前提、汎用シグネチャ無しと明記) |
-| R12 | 再帰DNSリゾルバへの、単一ドメイン配下のランダムサブドメイン問い合わせの急増（DNS水攻め/ランダムサブドメイン攻撃の兆候） | ✅ | — | ✅ | — | Gate 0(汎用インフラ防御として収録、本連鎖固有ではない) |
+| R12 | 再帰DNSリゾルバへの、単一ドメイン配下のランダムサブドメイン問い合わせの急増（DNS水攻め/ランダムサブドメイン攻撃の兆候） | ✅ | — | ✅ | — | Gate 2(`scripts/dns_water_torture_check.py`を合成ログで検証) |
 | R13 | WordPress REST API バッチエンドポイントの悪用（wp2shell連鎖: CVE-2026-63030のルート混同＋CVE-2026-60137のSQLi、Webシェル設置に悪用） | ✅ | — | ✅ | — | Gate 2(`check_php2shell()`を実機確認) |
 | R14 | eMudhra侵害中間CA(2026-10失効)の証明書チェーンへのTLS接続成立（CAトラストストア更新遅延/なりすましの兆候） | ✅ | — | ✅ | — | Gate 2(JDK cacertsを実機確認) |
 | R15 | PHP2Shell(CVE-2026-109618のOOM破壊/CVE-2026-109619の古いグローバル状態UAF)を狙うPHP-FPM workerの異常クラッシュ、または修正前バージョンの露出 | ✅ | — | ✅ | — | Gate 2(バージョン判定のみ実機確認。クラッシュ検知は無し) |

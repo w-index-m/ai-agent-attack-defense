@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 """proxy_egress_check: フォワードプロキシのアクセスログを読み、R1(LLM APIへの外向き通信)・
-R4(メッセージングAPIへの外向き通信、C2的チャネル)相当の宛先への通信が無いかを確認する
+R4(メッセージングAPIへの外向き通信、C2的チャネル)・R9(許可リスト外ドメインへのエージェント
+egress)・R10(クラウドメタデータサービスへのアクセス)相当の宛先への通信が無いかを確認する
 (確認専用、読み取りのみ)。
+
+R9・R10は2026-11-08追加:
+  - R9は`python-requests`/`node-fetch`/`LangChain`等のエージェント系User-Agentから、
+    許可リスト外のドメインへの通信を見る(`r9_idpi_steered_egress.yml`)。**User-Agentは
+    Squid native形式のログには含まれないため、JSON Linesの`user_agent`キーが無いと判定
+    できない**(Squid形式では常にスキップされる。これは本ツールの既知の限界)。
+  - R10はクラウドメタデータサービス(`169.254.169.254`等)への、資格情報エンドポイント
+    パスへのアクセスを見る(`r10_metadata_service_credential_access.yml`)。Squid native
+    形式でも、CONNECT以外(平文HTTP)のGETリクエストであればURLパスが見えるため判定できる。
 
 背景:
   - `security-scan/detections/sigma/r1_llm_api_egress.yml` と `r4_messaging_api_c2.yml` は、
@@ -65,6 +75,30 @@ R4_MESSAGING_API_DOMAINS = {
     "textsecure-service.whispersystems.org",
 }
 
+# r9_idpi_steered_egress.yml の selection_agent_ua.user_agent|contains と完全に同じ。
+R9_AGENT_USER_AGENT_SUBSTRINGS = (
+    "python-requests",
+    "node-fetch",
+    "LangChain",
+    "AutoGen",
+    "CrewAI",
+    "openclaw",
+)
+
+# r10_metadata_service_credential_access.yml の selection_dest.dest_host と完全に同じ。
+R10_METADATA_HOSTS = {
+    "169.254.169.254",
+    "metadata.google.internal",
+    "metadata",
+}
+
+# r10_metadata_service_credential_access.yml の selection_path.url|contains と完全に同じ。
+R10_METADATA_PATH_SUBSTRINGS = (
+    "/computeMetadata/v1/instance/service-accounts/",
+    "/latest/meta-data/iam/security-credentials/",
+    "/metadata/identity/oauth2/token",
+)
+
 
 def _host_matches(dest_host: str, domains: set[str]) -> bool:
     """完全一致、または対象ドメインのサブドメイン(例: foo.openrouter.ai)を拾う。"""
@@ -78,9 +112,17 @@ def _host_matches(dest_host: str, domains: set[str]) -> bool:
 class ProxyHit:
     src_ip: str
     dest_host: str
-    rule: str  # "R1" or "R4"
+    rule: str  # "R1" / "R4" / "R9" / "R10"
     line_no: int
     raw_line: str = field(repr=False)
+
+
+@dataclass
+class ParsedEntry:
+    src_ip: str
+    dest_host: str
+    url: str | None = None  # 完全なURL(パスを含む)。CONNECTでは取れない
+    user_agent: str | None = None  # Squid native形式には無い。JSON Linesのみ
 
 
 # --------------------------------------------------------------------------
@@ -102,15 +144,17 @@ def _host_from_squid_url(method: str, url: str) -> str | None:
     return parsed.hostname
 
 
-def parse_squid_line(line: str, line_no: int) -> tuple[str, str] | None:
-    """(src_ip, dest_host) を返す。パースできない行はNone。"""
+def parse_squid_line(line: str, line_no: int) -> ParsedEntry | None:
     m = _SQUID_RE.match(line)
     if not m:
         return None
-    host = _host_from_squid_url(m.group("method"), m.group("url"))
+    method, url = m.group("method"), m.group("url")
+    host = _host_from_squid_url(method, url)
     if not host:
         return None
-    return m.group("client"), host
+    # CONNECT(HTTPSトンネル)はパスが見えない。平文HTTPのGET等ならurlをそのまま使う。
+    full_url = None if method.upper() == "CONNECT" else (url if "://" in url else "http://" + url)
+    return ParsedEntry(m.group("client"), host, url=full_url, user_agent=None)
 
 
 # --------------------------------------------------------------------------
@@ -120,9 +164,10 @@ def parse_squid_line(line: str, line_no: int) -> tuple[str, str] | None:
 _SRC_KEYS = ("src_ip", "client_ip", "client", "source_ip")
 _HOST_KEYS = ("dest_host", "host", "destination_host")
 _URL_KEYS = ("url", "uri", "request_url")
+_UA_KEYS = ("user_agent", "ua", "http_user_agent")
 
 
-def parse_jsonl_line(line: str, line_no: int) -> tuple[str, str] | None:
+def parse_jsonl_line(line: str, line_no: int) -> ParsedEntry | None:
     line = line.strip()
     if not line:
         return None
@@ -135,13 +180,13 @@ def parse_jsonl_line(line: str, line_no: int) -> tuple[str, str] | None:
 
     src_ip = next((obj[k] for k in _SRC_KEYS if isinstance(obj.get(k), str)), None)
     host = next((obj[k] for k in _HOST_KEYS if isinstance(obj.get(k), str)), None)
-    if not host:
-        url = next((obj[k] for k in _URL_KEYS if isinstance(obj.get(k), str)), None)
-        if url:
-            host = urlparse(url if "://" in url else "http://" + url).hostname
+    url = next((obj[k] for k in _URL_KEYS if isinstance(obj.get(k), str)), None)
+    if not host and url:
+        host = urlparse(url if "://" in url else "http://" + url).hostname
     if not src_ip or not host:
         return None
-    return src_ip, host
+    user_agent = next((obj[k] for k in _UA_KEYS if isinstance(obj.get(k), str)), None)
+    return ParsedEntry(src_ip, host, url=url, user_agent=user_agent)
 
 
 # --------------------------------------------------------------------------
@@ -174,13 +219,34 @@ def is_in_scope(
 # --------------------------------------------------------------------------
 
 
+def _is_r9_agent_ua(user_agent: str | None) -> bool:
+    if not user_agent:
+        return False
+    return any(s.lower() in user_agent.lower() for s in R9_AGENT_USER_AGENT_SUBSTRINGS)
+
+
+def _is_r9_allowlisted(dest_host: str, allowlist_suffixes: list[str]) -> bool:
+    dest_host = dest_host.lower().rstrip(".")
+    return any(dest_host.endswith(s.lower()) for s in allowlist_suffixes)
+
+
+def _is_r10_metadata_access(dest_host: str, url: str | None) -> bool:
+    if dest_host.lower() not in R10_METADATA_HOSTS:
+        return False
+    if not url:
+        return False
+    return any(s in url for s in R10_METADATA_PATH_SUBSTRINGS)
+
+
 def scan_log(
     log_path: str,
     fmt: str,
     server_nets: list,
     exclude_nets: list,
+    r9_allowlist_suffixes: list[str] | None = None,
 ) -> tuple[list[ProxyHit], int, str | None]:
     """(hits, 読んだ行数, エラー文字列) を返す。"""
+    r9_allowlist_suffixes = r9_allowlist_suffixes or []
     try:
         with open(log_path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
@@ -197,22 +263,36 @@ def scan_log(
         parsed = parser(line, i)
         if not parsed:
             continue
-        src_ip, dest_host = parsed
-        if not is_in_scope(src_ip, server_nets, exclude_nets):
+        if not is_in_scope(parsed.src_ip, server_nets, exclude_nets):
             continue
-        if _host_matches(dest_host, R1_LLM_API_DOMAINS):
-            hits.append(ProxyHit(src_ip, dest_host, "R1", i, line.rstrip("\n")))
-        elif _host_matches(dest_host, R4_MESSAGING_API_DOMAINS):
-            hits.append(ProxyHit(src_ip, dest_host, "R4", i, line.rstrip("\n")))
+        raw = line.rstrip("\n")
+        if _host_matches(parsed.dest_host, R1_LLM_API_DOMAINS):
+            hits.append(ProxyHit(parsed.src_ip, parsed.dest_host, "R1", i, raw))
+        elif _host_matches(parsed.dest_host, R4_MESSAGING_API_DOMAINS):
+            hits.append(ProxyHit(parsed.src_ip, parsed.dest_host, "R4", i, raw))
+        if _is_r10_metadata_access(parsed.dest_host, parsed.url):
+            hits.append(ProxyHit(parsed.src_ip, parsed.dest_host, "R10", i, raw))
+        elif _is_r9_agent_ua(parsed.user_agent) and not _is_r9_allowlisted(
+            parsed.dest_host, r9_allowlist_suffixes
+        ):
+            hits.append(ProxyHit(parsed.src_ip, parsed.dest_host, "R9", i, raw))
 
     return hits, len(lines), None
+
+
+_RULE_LABELS = {
+    "R1": "LLM API への外向き通信",
+    "R4": "メッセージング API への外向き通信(C2的チャネル)",
+    "R9": "エージェント系User-Agentから許可リスト外ドメインへのegress(IDPIの兆候)",
+    "R10": "クラウドメタデータサービスの資格情報エンドポイントへのアクセス",
+}
 
 
 def print_report(hits: list[ProxyHit], total_lines: int, log_path: str, fmt: str) -> None:
     print("対象ログ: %s (形式: %s、%d行)" % (log_path, fmt, total_lines))
     print("-" * 60)
     if not hits:
-        print("R1(LLM API)・R4(メッセージングAPI)相当の宛先への通信は見つかりませんでした。")
+        print("R1・R4・R9・R10相当の宛先への通信は見つかりませんでした。")
         return
 
     by_pair: dict[tuple[str, str, str], list[ProxyHit]] = {}
@@ -221,7 +301,7 @@ def print_report(hits: list[ProxyHit], total_lines: int, log_path: str, fmt: str
 
     print("%d 件の通信ペアで、計 %d 行が一致しました:\n" % (len(by_pair), len(hits)))
     for (rule, src_ip, dest_host), group in sorted(by_pair.items()):
-        label = "LLM API への外向き通信" if rule == "R1" else "メッセージング API への外向き通信(C2的チャネル)"
+        label = _RULE_LABELS[rule]
         print("  [%s] %s (%s) -> %s: %d 回 (例: 行 %d)" % (
             rule, src_ip, label, dest_host, len(group), group[0].line_no,
         ))
@@ -242,6 +322,11 @@ def main() -> int:
         "--exclude-cidr", action="append", default=[], metavar="CIDR",
         help="このCIDRに属する送信元IPを対象から除外する(repeatable。開発者端末等)",
     )
+    parser.add_argument(
+        "--r9-allowlist-suffix", action="append", default=[], metavar="SUFFIX",
+        help="R9: このドメインサフィックス(例: .internal.example)宛のegressは許可リスト内として"
+        "除外する(repeatable)。指定が無ければ、エージェント系User-Agentからの通信は全て対象",
+    )
     args = parser.parse_args()
 
     try:
@@ -251,7 +336,9 @@ def main() -> int:
         print("CIDRの指定が不正です: %s" % exc, file=sys.stderr)
         return 2
 
-    hits, total_lines, err = scan_log(args.log_path, args.fmt, server_nets, exclude_nets)
+    hits, total_lines, err = scan_log(
+        args.log_path, args.fmt, server_nets, exclude_nets, args.r9_allowlist_suffix
+    )
     if err:
         print(err, file=sys.stderr)
         return 2

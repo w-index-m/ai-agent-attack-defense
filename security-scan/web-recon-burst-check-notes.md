@@ -1,0 +1,46 @@
+# web_recon_burst_check: Webアクセスログから R3 を確認するツール
+
+## 経緯
+
+`verification-gates.md`の棚卸し(R1-R31をGate 0〜2で分類)で、「R3(偵察的Webアクセス、
+列挙バースト)を実際のWebアクセスログに対して実行する独立ツールが無い」という既知のギャップが
+あり、2026-11-08にこれを埋めた。
+
+`security-scan/detections/sigma/r3_recon_enumeration_burst.yml`は、「管理画面系パスへの
+401/403/404応答が、同一送信元IPから短時間(1分)に30件超」というパターンの**ルール定義**で、
+投入先はSIEM側が前提。`scripts/web_recon_burst_check.py`は、このルールをWebサーバーの実
+アクセスログに対して直接実行する版。
+
+## やること(確認専用、読み取りのみ)
+
+- Apache/Nginxの標準combined log形式、またはJSON Lines形式のアクセスログを読む。
+- 管理画面系パス(`/admin`・`/wp-login.php`・`/wp-admin/`・`/phpmyadmin/`・`/console`等、
+  Sigmaルールと完全に同じ一覧)への、401/403/404応答のリクエストだけを対象にする。
+- タイムスタンプを分単位(既定60秒、`--window-seconds`で変更可)の時間窓に丸め、
+  (送信元IP, 時間窓)ごとに件数を集計。閾値(既定30件、`--threshold`で変更可、Sigmaルールの
+  `> 30`と同じ)を超えたものを検知として報告。
+- ネットワーク通信は一切しない。ログの改変もしない。
+
+## 使い方
+
+```bash
+python3 scripts/web_recon_burst_check.py --log-path /var/log/nginx/access.log
+python3 scripts/web_recon_burst_check.py --log-path access.jsonl --format jsonl --threshold 10
+```
+
+終了コード: 0(ヒット無し) / 1(ヒット有り) / 2(ログ読み取り失敗)。
+
+## 確認したこと(2026-11-08、このサンドボックス内)
+
+- Apache/Nginx combined log形式の合成ログで、単一IP(`203.0.113.5`)から同一分内に35件の
+  管理画面系パス列挙(ツール名`ffuf/2.0`を模したUser-Agent)を正しく検出。別のIP
+  (`198.51.100.9`、10件・閾値未満)・無関係な正常アクセス(200応答)では誤検知0件。
+- JSON Lines形式の合成ログで、32件の列挙を正しく検出。
+
+## 確認していないこと
+
+- 実際に稼働しているApache/Nginxが出力する**本物の**アクセスログでの動作(今回はすべて
+  合成ログでの検証)。`LogFormat`のカスタマイズ次第で、標準combined形式と異なる場合がある。
+- 大規模ログ(GB単位)での性能(全行をメモリに読み込む実装)。
+- タイムゾーンを含むタイムスタンプの厳密な扱い(`_parse_apache_time`はタイムゾーン部分を
+  無視して分単位の粒度で丸めており、タイムゾーンをまたぐログの境界では誤差がありうる)。

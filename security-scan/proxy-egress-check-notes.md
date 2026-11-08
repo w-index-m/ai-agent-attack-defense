@@ -1,4 +1,4 @@
-# proxy_egress_check: フォワードプロキシログからR1/R4を確認するツール
+# proxy_egress_check: フォワードプロキシログからR1/R4/R9/R10を確認するツール
 
 ## 経緯
 
@@ -19,6 +19,8 @@
 - 宛先ホストが、R1(LLM API: `api.openai.com`・`api.anthropic.com`・`api.openrouter.ai`等)・
   R4(メッセージングAPI: `api.telegram.org`・`discord.com`・`slack.com`等)のドメイン一覧に
   一致するものを拾う。ドメイン一覧はSigmaルールと完全に同じ(コピー元はそちら)。
+- R9(エージェント系User-Agentから許可リスト外ドメインへのegress)・R10(クラウドメタデータ
+  サービスの資格情報エンドポイントへのアクセス)も同じツールで検知する(2026-11-08追加)。
 - `--server-cidr`で対象の送信元IP範囲を絞り込み、`--exclude-cidr`で既知の開発者端末等を除外
   できる(指定が無ければ全件対象。これはSigmaルールの「src_network_zoneは環境依存、既定では
   絞らない」という設計と同じ)。
@@ -60,6 +62,29 @@ falco(`cairn-ai-agent.yaml`)・`proxy_egress_check.py`の計6箇所を同時に�
 確認(JSON/NDJSONはパース確認、`tools/check_consistency.py`もOK)。`proxy_egress_check.py`は、
 合成ログ(`api.groq.com`・`generativelanguage.googleapis.com`・無関係1件)で、新しい2ドメインを
 正しく検出し、無関係な宛先での誤検知が無いことを確認した。
+
+## 2026-11-08追記: R9(IDPI誘導egress)・R10(クラウドメタデータアクセス)を追加
+
+「Gate 0のR1-R12、実機検証できそうなものありますか?」という質問をきっかけに、同じ
+`proxy_egress_check.py`にR9・R10の検知ロジックを追加した。
+
+- **R9**(`r9_idpi_steered_egress.yml`): `python-requests`・`node-fetch`・`LangChain`・`AutoGen`・
+  `CrewAI`・`openclaw`等のエージェント系User-Agentから、許可リスト外ドメインへの通信を見る。
+  `--r9-allowlist-suffix`で許可ドメインサフィックスを指定可能(指定が無ければ全件対象)。
+  **User-AgentはSquid native形式のログには含まれないため、JSON Linesの`user_agent`キーが
+  無いと判定できない**(Squid形式では常にスキップされる、既知の限界)。
+- **R10**(`r10_metadata_service_credential_access.yml`): `169.254.169.254`・
+  `metadata.google.internal`・`metadata`への、資格情報エンドポイントパス
+  (`/computeMetadata/v1/instance/service-accounts/`等)へのアクセスを見る。CONNECT(HTTPS
+  トンネル)ではパスが見えないため、平文HTTP(GET等)のみ判定可能。
+
+### 確認したこと(2026-11-08、このサンドボックス内)
+
+- JSON Lines合成ログで、R9該当2件(うち1件は許可リスト指定で正しく除外)・R10該当1件を正しく
+  検出。無関係な宛先(`www.example.com`)・資格情報パス以外へのメタデータアクセス
+  (`/some/other/path`)では誤検知0件。
+- Squid native形式の合成ログ(平文HTTPのGET)で、R10を正しく検出。
+- R1/R4の既存の検出が、この拡張後も変わらず正しく動作することを再確認(回帰なし)。
 
 ## 確認していないこと
 
