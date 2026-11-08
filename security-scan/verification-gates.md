@@ -23,7 +23,7 @@ X(旧Twitter)で見た、LLMを使ったバグハンティングのパイプラ�
 | ゲート | 本リポジトリでの実例 |
 |---|---|
 | **Gate 0: 機械的に反応するか** | `auto_vuln_scanner.py`の決定的な`detect_*()`が反応するか。Sigma/Datadog/Elasticルールの条件に一致するか。frameのtaint解析が指摘を出すか |
-| **Gate 1: 脆弱版/修正版のペアで検証したか** | `run_regression.py`で、脆弱版は必ず検出・修正版は必ず誤検知0件を確認(現在15クラス30パターン)。frameの`file_view_safe`・`fetch_url_safe`での誤検知も、**このペア検証をやったからこそ**見つかった(`frame-sast-trial-notes.md`) |
+| **Gate 1: 脆弱版/修正版のペアで検証したか** | `run_regression.py`で、脆弱版は必ず検出・修正版は必ず誤検知0件を確認(現在19クラス38パターン。2026-11-08にIPA「安全なウェブサイトの作り方」の未対応項目だったsession_fixation・header_injection・mail_header_injection・clickjackingを追加)。frameの`file_view_safe`・`fetch_url_safe`での誤検知も、**このペア検証をやったからこそ**見つかった(`frame-sast-trial-notes.md`) |
 | **Gate 2: 実機・実データ、またはこのサンドボックスでの合成データ再現で確認したか** | R26(Linuxカーネルのクラッシュ検知)は実際のdmesgログ375行で確認。SQLiteの`sleep()`代替(再帰CTE)は実測で約1秒の遅延を確認。netcheckは実サーバーで検証。frameは同じ入力で2回実行し完全に同じ結果になることを確認(決定性)。**R1〜R10・R12〜R31(R11を除く)は、このサンドボックス内で合成ログを作り、スクリプトが陽性/陰性を正しく判定することを確認した——本物のログフォーマットでの裏取りは無いが、これもGate 2として扱う**(2026-11-08、会話で合意) |
 | **Gate 3: 一次情報で裏取りしたか** | `lineage.md`の出典管理。Cairnの実被害事例は「複数の二次情報源のみ、一次情報での裏取りは一部できていない」と明記。NISC文書・Project YATA-Shieldも同様に「一次情報は未取得」と明記 |
 

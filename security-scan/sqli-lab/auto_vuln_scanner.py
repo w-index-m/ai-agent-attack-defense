@@ -415,6 +415,64 @@ def detect_account_enum(resp: requests.Response, baseline: requests.Response, pa
 
 
 # --------------------------------------------------------------------------
+# HTTP header injection / response splitting: CR/LF in a reflected value
+# ends the intended header early and starts a new one of the attacker's
+# choosing -- here, an injected Set-Cookie the app never set itself.
+# --------------------------------------------------------------------------
+
+HEADER_INJECTION_PAYLOADS = [
+    "/evil\r\nSet-Cookie: hdrinj=1",
+    "/evil\nSet-Cookie: hdrinj=1",
+]
+
+
+def detect_header_injection(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    injected = resp.headers.get("Set-Cookie", "")
+    if "hdrinj=1" in injected and "hdrinj=1" not in baseline.headers.get("Set-Cookie", ""):
+        return "HTTP header injection: CR/LF in input split the response into an extra Set-Cookie header"
+    return None
+
+
+# --------------------------------------------------------------------------
+# Mail header injection: CR/LF in a "To"/"Subject"-style field lets the
+# caller inject extra header lines (e.g. Bcc) into an outgoing message.
+# --------------------------------------------------------------------------
+
+MAIL_HEADER_INJECTION_PAYLOADS = [
+    "victim@example.com\nBcc: attacker@evil.example",
+    "victim@example.com\r\nBcc: attacker@evil.example",
+]
+
+
+def detect_mail_header_injection(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    marker = "Bcc: attacker@evil.example"
+    if marker in resp.text and marker not in baseline.text:
+        return "mail header injection: CR/LF in the To field injected an extra Bcc header into the outgoing message"
+    return None
+
+
+# --------------------------------------------------------------------------
+# Clickjacking: whether the response can be framed by any origin (missing
+# X-Frame-Options and no CSP frame-ancestors directive). No param actually
+# changes the outcome here -- the payload is a placeholder so this still
+# fits the fuzz-one-param scan() model used by every other class.
+# --------------------------------------------------------------------------
+
+CLICKJACK_PAYLOADS = [""]
+
+
+def detect_clickjacking(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    has_xfo = "X-Frame-Options" in resp.headers
+    has_csp_frame_ancestors = "frame-ancestors" in resp.headers.get("Content-Security-Policy", "")
+    if not has_xfo and not has_csp_frame_ancestors:
+        return (
+            "clickjacking: response has neither X-Frame-Options nor a CSP "
+            "frame-ancestors directive -- it can be framed by any origin"
+        )
+    return None
+
+
+# --------------------------------------------------------------------------
 # Registry: add a new vulnerability class here
 # --------------------------------------------------------------------------
 
@@ -524,6 +582,33 @@ VULN_CLASSES: dict[str, VulnClass] = {
         impact="登録済みかどうかで応答が変わり、既存のメールアドレス・ユーザー名を外部から"
         "特定されうる(標的型攻撃の下準備になる)。",
         fix="登録済み・未登録にかかわらず、同じ応答(文言・応答時間)を返す。",
+    ),
+    "header_injection": VulnClass(
+        HEADER_INJECTION_PAYLOADS,
+        detect_header_injection,
+        title="HTTP ヘッダ・インジェクション",
+        impact="入力した値に含まれる改行(CR/LF)が、応答ヘッダを分割し、意図しない追加ヘッダ"
+        "(Cookie の注入等)を差し込まれうる。キャッシュ汚染・セッション固定化等にもつながりうる。",
+        fix="ヘッダ値に改行を含めない(フレームワークの正規のヘッダAPIを使う、または明示的に"
+        "CR/LFを除去・拒否する)。",
+    ),
+    "mail_header_injection": VulnClass(
+        MAIL_HEADER_INJECTION_PAYLOADS,
+        detect_mail_header_injection,
+        title="メールヘッダ・インジェクション",
+        impact="宛先・件名等に含まれる改行(CR/LF)が、送信メールのヘッダを分割し、Bcc等の"
+        "追加ヘッダを注入されうる。スパム送信の踏み台・情報漏えいにつながりうる。",
+        fix="ヘッダに使う値へ改行を含めない(専用のメールライブラリを使い、文字列結合で"
+        "ヘッダを組み立てない)。",
+    ),
+    "clickjacking": VulnClass(
+        CLICKJACK_PAYLOADS,
+        detect_clickjacking,
+        title="クリックジャッキング",
+        impact="ページが任意の他オリジンの `<iframe>` に埋め込まれ、透明なUIを重ねて"
+        "利用者に意図しないクリックをさせられうる。",
+        fix="`X-Frame-Options`(DENY/SAMEORIGIN)または CSP の `frame-ancestors` で、"
+        "埋め込みを許可するオリジンを制限する。",
     ),
 }
 
@@ -762,8 +847,10 @@ def assess_target(url: str, base_params: dict[str, str]) -> TargetAssessment:
     down/misconfigured" (this raises) from "scanned fine, found nothing"
     (the actual scan below), and surfaces enough about the target (status,
     size, Server/X-Powered-By) to sanity-check --baseline/--url before
-    trusting a "no indicators found" result."""
-    resp = requests.get(url, params=base_params, timeout=10)
+    trusting a "no indicators found" result. Redirects are not followed --
+    see probe()'s docstring for why (a redirect response's own headers are
+    themselves part of what a scan needs to inspect)."""
+    resp = requests.get(url, params=base_params, timeout=10, allow_redirects=False)
     return TargetAssessment(
         status_code=resp.status_code,
         elapsed_ms=resp.elapsed.total_seconds() * 1000,
@@ -795,9 +882,15 @@ def print_target_assessment(a: TargetAssessment) -> None:
 def probe(
     url: str, base_params: dict[str, str], param: str, payload: str
 ) -> requests.Response:
+    """Redirects are never followed: a scan needs to see the response the
+    target actually sent for THIS request (status + headers included), not
+    whatever page a Location header happens to point at next. This matters
+    most for header_injection -- an injected header lives on the redirect
+    response itself, and following it would silently discard that response
+    in favor of an unrelated one (its target's own, usually a 404 here)."""
     params = dict(base_params)
     params[param] = payload
-    return requests.get(url, params=params, timeout=10)
+    return requests.get(url, params=params, timeout=10, allow_redirects=False)
 
 
 def scan(
@@ -811,7 +904,7 @@ def scan(
     i.e. during the scan, not after it finishes (see --stream/--report-dir).
     This is still only a local callback (print / write a file): no network
     call to any third-party notification service is made here."""
-    baseline = requests.get(url, params=base_params, timeout=10)
+    baseline = requests.get(url, params=base_params, timeout=10, allow_redirects=False)
 
     findings: list[Finding] = []
     for param in fuzz_params:
