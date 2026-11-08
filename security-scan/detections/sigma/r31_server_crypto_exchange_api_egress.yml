@@ -6,7 +6,13 @@ description: >
   Hunt.io found on attacker infrastructure tied to a campaign against seven
   South Korean banks (2026-11-04, alongside the R29 JNDI/LDAP toolset and
   R30 proxy pool). Hunt.io explicitly said this tooling's relation to the
-  specific bank-breach campaign is unconfirmed -- this rule targets the
+  specific bank-breach campaign is unconfirmed, and a 2026-11-08
+  follow-up check found no update to that position in secondary
+  coverage -- the "unconfirmed" framing stands as of this writing. (Per
+  secondary coverage, CrowdStrike has reportedly attributed the broader
+  intrusions to a China-based operator via an attribution chain
+  independent of Hunt.io's own inference; this too has not been
+  confirmed by Korean police.) This rule targets the
   general technique it suggests (a compromised server/production host, not
   a user's own trading client, reaching a cryptocurrency exchange's API),
   which is a common later-stage monetization step after a breach

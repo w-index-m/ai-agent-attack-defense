@@ -16,8 +16,20 @@ description: >
   banks that used the ARTEX autonomous-pentest agent (this repo's own
   artex-analysis.ja.md tracks ARTEX; the Korea-banking link is reported
   but, per Hunt.io and Korean police coverage, ARTEX's exact role in that
-  campaign is still unconfirmed as of this writing). This rule detects the
-  RCE technique itself, independent of which tool or agent drove it.
+  campaign is still unconfirmed as of this writing). Updated 2026-11-08:
+  Hunt.io independently confirmed a self-contained JNDI/LDAP exploitation
+  rig at a separate open directory (23.248.226.250:8001), built on the
+  UnboundID LDAP SDK, with command execution verified via DNS callback
+  (payload retrieved 2026-10-05 03:42 UTC); secondary coverage of this
+  rig does not itself enumerate specific LDAP/RMI port numbers beyond
+  "LDAP", so this rule's 389/636/1099 port selection remains this repo's
+  own standard-JNDI-practice assumption, not a value Hunt.io published.
+  Separately, CrowdStrike has reportedly attributed the bank intrusions
+  to a China-based operator (also said to have used Claude Code), per
+  secondary source coverage -- an independent attribution chain from
+  Hunt.io's own ARTEX-console-to-relay-server inference, and still not
+  confirmed by Korean police. This rule detects the RCE technique itself,
+  independent of which tool or agent drove it.
 references:
   - https://hunt.io/blog/artex-south-korea-bank-infrastructure
   - ../artex-analysis.ja.md

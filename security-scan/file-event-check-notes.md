@@ -44,6 +44,29 @@ python3 scripts/file_event_check.py --log-path file_events.jsonl
 除外対象として6件/R28該当: Cursor extensionHostによるauthorized_keys作成1件・通常のターミナル
 からのssh-keygenは対象外)で正しく検出し、誤検知0件を確認。
 
+## 2026-11-08追記2: R28の一次情報源での裏取り(Gate 3へ)
+
+R28が模した事件(Cursorマーケットプレイスの改ざん版Claude Code拡張機能)について、Cursor公式の
+セキュリティ通知(https://cursor.com/blog/claude-code-extension-security-notice)を一次情報源として
+確認できた。確認できた具体的事実:
+
+- 対象: `Anthropic.claude-code` v2.1.312/2.1.313、2026-10-29 02:27〜13:35 PT(約11時間)、
+  最大約5,000ユーザー。
+- 手口: 拡張機能ロード時に無条件で実行され、攻撃者の`ssh-ed25519`公開鍵(ラベル
+  `svc-telemetry`)を`authorized_keys`に追記、ローカルSSHを有効化し、攻撃者IP
+  `134.209.82.225`へポート22/8099でリバースSSHトンネルを試行。
+- Cursor自身が「通常ホストでは管理者権限が無い限り失敗する」と明言。
+- **当初「IOC未公表」としていたが、これは現在誤り**。Cursorは改訂版通知でSHA-256ハッシュ・
+  攻撃者IP・`svc-telemetry`文字列・macOSのLaunchAgent/`~/.config`下のファイル・Windowsの
+  タスク/スタートアップスクリプトのパスをIOCとして公表済み。
+- Cursorは「アンインストールのみでは不十分な場合がある」と明言(悪意のあるコードが拡張機能
+  フォルダ外に永続化アーティファクトを設置できるため)。
+
+これにより、Sigmaルール(`r28_ide_extension_ssh_persistence.yml`)の`description`・
+`references`を更新した。ただし本スクリプト自体の判定ロジック(親プロセス名の文字列一致)は
+IOC(ハッシュ・IP・鍵ラベル)を使った確認済みシグネチャではなく、依然として汎用的な
+ビヘイビアプロキシである点は変わらない。
+
 ## 確認していないこと
 
 - 実際のauditd等が出力する**本物の**ファイルイベントログでの動作(今回はすべて合成ログでの
