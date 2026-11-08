@@ -17,9 +17,15 @@ description: >
   (a leads-generator, not proof of exploitation). Confirming an actual
   exploitation attempt requires HTTP/2 frame-level logging (mod_http2
   trace-level logging, not enabled by default) or a network capture.
+  Updated 2026-11-08: confirmed via the Apache Software Foundation's own
+  vulnerabilities page (httpd.apache.org/security/vulnerabilities_24.html,
+  cited by multiple independent secondary sources since direct fetch of
+  httpd.apache.org is blocked in this sandbox) that Apache's own project
+  lists this CVE and the 2.4.67 fix.
 references:
   - https://thehackernews.com/2026/05/critical-apache-http2-flaw-cve-2026.html
   - https://socprime.com/blog/cve-2026-23918-analysis/
+  - https://httpd.apache.org/security/vulnerabilities_24.html
 author: ai-agent-attack-defense
 date: 2026-10-22
 logsource:

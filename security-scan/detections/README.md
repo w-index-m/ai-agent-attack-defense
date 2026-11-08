@@ -55,19 +55,19 @@ Gambit レポート由来の帰属であり、検知条件そのものに特定�
 | R10 | AIワークロードから、クラウドメタデータサービスの資格情報エンドポイントへのアクセス | ✅ | — | ✅ | — | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証) |
 | R11 | マルチエージェントのセッション内で、ユーザーの直接指示のないツール呼び出し（セッション密輸の兆候） | — | — | ✅(要アプリ計装) | — | 🚫 Gate 0・実装不能(構造的)。ルール自体が「アプリ側の計装が無い限り汎用シグネチャが存在しない」と明記しており、汎用スクリプトでの検証を意図的に断念した(2026-11-08) |
 | R12 | 再帰DNSリゾルバへの、単一ドメイン配下のランダムサブドメイン問い合わせの急増（DNS水攻め/ランダムサブドメイン攻撃の兆候） | ✅ | — | ✅ | — | Gate 2(`scripts/dns_water_torture_check.py`を合成ログで検証) |
-| R13 | WordPress REST API バッチエンドポイントの悪用（wp2shell連鎖: CVE-2026-63030のルート混同＋CVE-2026-60137のSQLi、Webシェル設置に悪用） | ✅ | — | ✅ | — | Gate 2(`check_php2shell()`を実機確認) |
+| R13 | WordPress REST API バッチエンドポイントの悪用（wp2shell連鎖: CVE-2026-63030のルート混同＋CVE-2026-60137のSQLi、Webシェル設置に悪用） | ✅ | — | ✅ | — | Gate 3(`check_php2shell()`を実機確認。WordPress公式7.0.2リリースが一次情報源、2026-11-08追加) |
 | R14 | eMudhra侵害中間CA(2026-10失効)の証明書チェーンへのTLS接続成立（CAトラストストア更新遅延/なりすましの兆候） | ✅ | — | ✅ | — | Gate 3(JDK cacertsを実機確認。Mozilla Bugzilla #2083449が一次情報源、2026-11-08再確認) |
-| R15 | PHP2Shell(CVE-2026-109618のOOM破壊/CVE-2026-109619の古いグローバル状態UAF)を狙うPHP-FPM workerの異常クラッシュ、または修正前バージョンの露出 | ✅ | — | ✅ | — | Gate 2(バージョン判定のみ実機確認。クラッシュ検知は無し) |
-| R16 | Apache httpd mod_http2のダブルフリー(CVE-2026-23918)を狙うHTTP/2パターン、またはworkerクラッシュ | ✅ | — | ✅ | — | Gate 2(バージョン判定のみ実機確認。HTTP/2パターン検知は無し) |
-| R17 | Nginx ngx_http_rewrite_moduleのヒープオーバーフロー(CVE-2026-42945、通称NGINX Rift)を狙う単発リクエスト、またはworkerクラッシュ | ✅ | — | ✅ | — | Gate 2(バージョン判定のみ実機確認。単発リクエスト検知は無し) |
+| R15 | PHP2Shell(CVE-2026-109618のOOM破壊/CVE-2026-109619の古いグローバル状態UAF)を狙うPHP-FPM workerの異常クラッシュ、または修正前バージョンの露出 | ✅ | — | ✅ | — | Gate 3(バージョン判定のみ実機確認。php.net公式アドバイザリが一次情報源、2026-11-08追加。クラッシュ検知は無し) |
+| R16 | Apache httpd mod_http2のダブルフリー(CVE-2026-23918)を狙うHTTP/2パターン、またはworkerクラッシュ | ✅ | — | ✅ | — | Gate 3(バージョン判定のみ実機確認。Apache公式アドバイザリ(httpd.apache.org)が一次情報源、2026-11-08追加。HTTP/2パターン検知は無し) |
+| R17 | Nginx ngx_http_rewrite_moduleのヒープオーバーフロー(CVE-2026-42945、通称NGINX Rift)を狙う単発リクエスト、またはworkerクラッシュ | ✅ | — | ✅ | — | Gate 3(バージョン判定のみ実機確認。F5公式KB(my.f5.com)が一次情報源、2026-11-08追加。単発リクエスト検知は無し) |
 | R18 | PHPUnitのeval-stdin.php(CVE-2017-9841、CISA KEV)への到達。公開されたvendorディレクトリを狙う定番スキャン/RCE | ✅ | — | ✅ | — | Gate 3(`scripts/web_recon_burst_check.py`を合成ログで検証。CVSS 9.8・CISA KEV登録をWebSearchで再確認、2026-11-08) |
 | R19 | ThinkPHPのinvokefunction経由call_user_func_array RCE(CVE-2018-20062/CVE-2019-9082、CISA KEV) | ✅ | — | ✅ | — | Gate 3(`scripts/web_recon_burst_check.py`を合成ログで検証。CVSS 9.8・CISA KEV登録をWebSearchで再確認、2026-11-08) |
 | R20 | 単一プロセスから複数ディレクトリへの構造化Markdown散発書き込み(Unit 42報告のエージェント間情報受け渡し痕跡を模した探索的ヒューリスティック、未確証) | ✅ | — | ✅ | — | Gate 3(手口自体はUnit 42の一次記事で確認済み。検知ロジックはUnit 42未公開のため本リポジトリ独自の構成のまま) |
-| R21 | 既知の昇格経路なしに非特権プロセスがroot(UID 0)へ遷移(Infinity Core、6件のLinuxカーネルLPE脆弱性、CVE-2026-98260等を狙う探索的ヒューリスティック) | ✅ | — | ✅ | — | Gate 2(カーネル/ディストリビューション情報を実機確認) |
+| R21 | 既知の昇格経路なしに非特権プロセスがroot(UID 0)へ遷移(Infinity Core、6件のLinuxカーネルLPE脆弱性、CVE-2026-98260等を狙う探索的ヒューリスティック) | ✅ | — | ✅ | — | Gate 3(カーネル/ディストリビューション情報を実機確認。発見者V4bel自身の一次公開(GitHub)が一次情報源、2026-11-08追加。ARTEX/Hunt.ioとの関連は未確認のまま) |
 | R22 | GSS-TSIG/TKEY文脈でのnamedのassertion failureクラッシュ、またはCHAOS版数バナーでの修正前BIND検出(2026-10-21のBIND 9セキュリティリリース、CVE-2026-94300等4件) | ✅ | — | ✅ | — | Gate 3(BINDバージョンを実機確認。ISC公式KB(kb.isc.org)が一次情報源、2026-11-08再確認) |
 | R23 | F5 BIG-IP APMのOAuth UserInfo要求失敗の反復、または異常に長いAuthorizationヘッダー(CVE-2026-94127、ヒープオーバーフローによる事前認証RCE、悪用確認済み・CISA KEV) | ✅ | — | ✅ | — | Gate 3(2026-11-08、全4経路を合成データで検証。F5公式KB(my.f5.com)が一次情報源。実機BIG-IPでのログ形式裏取りは未実施) |
 | R24 | brotli文脈近くのアプリケーションworkerクラッシュ(CVE-2026-111497、通称Node2Shell/HTTP2Shell、Brotliデコーダの境界外書き込み、探索的ヒューリスティック・未確証) | ✅ | — | ✅ | — | Gate 3(バージョン判定は実機確認、GitHub Security Advisory(GHSA-9v8h-qqgm-4m35)が一次情報源。クラッシュ検知自体は未確証の探索的ヒューリスティックのまま) |
-| R25 | Node.js本体の修正前バージョンでの稼働、またはbrotli文脈近くのNode.jsプロセスクラッシュ(CVE-2026-111497、Node.js公式2026-10-21リリースで修正、クラッシュ検知部分は探索的ヒューリスティック・未確証) | ✅ | — | ✅ | — | Gate 2(バージョン判定のみ実機確認。クラッシュ検知は未確証の探索的ヒューリスティック) |
+| R25 | Node.js本体の修正前バージョンでの稼働、またはbrotli文脈近くのNode.jsプロセスクラッシュ(CVE-2026-111497、Node.js公式2026-10-21リリースで修正、クラッシュ検知部分は探索的ヒューリスティック・未確証) | ✅ | — | ✅ | — | Gate 3(バージョン判定のみ実機確認。Node.js公式アドバイザリ(nodejs.org)が一次情報源、2026-11-08追加。クラッシュ検知は未確証の探索的ヒューリスティック) |
 | R26 | TCP SYN/SYNACK処理近傍でのLinuxカーネルUAF/KASANクラッシュ(CVE-2026-98432、CVSS 3.1 9.8・Critical、Ubuntu優先度High。2026-10-28時点で全サポート対象リリース未修正、探索的ヒューリスティック・未確証) | ✅ | — | ✅ | — | Gate 3(実機ホスト+実際のdmesg 375行+合成陽性/陰性ログで検証済み。Canonical公式(ubuntu.com/security)が一次情報源) |
 | R27 | CI/エージェントワークフローが、プライベートリポジトリの読み取り直後に、公開の出力先へ書き込む(GitLost: GitHub Agentic Workflowsへの間接プロンプトインジェクション、Noma Security 2026-07-06開示、未確証の探索的ヒューリスティック) | ✅ | — | ✅ | — | Gate 3(攻撃シナリオの骨格はNoma Security自身のブログと一致を確認。検知ロジックはNoma未公開のため本リポジトリ独自の構成のまま) |
 | R28 | IDE/AIコーディング拡張機能のプロセスが、インストール・更新直後にSSH鍵を作成/authorized_keysを変更(Cursorマーケットプレイスの改ざんされたClaude Code拡張、2026-10-29、未確証の探索的ヒューリスティック) | ✅ | — | ✅ | — | Gate 3(Cursor公式通知でIOC(ハッシュ・IP・鍵ラベル)まで裏取り済み。本スクリプトの判定ロジック自体はIOCを使わない汎用ビヘイビアプロキシのまま) |

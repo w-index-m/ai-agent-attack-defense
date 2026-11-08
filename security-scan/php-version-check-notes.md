@@ -68,3 +68,12 @@ python3 scripts/php_version_check.py --journalctl-unit php8.5-fpm
 - `--journalctl-unit`は未検証(このサンドボックスにphp-fpmサービス自体が無いため)。
 
 > 確認・検知の設計に限定。攻撃の実行手順やエクスプロイトコードは含めない。
+
+## 2026-11-08追記: R15をGate 3に区分(`verification-gates.md`棚卸しとの整合)
+
+`r15_php2shell_worker_crash.yml`の`references`に、php.net公式のアドバイザリアーカイブ
+(`php.net/archive/2026.php#2026-10-21-5`)を追加した。直接fetchはブロックされているため
+本文は読めていないが、複数の独立した二次情報源がこのURLの存在とCVE番号・修正バージョンを
+一致して報告していることを確認した。これにより`verification-gates.md`の棚卸しでR15を
+Gate 3に区分した。クラッシュ検知ロジック自体は本リポジトリ独自のヒューリスティックのままで、
+この限界は変わらない。

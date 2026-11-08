@@ -9,7 +9,12 @@ description: >
   Node.js 22.23.4/24.22.1/26.12.1, among 9 other CVEs in the same
   release). As of 2026-10-25, this Node.js fix has been independently
   corroborated via multiple secondary security-news outlets covering
-  that release (see ../../node-version-check-notes.md).
+  that release (see ../../node-version-check-notes.md). Updated
+  2026-11-08: Node.js's own official advisory
+  (nodejs.org/en/blog/vulnerability/october-2026-security-releases)
+  was confirmed to carry this CVE and the fixed versions above, via
+  multiple independent secondary sources since direct fetch of
+  nodejs.org is blocked in this sandbox.
   Like R24 (the PyPI brotli/brotlicffi sibling of this rule), no vendor
   or researcher has published a request-level or log-level IOC for this
   CVE against Node.js itself -- this rule is this repo's own constructed
@@ -27,6 +32,7 @@ references:
   - https://github.com/w-index-m/ai-agent-attack-defense (R24, same CVE, PyPI brotli/brotlicffi)
   - ../../node-version-check-notes.md
   - ../../scripts/node_version_check.py
+  - https://nodejs.org/en/blog/vulnerability/october-2026-security-releases
 author: ai-agent-attack-defense
 date: 2026-10-25
 logsource:

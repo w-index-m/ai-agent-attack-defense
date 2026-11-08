@@ -194,6 +194,14 @@ flowchart LR
 > 訂正した。「検索で出てこない」は「捏造である」の証明ではなく、時間を置いた再調査や、
 > ユーザー自身が提示する一次情報（この場合はphp2shell.com本体）を軽視しないことも重要。
 
+> **2026-11-08追記(R13・R16・R17をGate 3に区分)**: `verification-gates.md`の棚卸しで、
+> R13(wp2shell)・R16(Apache HTTP/2ダブルフリー)・R17(NGINX Rift)は、上表では
+> Wiz/TheHackerNews/SOCPrime等の二次情報源のみで確認していたが、WebSearchで追加調査した
+> ところ、各脆弱性の当事者ベンダー自身の公式アドバイザリ(WordPress公式7.0.2リリース、
+> Apache Software Foundation公式の脆弱性ページ、F5公式KB)のURLを特定できた(直接fetchは
+> ブロックされているため、複数の独立した二次情報源が一致してそのURL・内容を報告している
+> ことで確認)。該当する`detections/sigma/`の`references`に追加済み。
+
 > 図中の `sqli-lab/` との接続は、ドキュメントだけでなく**ツール自体**にも実装している。
 > `auto_vuln_scanner.py`（sqli・ssrf クラス）と `session_vuln_check.py`（deserialize クラス）は、
 > 該当クラスの脆弱性を検出すると、この実例（R13・R10・R8）への参照を実行結果に併せて出力する

@@ -14,9 +14,14 @@ description: >
   directive, a '?' in the replacement string, followed by another
   rewrite/if/set directive in the same scope) -- most deployments are not
   exploitable regardless of version unless they use this pattern.
+  Updated 2026-11-08: confirmed via F5's own advisory (my.f5.com article
+  K000161019 -- F5 owns NGINX -- cited by multiple independent secondary
+  sources since direct fetch of my.f5.com is blocked in this sandbox)
+  that F5's own project published this CVE and the patch matrix above.
 references:
   - https://community.broadcom.com/tanzu/blogs/beltran-rueda-borrego/2026/05/14/critical-nginx-rce-vulnerability-cve-2026-42945
   - https://qualysec.com/cybersecurity-news/nginx-cve-2026-42945-exploited-in-wild/
+  - https://my.f5.com/manage/s/article/K000161019
 author: ai-agent-attack-defense
 date: 2026-10-22
 logsource:
