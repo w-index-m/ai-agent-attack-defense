@@ -34,23 +34,23 @@ Gambit レポート由来の帰属であり、検知条件そのものに特定�
 | ルール | 検知ログ源 | 想定ツール(Gambit内での担当) | 備考 |
 |---|---|---|---|
 | R1 | フォワードプロキシ / NetFlow / DNS ログ | 3 ツール共通の土台(Strix/Cairn/Hermes いずれも LLM API への継続的 egress を持つ) | 最も安定した観測点。送信先ドメイン(`api.openai.com`等)への通信を見る。実際にログを読む独立ツールは `scripts/proxy_egress_check.py`(SIEM不要。[`../proxy-egress-check-notes.md`](../proxy-egress-check-notes.md)参照) |
-| R2 | コンテナランタイム監査(Docker events / containerd / Falco / auditd) | **Cairn**(探索的侵入。per-project ワーカーを `NET_RAW`/`NET_ADMIN` 付きで起動) | 未知イメージ名(`cairn-worker-container`等)との相関で確度が上がる |
+| R2 | コンテナランタイム監査(Docker events / containerd / Falco / auditd) | **Cairn**(探索的侵入。per-project ワーカーを `NET_RAW`/`NET_ADMIN` 付きで起動) | 未知イメージ名(`cairn-worker-container`等)との相関で確度が上がる。実際にログを読む独立ツールは `scripts/container_privilege_check.py`(SIEM不要。[`../container-privilege-check-notes.md`](../container-privilege-check-notes.md)参照) |
 | R3 | Web/WAF アクセスログ | **Strix**(偵察・スキャン。`nmap`/`ffuf`/`playwright`を同梱) | 同一送信元IPからの管理画面系パスへの高速な総当たりを見る。実際にログを読む独立ツールは `scripts/web_recon_burst_check.py`(SIEM不要。[`../web-recon-burst-check-notes.md`](../web-recon-burst-check-notes.md)参照) |
 | R4 | フォワードプロキシ / NetFlow(メッセージングAPI宛) | **Hermes**(統括・事後。Telegram/Discord/Slackゲートウェイを持つ) | サーバ/本番ホストからの通信は強い異常シグナル。R1と同じ`scripts/proxy_egress_check.py`で読み取り確認できる |
-| R5 | ホスト永続化(cron / systemd timer / 自動起動) | **Hermes**(統括・事後。cron による永続化) | 新規スケジュール・サービスの作成を見る |
-| R6 | SIEM相関(複数データソースを横断) | 特定のツールではなく、**複数のRの組み合わせ**を束ねる仕組み自体 | R1〜R5・R7のうち複数が、同じ送信元・時間帯で同時に発火した場合に相関 |
-| R7 | EDR / プロセステレメトリ(Sysmon / auditd / eBPF) | 特定のツールではなく、**多数のツールを統括する構成(フレームワーク型)なら共通して出る** | HexStrike AI・CAI等の「攻撃基盤・フレームワーク型」で特に顕著。ローカルLLM型でも残る数少ない兆候 |
+| R5 | ホスト永続化(cron / systemd timer / 自動起動) | **Hermes**(統括・事後。cron による永続化) | 新規スケジュール・サービスの作成を見る。実際にログを読む独立ツールは `scripts/file_event_check.py`(SIEM不要。[`../file-event-check-notes.md`](../file-event-check-notes.md)参照) |
+| R6 | SIEM相関(複数データソースを横断) | 特定のツールではなく、**複数のRの組み合わせ**を束ねる仕組み自体 | R1〜R5・R7のうち複数が、同じ送信元・時間帯で同時に発火した場合に相関。実際にログを読む独立ツールは `scripts/process_tool_check.py`(SIEM不要。[`../process-tool-check-notes.md`](../process-tool-check-notes.md)参照) |
+| R7 | EDR / プロセステレメトリ(Sysmon / auditd / eBPF) | 特定のツールではなく、**多数のツールを統括する構成(フレームワーク型)なら共通して出る** | HexStrike AI・CAI等の「攻撃基盤・フレームワーク型」で特に顕著。ローカルLLM型でも残る数少ない兆候。実際にログを読む独立ツールは `scripts/process_tool_check.py`(R6と共通。[`../process-tool-check-notes.md`](../process-tool-check-notes.md)参照) |
 
 | ルール | 意味 | Sigma | Falco | Datadog | Elastic | 到達ゲート([`verification-gates.md`](../verification-gates.md)参照) |
 |---|---|---|---|---|---|---|
 | R1 | サーバ系から LLM API への外向き通信 | ✅ | — | ✅ | ✅ | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証) |
-| R2 | 特権 cap / host ネット / privileged コンテナ起動 | ✅(aux) | ✅ | — | ✅ | Gate 0(同上) |
+| R2 | 特権 cap / host ネット / privileged コンテナ起動 | ✅(aux) | ✅ | — | ✅ | Gate 2(`scripts/container_privilege_check.py`を合成ログで検証) |
 | R3 | 偵察的 Web 列挙バースト | ✅ | — | ✅ | ✅(threshold) | Gate 2(`scripts/web_recon_burst_check.py`を合成ログで検証) |
 | R4 | サーバからのメッセージング API（C2 的） | ✅ | — | ✅ | ✅ | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証) |
-| R5 | 永続化（cron / systemd timer）の新規作成 | ✅ | ✅ | — | ✅ | Gate 0(同上) |
-| R6 | 相関（連鎖を束ねる） | — | — | — | ✅(EQL seq) | Gate 0(相関ルール自体は未実機検証) |
-| R7 | 1 親プロセスが多種のセキュリティツールを短時間に連続実行（ローカルLLM型でも残る） | ✅ | ✅(aux) | — | ✅(threshold+card) | Gate 0(同上) |
-| R8 | Web シェルの設置（Web ルート配下への JSP/WAR/PHP 等）と、Web サーバーからのシェル起動 | ✅(2 ルール) | ✅(2 ルール) | — | — | Gate 0(ルール自体は未実機検証。wp2shell[R13]等の実例とは整合) |
+| R5 | 永続化（cron / systemd timer）の新規作成 | ✅ | ✅ | — | ✅ | Gate 2(`scripts/file_event_check.py`を合成ログで検証) |
+| R6 | 相関（連鎖を束ねる） | — | — | — | ✅(EQL seq) | Gate 2(`scripts/process_tool_check.py`を合成ログで検証) |
+| R7 | 1 親プロセスが多種のセキュリティツールを短時間に連続実行（ローカルLLM型でも残る） | ✅ | ✅(aux) | — | ✅(threshold+card) | Gate 2(`scripts/process_tool_check.py`を合成ログで検証) |
+| R8 | Web シェルの設置（Web ルート配下への JSP/WAR/PHP 等）と、Web サーバーからのシェル起動 | ✅(2 ルール) | ✅(2 ルール) | — | — | Gate 2(`scripts/file_event_check.py`(設置側)・`scripts/process_tool_check.py`(起動側)を合成ログで検証) |
 | R9 | LLM/エージェントが、取得した外部コンテンツ由来の指示で、許可リスト外ドメインへ送信（IDPIの兆候） | ✅ | — | ✅ | — | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証。Squid native形式はUser-Agent非対応のためJSON Linesのみ) |
 | R10 | AIワークロードから、クラウドメタデータサービスの資格情報エンドポイントへのアクセス | ✅ | — | ✅ | — | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証) |
 | R11 | マルチエージェントのセッション内で、ユーザーの直接指示のないツール呼び出し（セッション密輸の兆候） | — | — | ✅(要アプリ計装) | — | Gate 0(アプリ計装前提、汎用シグネチャ無しと明記) |
