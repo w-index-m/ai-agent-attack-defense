@@ -43,18 +43,18 @@ Gambit レポート由来の帰属であり、検知条件そのものに特定�
 
 | ルール | 意味 | Sigma | Falco | Datadog | Elastic | 到達ゲート([`verification-gates.md`](../verification-gates.md)参照) |
 |---|---|---|---|---|---|---|
-| R1 | サーバ系から LLM API への外向き通信 | ✅ | — | ✅ | ✅ | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証) |
-| R2 | 特権 cap / host ネット / privileged コンテナ起動 | ✅(aux) | ✅ | — | ✅ | Gate 2(`scripts/container_privilege_check.py`を合成ログで検証) |
-| R3 | 偵察的 Web 列挙バースト | ✅ | — | ✅ | ✅(threshold) | Gate 2(`scripts/web_recon_burst_check.py`を合成ログで検証) |
-| R4 | サーバからのメッセージング API（C2 的） | ✅ | — | ✅ | ✅ | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証) |
-| R5 | 永続化（cron / systemd timer）の新規作成 | ✅ | ✅ | — | ✅ | Gate 2(`scripts/file_event_check.py`を合成ログで検証) |
-| R6 | 相関（連鎖を束ねる） | — | — | — | ✅(EQL seq) | Gate 2(`scripts/process_tool_check.py`を合成ログで検証) |
-| R7 | 1 親プロセスが多種のセキュリティツールを短時間に連続実行（ローカルLLM型でも残る） | ✅ | ✅(aux) | — | ✅(threshold+card) | Gate 2(`scripts/process_tool_check.py`を合成ログで検証) |
+| R1 | サーバ系から LLM API への外向き通信 | ✅ | — | ✅ | ✅ | Gate 3(`scripts/proxy_egress_check.py`を合成ログで検証。Gambit Security自身の一次報告(2026-09-22)が一次情報源、2026-11-08追加) |
+| R2 | 特権 cap / host ネット / privileged コンテナ起動 | ✅(aux) | ✅ | — | ✅ | Gate 3(`scripts/container_privilege_check.py`を合成ログで検証。Cairn自身のGitHubリポジトリが一次情報源、2026-11-08追加) |
+| R3 | 偵察的 Web 列挙バースト | ✅ | — | ✅ | ✅(threshold) | Gate 3(`scripts/web_recon_burst_check.py`を合成ログで検証。Gambit Security自身の一次報告(2026-09-22)が一次情報源、2026-11-08追加) |
+| R4 | サーバからのメッセージング API（C2 的） | ✅ | — | ✅ | ✅ | Gate 3(`scripts/proxy_egress_check.py`を合成ログで検証。Gambit Security自身の一次報告(2026-09-22)が一次情報源、2026-11-08追加) |
+| R5 | 永続化（cron / systemd timer）の新規作成 | ✅ | ✅ | — | ✅ | Gate 3(`scripts/file_event_check.py`を合成ログで検証。Gambit Security自身の一次報告(2026-09-22)が一次情報源、2026-11-08追加) |
+| R6 | 相関（連鎖を束ねる） | — | — | — | ✅(EQL seq) | Gate 3(`scripts/process_tool_check.py`を合成ログで検証。Gambit Security自身の一次報告(2026-09-22)が一次情報源、2026-11-08追加) |
+| R7 | 1 親プロセスが多種のセキュリティツールを短時間に連続実行（ローカルLLM型でも残る） | ✅ | ✅(aux) | — | ✅(threshold+card) | Gate 3(`scripts/process_tool_check.py`を合成ログで検証。Gambit Security自身の一次報告(2026-09-22)が一次情報源、2026-11-08追加) |
 | R8 | Web シェルの設置（Web ルート配下への JSP/WAR/PHP 等）と、Web サーバーからのシェル起動 | ✅(2 ルール) | ✅(2 ルール) | — | — | Gate 2(`scripts/file_event_check.py`(設置側)・`scripts/process_tool_check.py`(起動側)を合成ログで検証) |
-| R9 | LLM/エージェントが、取得した外部コンテンツ由来の指示で、許可リスト外ドメインへ送信（IDPIの兆候） | ✅ | — | ✅ | — | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証。Squid native形式はUser-Agent非対応のためJSON Linesのみ) |
-| R10 | AIワークロードから、クラウドメタデータサービスの資格情報エンドポイントへのアクセス | ✅ | — | ✅ | — | Gate 2(`scripts/proxy_egress_check.py`を合成ログで検証) |
+| R9 | LLM/エージェントが、取得した外部コンテンツ由来の指示で、許可リスト外ドメインへ送信（IDPIの兆候） | ✅ | — | ✅ | — | Gate 3(`scripts/proxy_egress_check.py`を合成ログで検証。Squid native形式はUser-Agent非対応のためJSON Linesのみ。Unit 42公式記事(ai-agent-prompt-injection/)が一次情報源、2026-11-08追加) |
+| R10 | AIワークロードから、クラウドメタデータサービスの資格情報エンドポイントへのアクセス | ✅ | — | ✅ | — | Gate 3(`scripts/proxy_egress_check.py`を合成ログで検証。Unit 42公式記事(double-agents-vertex-ai/)が一次情報源、2026-11-08追加) |
 | R11 | マルチエージェントのセッション内で、ユーザーの直接指示のないツール呼び出し（セッション密輸の兆候） | — | — | ✅(要アプリ計装) | — | 🚫 Gate 0・実装不能(構造的)。ルール自体が「アプリ側の計装が無い限り汎用シグネチャが存在しない」と明記しており、汎用スクリプトでの検証を意図的に断念した(2026-11-08) |
-| R12 | 再帰DNSリゾルバへの、単一ドメイン配下のランダムサブドメイン問い合わせの急増（DNS水攻め/ランダムサブドメイン攻撃の兆候） | ✅ | — | ✅ | — | Gate 2(`scripts/dns_water_torture_check.py`を合成ログで検証) |
+| R12 | 再帰DNSリゾルバへの、単一ドメイン配下のランダムサブドメイン問い合わせの急増（DNS水攻め/ランダムサブドメイン攻撃の兆候） | ✅ | — | ✅ | — | Gate 2(`scripts/dns_water_torture_check.py`を合成ログで検証。参照していたus-cert.gov URLは2026-11-08のWebSearchで具体的なアドバイザリに解決せず、特定事件ではなく汎用技術のためGate 3対象外と訂正) |
 | R13 | WordPress REST API バッチエンドポイントの悪用（wp2shell連鎖: CVE-2026-63030のルート混同＋CVE-2026-60137のSQLi、Webシェル設置に悪用） | ✅ | — | ✅ | — | Gate 3(`check_php2shell()`を実機確認。WordPress公式7.0.2リリースが一次情報源、2026-11-08追加) |
 | R14 | eMudhra侵害中間CA(2026-10失効)の証明書チェーンへのTLS接続成立（CAトラストストア更新遅延/なりすましの兆候） | ✅ | — | ✅ | — | Gate 3(JDK cacertsを実機確認。Mozilla Bugzilla #2083449が一次情報源、2026-11-08再確認) |
 | R15 | PHP2Shell(CVE-2026-109618のOOM破壊/CVE-2026-109619の古いグローバル状態UAF)を狙うPHP-FPM workerの異常クラッシュ、または修正前バージョンの露出 | ✅ | — | ✅ | — | Gate 3(バージョン判定のみ実機確認。php.net公式アドバイザリが一次情報源、2026-11-08追加。クラッシュ検知は無し) |

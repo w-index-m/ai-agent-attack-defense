@@ -8,6 +8,11 @@ description: >
   that orchestrate 150+ tools). This signal persists even when the agent uses a
   LOCAL LLM and therefore produces no LLM-API egress (R1). Correlate with R2
   (Kali/privileged container) and R3 (recon). Tune N to your baseline.
+  Updated 2026-11-08: Gambit Security's report (its own recovered exposed
+  attacker staging server, dated 2026-09-22) is Gambit's own primary
+  account of an incident it discovered, confirmed via multiple
+  independent secondary outlets quoting the same report (gambit.security
+  direct fetch is blocked in this sandbox).
 references:
   - https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company
 author: ai-agent-attack-defense

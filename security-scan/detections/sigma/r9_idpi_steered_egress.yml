@@ -11,8 +11,13 @@ description: >
   2026-03-03). This rule does not inspect page content; it is a
   behavioral proxy — an unapproved-domain egress that correlates in time
   with an agent's own web-fetch activity — not proof of IDPI by itself.
+  Updated 2026-11-08: the bare domain reference was replaced with the
+  specific article URL (ai-agent-prompt-injection/), confirmed via
+  multiple independent secondary outlets quoting that exact article
+  (unit42.paloaltonetworks.com direct fetch is blocked in this sandbox),
+  which is Unit 42's own primary research, not a secondary report.
 references:
-  - https://unit42.paloaltonetworks.com/
+  - https://unit42.paloaltonetworks.com/ai-agent-prompt-injection/
 author: ai-agent-attack-defense
 date: 2026-10-16
 logsource:

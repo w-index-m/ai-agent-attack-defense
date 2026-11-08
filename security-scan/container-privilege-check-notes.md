@@ -34,3 +34,10 @@ python3 scripts/container_privilege_check.py --log-path container_events.jsonl
 - 実際のDocker/containerd/Falcoが出力する**本物の**イベントログでの動作(今回はすべて
   合成ログでの検証)。実際のDockerイベントのJSON構造(`Actor.Attributes`のネスト等)と、
   本スクリプトが想定するフラットなキー名が一致しない可能性がある。
+
+## 2026-11-08追記: R2をGate 3に区分(`verification-gates.md`棚卸しとの整合)
+
+R2が参照するCairn自身のGitHubリポジトリ(`github.com/oritera/Cairn`)は、ツール自体の
+一次情報源(開発元自身の公開物)にあたる。これにより`verification-gates.md`の棚卸しでR2を
+Gate 3に区分した。検知ロジック自体(capabilities/privileged/network_modeの判定)は
+本リポジトリ独自の構成のままである。

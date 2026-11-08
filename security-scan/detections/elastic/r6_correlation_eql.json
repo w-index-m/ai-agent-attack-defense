@@ -1,7 +1,7 @@
 {
   "rule_id": "aad-r6-correlation-eql",
   "name": "[R6] Agent chain: recon tool then another tool under one parent (EQL)",
-  "description": "Representative single-index correlation (EQL sequence): the same parent process runs a recon tool and then a different offensive tool within a few minutes — the fast, chained behavior of an autonomous agent. True cross-index correlation (R1 egress + R2 container + R7 tooling) is best built with Elastic's rule-on-rule / alert correlation; see this folder's README.",
+  "description": "Representative single-index correlation (EQL sequence): the same parent process runs a recon tool and then a different offensive tool within a few minutes — the fast, chained behavior of an autonomous agent. True cross-index correlation (R1 egress + R2 container + R7 tooling) is best built with Elastic's rule-on-rule / alert correlation; see this folder's README. Updated 2026-11-08: the Gambit Security report cited below (its own recovered exposed attacker staging server, dated 2026-09-22) is Gambit's own primary account of an incident it discovered, confirmed via multiple independent secondary outlets quoting the same report (gambit.security direct fetch is blocked in this sandbox).",
   "type": "eql",
   "language": "eql",
   "query": "sequence by process.parent.entity_id with maxspan=5m\n  [process where event.type == \"start\" and process.name == \"nmap\"]\n  [process where event.type == \"start\" and process.name in (\"ffuf\", \"gobuster\", \"nikto\", \"sqlmap\", \"hydra\", \"nuclei\", \"wpscan\", \"msfconsole\")]",
