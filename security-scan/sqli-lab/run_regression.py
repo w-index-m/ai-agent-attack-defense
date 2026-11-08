@@ -59,6 +59,16 @@ SCANNER_CASES = [
         {"email": "brand-new-unused2@example.com"},
         "email",
     ),
+    ("header_injection", "/header_inject", {}, "/header_inject_safe", {}, "next"),
+    (
+        "mail_header_injection",
+        "/contact",
+        {"subject": "Hello", "body": "Hi there"},
+        "/contact_safe",
+        {"subject": "Hello", "body": "Hi there"},
+        "to",
+    ),
+    ("clickjacking", "/dashboard", {}, "/dashboard_safe", {}, "dummy"),
 ]
 
 # (class_name, vulnerable-path overrides, safe-path overrides)
@@ -77,6 +87,11 @@ SESSION_CASES = [
         {"second_order_signup_path": "/second_order_signup_safe", "second_order_audit_path": "/second_order_audit_safe"},
     ),
     ("bfla", {"admin_path": "/admin_secrets"}, {"admin_path": "/admin_secrets_safe"}),
+    (
+        "session_fixation",
+        {"fixation_login_path": "/fixation_login", "fixation_whoami_path": "/fixation_whoami"},
+        {"fixation_login_path": "/fixation_login_safe", "fixation_whoami_path": "/fixation_whoami_safe"},
+    ),
 ]
 
 SESSION_DEFAULTS = {
@@ -87,6 +102,8 @@ SESSION_DEFAULTS = {
     "deserialize_path": "/deserialize",
     "post_path": "/review",
     "list_path": "/reviews",
+    "fixation_login_path": "/fixation_login",
+    "fixation_whoami_path": "/fixation_whoami",
 }
 
 
@@ -100,7 +117,7 @@ def _session_args(class_name: str, overrides: dict) -> argparse.Namespace:
 def _path_from_overrides(overrides: dict) -> str:
     for key in (
         "transfer_path", "account_path", "deserialize_path", "post_path",
-        "second_order_audit_path", "admin_path",
+        "second_order_audit_path", "admin_path", "fixation_login_path",
     ):
         if key in overrides:
             return overrides[key]

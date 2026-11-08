@@ -29,17 +29,19 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
   自身のコードではない。そのため、CIの既存ステップ(Semgrep/Trivy/gitleaks)のような
   「このリポジトリの脆弱性を検出するゲート」としては組み込んでいない。組み込んだのは
   「このラボ自身の検出スクリプト(`auto_vuln_scanner.py`/`session_vuln_check.py`)が
-  壊れていないか」を確認する**回帰テスト**。`vulnerable_app.py`を起動し、全30パターン
-  (15クラス×脆弱/修正。2026-11-06に`sqli_blind_time`・`sqli_blind_boolean`・`second_order_sqli`・
-  `bfla`を追加して11→15クラスに拡張)を実行して、**脆弱版は必ずVULNERABLE、修正版は必ずsafeと
-  判定されること**をアサートする。クラス自体や判定ロジックが壊れた場合にのみ、
+  壊れていないか」を確認する**回帰テスト**。`vulnerable_app.py`を起動し、全38パターン
+  (19クラス×脆弱/修正。2026-11-06に`sqli_blind_time`・`sqli_blind_boolean`・`second_order_sqli`・
+  `bfla`を追加して11→15クラスに拡張、2026-11-08に`session_fixation`・`header_injection`・
+  `mail_header_injection`・`clickjacking`を追加して15→19クラスに拡張)を実行して、
+  **脆弱版は必ずVULNERABLE、修正版は必ずsafeと判定されること**をアサートする。クラス自体や
+  判定ロジックが壊れた場合にのみ、
   不一致として報告される(正常時は何も出力しない。他のパーサー(Semgrep等)と同じ、
   「問題があるものだけを報告する」という設計)。
 - `scripts/summarize.py`の`SOURCES`に`sqli_lab.json`パーサーを追加し、
   Semgrep/Trivy/gitleaks/ZAPと同じ集計・Markdown/Elastic/Datadog出力に乗せた。
 
 ```bash
-# 単体実行(vulnerable_app.pyを自動起動し、22パターンすべてを検証)
+# 単体実行(vulnerable_app.pyを自動起動し、38パターンすべてを検証)
 python3 run_regression.py --out sqli_lab.json
 
 # summarize.py経由でのCI集計と同じ形式で見る
@@ -542,22 +544,31 @@ curl -s "http://127.0.0.1:5000/register_safe?email=brand-new-unused@example.com"
 
 [`auto_vuln_scanner.py`](auto_vuln_scanner.py): Strixのように「次に何を試すかをLLMが判断する」のではなく、
 固定のペイロードリストを総当たりし、レスポンスを機械的に比較するだけの、LLM不要・ルールベースのスキャナー。
-**「GETパラメータにペイロードを注入してレスポンスを比較する」という型**に合う9クラス
+**「GETパラメータにペイロードを注入してレスポンスを比較する」という型**に合う12クラス
 (`sqli`・`sqli_blind_time`・`sqli_blind_boolean`・`xss`・`cmdi`・`traversal`・`mass_assignment`・
-`ssrf`・`account_enum`)を`--class`で切り替え可能。`sqli_blind_time`・`sqli_blind_boolean`は
-2026-11-06追加。前者は、テキスト・ステータスに一切差が出ない状況で応答時間の差だけでSQLiを検知
+`ssrf`・`account_enum`・`header_injection`・`mail_header_injection`・`clickjacking`)を
+`--class`で切り替え可能。`sqli_blind_time`・`sqli_blind_boolean`は2026-11-06追加。前者は、
+テキスト・ステータスに一切差が出ない状況で応答時間の差だけでSQLiを検知
 (SQLiteには`sleep()`が無いため再帰CTEで代替)。後者は、新設の`/user_exists`エンドポイントで、
 「Match./No match.」という2値だけ(エラーも「Login OK」のような文言も出ない)からSQLiを検知する。
 詳細は[`../nisc-2026-11-05-taiou-notes.ja.md`](../nisc-2026-11-05-taiou-notes.ja.md)§5参照。
+`header_injection`・`mail_header_injection`・`clickjacking`は2026-11-08追加
+(IPA「安全なウェブサイトの作り方」の未対応項目を埋める形で実装。`header_injection`は、
+Flask/Werkzeug自身がヘッダ値へのCR/LF混入を拒否する(ValueError)ため、通常のFlask Response API
+では再現できず、生のWSGIディスパッチへバイパスする脆弱版エンドポイントを別途用意して再現した
+詳細はコード内コメント参照)。
 
-[`session_vuln_check.py`](session_vuln_check.py): 上記の型に合わない6クラス
-(`csrf`・`idor`・`deserialize`・`stored_xss`・`second_order_sqli`・`bfla`)をまとめた、もう1本の
-スクリプト。これらは「ペイロードを工夫する」のではなく、**セッション状態を跨いだ判定**(CSRF: ログイン→
-Cookieのみでトークン無しの状態変更が通るか、IDOR: 正当な自分のセッションのまま他人のオブジェクトIDを
-指定して通るか、BFLA: 正当な非adminセッションのまま、admin専用機能を呼べるか。2026-11-06追加)、
-**攻撃用バイト列の組み立て**(deserialize: 攻撃コード入りpickleペイロードを作って送信し、実行結果が
-レスポンスに現れるか)、または**2段階のリクエスト**(stored_xss: 1回目でペイロードを投稿し、2回目の
-別リクエストで未エスケープのまま現れるか。second_order_sqli: 1回目(signup)でSQLに触れずpasswordを
+[`session_vuln_check.py`](session_vuln_check.py): 上記の型に合わない7クラス
+(`csrf`・`idor`・`deserialize`・`stored_xss`・`second_order_sqli`・`bfla`・`session_fixation`)を
+まとめた、もう1本のスクリプト。これらは「ペイロードを工夫する」のではなく、**セッション状態を
+跨いだ判定**(CSRF: ログイン→Cookieのみでトークン無しの状態変更が通るか、IDOR: 正当な自分の
+セッションのまま他人のオブジェクトIDを指定して通るか、BFLA: 正当な非adminセッションのまま、
+admin専用機能を呼べるか。2026-11-06追加。session_fixation: ログイン**前**に自分で選んだ
+セッションIDを提示し、ログイン後もサーバーが同じIDを使い続けるか、かつそのIDがログインを
+一度も見ていない別クライアントからも使えるか。2026-11-08追加)、**攻撃用バイト列の組み立て**
+(deserialize: 攻撃コード入りpickleペイロードを作って送信し、実行結果がレスポンスに現れるか)、
+または**2段階のリクエスト**(stored_xss: 1回目でペイロードを投稿し、2回目の別リクエストで
+未エスケープのまま現れるか。second_order_sqli: 1回目(signup)でSQLに触れずpasswordを
 保存し、2回目の別リクエスト(audit)で初めてそのpasswordがSQLに使われ、他ユーザーの行が漏れるか。
 2026-11-06追加)が必要なため、`auto_vuln_scanner.py`とは別の仕組みになっている(同じスコープガードは共有)。
 
@@ -687,7 +698,7 @@ python3 session_vuln_check.py --class stored_xss --url http://127.0.0.1:5000 \
 
 ## まとめて1回で実行する
 
-[`scan_all.sh`](scan_all.sh): 上記30パターン(15クラス × それぞれ脆弱/修正)を1コマンドで
+[`scan_all.sh`](scan_all.sh): 上記38パターン(19クラス × それぞれ脆弱/修正)を1コマンドで
 実行するラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
 
 ```bash

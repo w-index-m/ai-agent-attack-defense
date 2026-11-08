@@ -28,6 +28,12 @@ request shape, or a crafted binary payload instead:
               function with that same valid session -- a normal
               authenticated request; the bug is a missing role check,
               not a payload.
+  session_fixation
+              Present a self-chosen session id BEFORE logging in, then
+              check whether the server kept using that same id
+              afterward (and whether it is now usable by a separate
+              client that never saw the login) -- the id itself is the
+              payload, not anything sent within a single request.
 
 Scope: run only against targets you own/control, e.g. vulnerable_app.py
 in this same directory.
@@ -180,6 +186,49 @@ def check_bfla(args: argparse.Namespace) -> tuple[bool, str]:
 
 
 # --------------------------------------------------------------------------
+# Session fixation: plant a self-chosen session id BEFORE logging in, then
+# check whether the server kept using that same id afterward, and whether
+# it is now usable by a separate client that never itself saw the login.
+# --------------------------------------------------------------------------
+
+
+def check_session_fixation(args: argparse.Namespace) -> tuple[bool, str]:
+    attacker_sid = "attacker-chosen-session-id-0000"
+    s = requests.Session()
+    s.cookies.set("sid", attacker_sid)
+    login_resp = s.get(
+        f"{args.url}{args.fixation_login_path}", params={"username": args.login_as}, timeout=10
+    )
+    if login_resp.status_code != 200:
+        return False, f"login failed (status {login_resp.status_code}), cannot test"
+
+    # Read what the LOGIN RESPONSE itself set, not the whole session jar --
+    # the jar can hold both the cookie we planted and the one the server
+    # just set under ambiguous domain/path scoping, which raises on a
+    # plain .get("sid") once both are present.
+    returned_sid = login_resp.cookies.get_dict().get("sid")
+    if returned_sid != attacker_sid:
+        return False, (
+            f"server issued a fresh session id at login (planted {attacker_sid!r}, "
+            f"got {returned_sid!r} back) -- the planted id is not usable"
+        )
+
+    # Reuse the planted id from a brand-new client that never itself saw
+    # the login -- exactly what an attacker who planted it beforehand would
+    # do, relying only on the victim having logged in under that same id.
+    attacker_session = requests.Session()
+    attacker_session.cookies.set("sid", attacker_sid)
+    whoami = attacker_session.get(f"{args.url}{args.fixation_whoami_path}", timeout=10)
+    if whoami.status_code == 200:
+        return True, (
+            f"session fixation confirmed: server kept using the attacker-planted "
+            f"session id {attacker_sid!r} after login, and a separate client that "
+            f"never saw the login is now authenticated with it: {whoami.text.strip()}"
+        )
+    return False, f"planted session id was kept, but reuse was rejected (status {whoami.status_code})"
+
+
+# --------------------------------------------------------------------------
 # Registry: add a new session/payload-shaped class here
 # --------------------------------------------------------------------------
 
@@ -217,6 +266,9 @@ CLASSES: dict[str, SessionVulnClass] = {
         check_second_order_sqli, "VULNERABLE", "Not vulnerable (parameterized at point of use)"
     ),
     "bfla": SessionVulnClass(check_bfla, "VULNERABLE", "Not vulnerable (caller's own role checked)"),
+    "session_fixation": SessionVulnClass(
+        check_session_fixation, "VULNERABLE", "Not vulnerable (fresh session id issued at login)"
+    ),
 }
 
 
@@ -267,6 +319,14 @@ def main() -> int:
         help="second_order_sqli: the endpoint where the stored value is later used in SQL",
     )
     parser.add_argument("--admin-path", default="/admin_secrets", help="bfla: the admin-only endpoint to call")
+    parser.add_argument(
+        "--fixation-login-path", default="/fixation_login",
+        help="session_fixation: the login endpoint path",
+    )
+    parser.add_argument(
+        "--fixation-whoami-path", default="/fixation_whoami",
+        help="session_fixation: the endpoint to check which session id is currently authenticated",
+    )
     parser.add_argument(
         "--i-own-this-target",
         action="store_true",

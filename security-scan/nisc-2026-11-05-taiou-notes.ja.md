@@ -145,3 +145,9 @@ NISC の対策例は「予防・ガバナンス層」が中心なので、R1–R
   BFLAを追加実装し(スタックドクエリ・OOBは技術的な理由で再現不可と判断)、AI診断の人間レビュー
   チェックリストも作成した。本リポジトリのスキャナーは計**15クラス**(`auto_vuln_scanner.py` 9 +
   `session_vuln_check.py` 6)に拡張。
+
+**2026-11-08追記**: IPA「安全なウェブサイトの作り方」の目次と照合した結果、session管理の不備・
+HTTPヘッダインジェクション・メールヘッダインジェクション・クリックジャッキングの4項目が
+未対応と判明し、`session_fixation`・`header_injection`・`mail_header_injection`・
+`clickjacking`の4クラスを追加実装した。計**19クラス**(`auto_vuln_scanner.py` 12 +
+`session_vuln_check.py` 7)、38パターンに拡張(詳細は`sqli-lab/README.ja.md`参照)。

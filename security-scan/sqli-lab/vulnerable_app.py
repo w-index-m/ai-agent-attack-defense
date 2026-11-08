@@ -3,7 +3,8 @@ Deliberately vulnerable demo app (SQLi -- incl. blind/boolean and
 second-order variants, reflected XSS, OS command injection, path
 traversal, CSRF, IDOR/BOLA, broken function-level authorization (BFLA),
 insecure deserialization, stored XSS, mass assignment, SSRF, account
-enumeration), for local/offline testing only.
+enumeration, session fixation, HTTP header injection, mail header
+injection, clickjacking), for local/offline testing only.
 
 Scope: run only against this app, on localhost, in an isolated sandbox.
 Do not deploy this code anywhere reachable by anyone else.
@@ -29,7 +30,7 @@ import requests
 # unchanged. Use the same values for the scanners (VULN_APP_PORT / VULN_INTERNAL_PORT).
 APP_PORT = int(os.environ.get("VULN_APP_PORT", "5000"))
 INTERNAL_PORT = int(os.environ.get("VULN_INTERNAL_PORT", "5001"))
-from flask import Flask, request, session
+from flask import Flask, make_response, request, session
 from markupsafe import escape
 
 app = Flask(__name__)
@@ -572,6 +573,169 @@ def register_safe() -> tuple[str, int]:
     # whether the email was already registered.
     KNOWN_EMAILS_SAFE.add(email)
     return "If this email is valid, a confirmation has been sent.", 200
+
+
+# Session fixation: a separate, plain session store (not Flask's built-in
+# signed session) so the session id is an ordinary cookie the client can
+# see and set itself -- the point of this demo is whether the SERVER
+# accepts and keeps using a session id the client already presented,
+# instead of always issuing a fresh one at login.
+FIXATION_SESSIONS: dict[str, str] = {}
+FIXATION_SESSIONS_SAFE: dict[str, str] = {}
+
+
+@app.route("/fixation_login", methods=["GET"])
+def fixation_login() -> tuple[str, int]:
+    username = request.args.get("username", "alice")
+
+    # VULNERABLE: if the client already presents a "sid" cookie, keep using
+    # it as-is instead of issuing a new one. An attacker can plant a known
+    # session id in the victim's browser beforehand (e.g. a link to this
+    # site with ?sid=... on a login page that sets cookies from a query
+    # param, or a sibling subdomain that can set cookies for this domain),
+    # then after the victim logs in, reuse that same known id themselves.
+    sid = request.cookies.get("sid") or secrets_mod.token_hex(16)
+    FIXATION_SESSIONS[sid] = username
+    resp = make_response(f"Logged in as {username}.", 200)
+    resp.set_cookie("sid", sid)
+    return resp
+
+
+@app.route("/fixation_whoami", methods=["GET"])
+def fixation_whoami() -> tuple[str, int]:
+    sid = request.cookies.get("sid", "")
+    username = FIXATION_SESSIONS.get(sid)
+    if not username:
+        return "Not logged in.", 401
+    return f"Logged in as {username}.", 200
+
+
+@app.route("/fixation_login_safe", methods=["GET"])
+def fixation_login_safe() -> tuple[str, int]:
+    username = request.args.get("username", "alice")
+
+    # FIXED: always issue a brand-new, freshly-random session id at login,
+    # regardless of any session id the client already presented -- this
+    # closes off reuse of an attacker-chosen id planted before
+    # authentication (the same thing Flask's own session cookie does by
+    # re-signing on every request; this plain demo store does it by hand).
+    sid = secrets_mod.token_hex(16)
+    FIXATION_SESSIONS_SAFE[sid] = username
+    resp = make_response(f"Logged in as {username}.", 200)
+    resp.set_cookie("sid", sid)
+    return resp
+
+
+@app.route("/fixation_whoami_safe", methods=["GET"])
+def fixation_whoami_safe() -> tuple[str, int]:
+    sid = request.cookies.get("sid", "")
+    username = FIXATION_SESSIONS_SAFE.get(sid)
+    if not username:
+        return "Not logged in.", 401
+    return f"Logged in as {username}.", 200
+
+
+# HTTP header injection / response splitting: Flask's own Response/Headers
+# API (used by every other route in this file) rejects CR/LF in a header
+# value outright (ValueError), so a route built the normal way cannot
+# reproduce this class at all in this Flask/Werkzeug version -- verified
+# empirically while building this demo (see header-injection-notes.md).
+# To still demonstrate the underlying technique, /header_inject bypasses
+# Flask's Response entirely and builds the WSGI header list by hand, the
+# way a raw WSGI route, a non-Werkzeug backend, or older framework code
+# might -- that path has no such validation, and a CR/LF in a reflected
+# value genuinely splits the HTTP response into an extra header line.
+_flask_wsgi_app = app.wsgi_app
+
+
+def _header_injection_dispatch(environ, start_response):
+    if environ.get("PATH_INFO") == "/header_inject":
+        from urllib.parse import parse_qs
+
+        params = parse_qs(environ.get("QUERY_STRING", ""))
+        nxt = params.get("next", ["/"])[0]
+
+        # VULNERABLE: the "next" value goes straight into the WSGI header
+        # list with no validation -- a CR/LF in it ends the Location header
+        # early and starts a new one of the attacker's choosing.
+        headers = [("Content-Type", "text/plain"), ("Location", nxt)]
+        start_response("302 Found", headers)
+        return [b""]
+    return _flask_wsgi_app(environ, start_response)
+
+
+app.wsgi_app = _header_injection_dispatch
+
+
+@app.route("/header_inject_safe", methods=["GET"])
+def header_inject_safe() -> tuple[str, int]:
+    nxt = request.args.get("next", "/")
+
+    # FIXED: strip CR/LF before building the header value. (Going through
+    # Flask's normal Response.headers setter here would also reject
+    # embedded newlines outright -- this explicit strip is defense in
+    # depth, and is also what a raw-WSGI route like the vulnerable one
+    # above would need to do by hand, since it bypasses that built-in
+    # check entirely.)
+    safe_next = nxt.replace("\r", "").replace("\n", "")
+    resp = make_response("", 302)
+    resp.headers["Location"] = safe_next
+    return resp
+
+
+# Mail header injection: no real email is ever sent (offline lab, no SMTP
+# dependency) -- the "vulnerable" endpoint returns the raw message text it
+# WOULD have handed to an SMTP client, so the effect (an attacker-injected
+# extra header line) is observable from the HTTP response body alone.
+@app.route("/contact", methods=["GET"])
+def contact() -> tuple[str, int]:
+    to_addr = request.args.get("to", "")
+    subject = request.args.get("subject", "")
+    body = request.args.get("body", "")
+
+    # VULNERABLE: headers built by naive string concatenation -- a CR/LF in
+    # to_addr/subject lets the caller inject additional header lines (e.g.
+    # Bcc) into a message that was never intended to carry them.
+    raw_message = f"To: {to_addr}\nSubject: {subject}\n\n{body}"
+    return raw_message, 200
+
+
+@app.route("/contact_safe", methods=["GET"])
+def contact_safe() -> tuple[str, int]:
+    to_addr = request.args.get("to", "")
+    subject = request.args.get("subject", "")
+    body = request.args.get("body", "")
+
+    # FIXED: reject header fields containing CR/LF outright instead of
+    # concatenating them in -- the same guard Python's own
+    # email.message.EmailMessage enforces if used to build a real message.
+    if "\r" in to_addr or "\n" in to_addr or "\r" in subject or "\n" in subject:
+        return "Error: invalid character in header field.", 400
+
+    raw_message = f"To: {to_addr}\nSubject: {subject}\n\n{body}"
+    return raw_message, 200
+
+
+# Clickjacking: whether a page can be embedded in an <iframe> on any other
+# origin and overlaid with invisible/deceptive UI to trick a user into
+# clicking something they did not mean to.
+_DASHBOARD_HTML = "<html><body><h1>Account dashboard</h1><button>Delete account</button></body></html>"
+
+
+@app.route("/dashboard", methods=["GET"])
+def dashboard() -> tuple[str, int]:
+    # VULNERABLE: no X-Frame-Options / CSP frame-ancestors -- this page can
+    # be framed by any origin.
+    return _DASHBOARD_HTML, 200
+
+
+@app.route("/dashboard_safe", methods=["GET"])
+def dashboard_safe() -> tuple[str, int]:
+    # FIXED: explicitly refuses to be framed by any origin.
+    resp = make_response(_DASHBOARD_HTML, 200)
+    resp.headers["X-Frame-Options"] = "DENY"
+    resp.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    return resp
 
 
 if __name__ == "__main__":
