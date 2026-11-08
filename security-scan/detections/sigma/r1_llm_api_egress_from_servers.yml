@@ -10,6 +10,13 @@ description: >
   matter for this rule (e.g. Gemma served via Groq's inference API is still
   LLM egress) -- only known API endpoints are listed here; a fully local model
   (no network egress at all) is not covered by this rule (see R7 instead).
+  Updated 2026-11-08: Gambit Security's report (its own recovered exposed
+  attacker staging server, dated 2026-09-22, "Autonomous AI Agents are
+  breaking into hundreds of Online Retailers for $25 a target in an
+  ongoing campaign") is Gambit's own primary account of an incident it
+  discovered, not a secondary report of someone else's finding, confirmed
+  via multiple independent secondary outlets quoting the same report
+  (gambit.security direct fetch is blocked in this sandbox).
 references:
   - https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company
 author: ai-agent-attack-defense

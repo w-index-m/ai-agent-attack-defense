@@ -11,8 +11,17 @@ description: >
   This rule is a resolver-side detection; it does not distinguish attacker
   traffic from legitimate high-cardinality subdomain usage (CDN/tracking
   pixels) without tuning the allowlist below.
+  Correction (2026-11-08): the us-cert.gov reference below was checked
+  via WebSearch and does not resolve to any specific CISA/US-CERT
+  advisory on this technique -- no such advisory was found, so this
+  reference should be read as a generic pointer to the well-documented
+  technique (also known as "Pseudo Random Subdomain"/PRSD; the 2016 Dyn
+  DNS attack is the commonly-cited real-world example), not a verified
+  primary-source citation. This rule models a generic, decades-old
+  technique rather than one specific named incident, so it stays at
+  Gate 2 rather than being promoted to Gate 3.
 references:
-  - https://www.us-cert.gov/ncas/alerts (DNS amplification/water torture advisories)
+  - https://www.us-cert.gov/ncas/alerts (DNS amplification/water torture advisories, generic pointer only -- see correction above)
 author: ai-agent-attack-defense
 date: 2026-10-19
 logsource:

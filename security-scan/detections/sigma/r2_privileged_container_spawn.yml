@@ -6,6 +6,10 @@ description: >
   joining the host network namespace. Cairn-style worker containers request
   these for packet crafting/network tooling. Correlate with unknown image
   names. (Falco is usually the better native source; see ../falco/.)
+  Updated 2026-11-08: the Cairn project's own GitHub repository
+  (github.com/oritera/Cairn, already cited below) is the tool's own
+  primary source for its existence and documented capabilities, not a
+  secondary report about it.
 references:
   - https://github.com/oritera/Cairn
 author: ai-agent-attack-defense

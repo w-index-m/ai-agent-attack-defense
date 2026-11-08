@@ -51,3 +51,12 @@ python3 scripts/dns_water_torture_check.py --log-path dns.jsonl --subdomain-thre
   `co.jp`ではなく誤って判定しうる)。公開サフィックスリスト(Public Suffix List)を使った
   厳密な実装は未対応。
 - 大規模ログ(GB単位)での性能(全行をメモリに読み込む実装)。
+
+## 2026-11-08追記: R12はGate 2に留める(訂正あり)
+
+`verification-gates.md`の棚卸しで、R12が参照する`https://www.us-cert.gov/ncas/alerts`を
+WebSearchで確認したところ、この技術に関する具体的なアドバイザリには解決しなかった
+(汎用的なポインタであり、具体的なURLではなかった)。また、R12が模す「DNS水攻め」は特定の
+1件の事件ではなく数十年来の汎用技術(2016年のDyn DNS攻撃が代表例として広く引用される)で
+あるため、そもそも他のルールのような「特定事件の一次情報裏取り」という枠組みが当てはまり
+にくい。無理にGate 3と名乗らず、Gate 2のまま、参照の不備を正直に訂正した。

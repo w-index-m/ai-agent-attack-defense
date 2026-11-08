@@ -5,6 +5,11 @@ description: >
   Detects scanning-style enumeration of admin/sensitive endpoints with a high
   rate of 401/403/404 responses from a single source, consistent with the
   reconnaissance stage (Strix). Tune the count/timeframe to your baseline.
+  Updated 2026-11-08: Gambit Security's report (its own recovered exposed
+  attacker staging server, dated 2026-09-22) is Gambit's own primary
+  account of an incident it discovered, confirmed via multiple
+  independent secondary outlets quoting the same report (gambit.security
+  direct fetch is blocked in this sandbox).
 references:
   - https://gambit.security/blog-posts/autonomous-ai-agents-online-retailers-25-a-company
 author: ai-agent-attack-defense
