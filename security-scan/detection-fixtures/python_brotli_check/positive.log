@@ -1,0 +1,2 @@
+[2026-11-08 00:00:01] gunicorn: handling request with Content-Encoding: br
+[2026-11-08 00:00:02] gunicorn: worker (pid:1234) was sent SIGSEGV!

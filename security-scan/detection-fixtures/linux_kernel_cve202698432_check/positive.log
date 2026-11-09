@@ -1,0 +1,5 @@
+[12345.678] BUG: KASAN: slab-use-after-free in tcp_v4_syn_recv_sock+0x123/0x456
+[12345.679] Call Trace:
+[12345.680]  tcp_v4_syn_recv_sock+0x123/0x456
+[12345.681]  tcp_v4_reqsk_destructor+0x12/0x34
+[12345.682] Kernel panic - not syncing: panic_on_warn set ...

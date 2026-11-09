@@ -60,3 +60,14 @@ WebSearchで確認したところ、この技術に関する具体的なアド�
 1件の事件ではなく数十年来の汎用技術(2016年のDyn DNS攻撃が代表例として広く引用される)で
 あるため、そもそも他のルールのような「特定事件の一次情報裏取り」という枠組みが当てはまり
 にくい。無理にGate 3と名乗らず、Gate 2のまま、参照の不備を正直に訂正した。
+
+
+## 2026-11-09追記: CI回帰に組み込んだ
+
+これまで「このセッション内で一度、合成ログで動作確認した」のみで、継続的な再検証の手段が
+無かった。`security-scan/detection-fixtures/`に陽性/陰性の合成ログを同梱し、
+`scripts/run_detection_regression.py`が`.github/workflows/security-scan.yml`の`scan`
+ジョブから毎回(PR・push・毎日の定期実行)このスクリプトを実行し、陽性入力は必ず検知・
+陰性入力は必ず誤検知0件であることを確認するようになった。壊れた場合は
+`results/detection_regression.json`に記録され、`scripts/summarize.py`経由でCIの要約にも
+出る。詳細は`scripts/run_detection_regression.py`自身のdocstring参照。

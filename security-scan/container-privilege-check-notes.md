@@ -41,3 +41,14 @@ R2が参照するCairn自身のGitHubリポジトリ(`github.com/oritera/Cairn`)
 一次情報源(開発元自身の公開物)にあたる。これにより`verification-gates.md`の棚卸しでR2を
 Gate 3に区分した。検知ロジック自体(capabilities/privileged/network_modeの判定)は
 本リポジトリ独自の構成のままである。
+
+
+## 2026-11-09追記: CI回帰に組み込んだ
+
+これまで「このセッション内で一度、合成ログで動作確認した」のみで、継続的な再検証の手段が
+無かった。`security-scan/detection-fixtures/`に陽性/陰性の合成ログを同梱し、
+`scripts/run_detection_regression.py`が`.github/workflows/security-scan.yml`の`scan`
+ジョブから毎回(PR・push・毎日の定期実行)このスクリプトを実行し、陽性入力は必ず検知・
+陰性入力は必ず誤検知0件であることを確認するようになった。壊れた場合は
+`results/detection_regression.json`に記録され、`scripts/summarize.py`経由でCIの要約にも
+出る。詳細は`scripts/run_detection_regression.py`自身のdocstring参照。

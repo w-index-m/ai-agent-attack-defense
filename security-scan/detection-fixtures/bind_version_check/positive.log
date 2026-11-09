@@ -1,0 +1,3 @@
+Nov 08 00:00:01 ns1 named[1234]: client 10.0.0.1#53210 (example.com): TKEY query
+Nov 08 00:00:01 ns1 named[1234]: GSS-TSIG key negotiation
+Nov 08 00:00:02 ns1 named[1234]: REQUIRE(dns_name_isvalid(name)) failed, exiting (due to fatal error)

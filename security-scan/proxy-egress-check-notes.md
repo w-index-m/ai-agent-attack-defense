@@ -129,3 +129,14 @@ Unit 42自身の記事に差し替えた。直接fetchはいずれもブロッ�
 独立した二次情報源の一致した報告で確認した。これにより4件ともGate 3に区分した。検知
 ロジック自体(ドメインリスト+文字列一致)は確認済みシグネチャではなく、本リポジトリ独自の
 構成のままである点は変わらない。
+
+
+## 2026-11-09追記: CI回帰に組み込んだ
+
+これまで「このセッション内で一度、合成ログで動作確認した」のみで、継続的な再検証の手段が
+無かった。`security-scan/detection-fixtures/`に陽性/陰性の合成ログを同梱し、
+`scripts/run_detection_regression.py`が`.github/workflows/security-scan.yml`の`scan`
+ジョブから毎回(PR・push・毎日の定期実行)このスクリプトを実行し、陽性入力は必ず検知・
+陰性入力は必ず誤検知0件であることを確認するようになった。壊れた場合は
+`results/detection_regression.json`に記録され、`scripts/summarize.py`経由でCIの要約にも
+出る。詳細は`scripts/run_detection_regression.py`自身のdocstring参照。
