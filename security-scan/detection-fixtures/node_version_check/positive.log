@@ -1,0 +1,2 @@
+2026-11-08T00:00:01Z node: decompressing response with Content-Encoding: br
+2026-11-08T00:00:02Z node: Segmentation fault (core dumped)

@@ -150,6 +150,14 @@ jobs:
           pip install --quiet flask requests markupsafe
           python3 security-scan/sqli-lab/run_regression.py --out results/sqli_lab.json || true
 
+      # --- R1-R31系・CVEバージョン照合系の検知スクリプト自身の回帰テスト ------------
+      # このリポジトリの脆弱性診断ではなく、sqli-labのリグレッションと同じ考え方:
+      # security-scan/detection-fixtures/ の合成ログに対して各スクリプトを実行し、
+      # 陽性入力は必ずヒット・陰性入力は必ず誤検知0件であることを確認する。
+      - name: 検知スクリプト自身のリグレッションテスト
+        run: |
+          python3 -I scripts/run_detection_regression.py --out results/detection_regression.json || true
+
       # --- hackingBuddyGPTのapi_baseバグに関する、本リポジトリの記録のカナリア ---
       # 「このリポジトリの脆弱性」でも「hackingBuddyGPTの脆弱性」でもない。upstream の
       # 現在のmainを毎回クローンし、本リポジトリがsecurity-scan/hackingbuddygpt-local-

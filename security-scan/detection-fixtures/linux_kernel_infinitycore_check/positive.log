@@ -1,0 +1,5 @@
+[23456.100] WARNING: CPU: 2 PID: 4521 at kernel/futex/core.c:987 futex_wait+0x55/0x200
+[23456.101] Call Trace:
+[23456.102]  futex_wait+0x55/0x200
+[23456.103]  do_futex+0x120/0x300
+[23456.104] Kernel panic - not syncing: panic_on_warn set ...

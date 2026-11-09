@@ -1,0 +1,2 @@
+Nov 08 00:00:01 ns1 named[1234]: starting BIND 9.18.1
+Nov 08 00:00:02 ns1 named[1234]: zone example.com/IN: loaded serial 2026110801

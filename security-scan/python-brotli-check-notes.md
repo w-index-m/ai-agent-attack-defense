@@ -96,3 +96,14 @@ R24の`references`はGitHub Security Advisory(`GHSA-9v8h-qqgm-4m35`、GitHubの�
 データベース)を直接引用している。脆弱性の当事者(パッケージ生態系の公式データベース)自身の
 一次情報源にあたるため、`verification-gates.md`の棚卸しでR24をGate 3に区分した。クラッシュ
 検知自体は依然として未確証の探索的ヒューリスティックのままで、この限界は変わらない。
+
+
+## 2026-11-09追記: CI回帰に組み込んだ
+
+これまで「このセッション内で一度、合成ログで動作確認した」のみで、継続的な再検証の手段が
+無かった。`security-scan/detection-fixtures/`に陽性/陰性の合成ログを同梱し、
+`scripts/run_detection_regression.py`が`.github/workflows/security-scan.yml`の`scan`
+ジョブから毎回(PR・push・毎日の定期実行)このスクリプトを実行し、陽性入力は必ず検知・
+陰性入力は必ず誤検知0件であることを確認するようになった。壊れた場合は
+`results/detection_regression.json`に記録され、`scripts/summarize.py`経由でCIの要約にも
+出る。詳細は`scripts/run_detection_regression.py`自身のdocstring参照。

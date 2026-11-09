@@ -80,3 +80,14 @@ Infinity Coreの発見自体は、発見者V4bel自身の一次公開(`github.co
 R21をGate 3に区分した。ただし、R21のSigma記述が追記しているHunt.io/ARTEXとの関連
 (2026-11 addendum)は依然未確認のままで、この区別は変わらない。「既知の昇格経路なしに
 rootへ遷移」という検知ロジック自体も本リポジトリ独自のヒューリスティックのままである。
+
+
+## 2026-11-09追記: CI回帰に組み込んだ
+
+これまで「このセッション内で一度、合成ログで動作確認した」のみで、継続的な再検証の手段が
+無かった。`security-scan/detection-fixtures/`に陽性/陰性の合成ログを同梱し、
+`scripts/run_detection_regression.py`が`.github/workflows/security-scan.yml`の`scan`
+ジョブから毎回(PR・push・毎日の定期実行)このスクリプトを実行し、陽性入力は必ず検知・
+陰性入力は必ず誤検知0件であることを確認するようになった。壊れた場合は
+`results/detection_regression.json`に記録され、`scripts/summarize.py`経由でCIの要約にも
+出る。詳細は`scripts/run_detection_regression.py`自身のdocstring参照。

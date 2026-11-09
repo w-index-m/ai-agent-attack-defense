@@ -1,0 +1,2 @@
+Nov 08 00:00:01 web1 php-fpm[1234]: [pool www] child 5678 started
+Nov 08 00:00:02 web1 php-fpm[1234]: [pool www] child 5678 said into stderr: "nothing interesting"

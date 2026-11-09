@@ -1,0 +1,10 @@
+Nov 08 00:00:01 apm1 apd[1234]: 01990004:4: OAuth UserInfo request failed for user from 10.0.0.5
+Nov 08 00:00:02 apm1 apd[1234]: 01990004:4: OAuth UserInfo request failed for user from 10.0.0.5
+Nov 08 00:00:03 apm1 apd[1234]: 01990004:4: OAuth UserInfo request failed for user from 10.0.0.5
+Nov 08 00:00:04 apm1 apd[1234]: 01990004:4: OAuth UserInfo request failed for user from 10.0.0.5
+Nov 08 00:00:05 apm1 apd[1234]: 01990004:4: OAuth UserInfo request failed for user from 10.0.0.5
+Nov 08 00:00:06 apm1 apd[1234]: 01990004:4: OAuth UserInfo request failed for user from 10.0.0.5
+Nov 08 00:00:07 apm1 apd[1234]: 01990004:4: OAuth UserInfo request failed for user from 10.0.0.5
+Nov 08 00:00:08 apm1 apd[1234]: 01990004:4: OAuth UserInfo request failed for user from 10.0.0.5
+Nov 08 00:00:09 apm1 apd[1234]: 01990004:4: OAuth UserInfo request failed for user from 10.0.0.5
+Nov 08 00:00:10 apm1 apd[1234]: 01990004:4: OAuth UserInfo request failed for user from 10.0.0.5
