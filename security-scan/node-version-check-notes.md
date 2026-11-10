@@ -72,6 +72,15 @@ python3 scripts/node_version_check.py --log-path /var/log/myapp/node.log
   確認した。
 - SARIF出力が有効なJSONとしてパースできることを確認した。
 
+## 2026-11-10追記: 利用者自身のWindows実機での確認
+
+利用者自身の実際のWindows PC(`python3 scripts/node_version_check.py`、node-pathの指定無し、
+PATH上の`node`を直接参照)で実行し、実際のNode.js `24.18.0`(修正版24.22.1未満)に対して
+正しく`[high]`判定になることを確認した。これまでの検証はいずれもこのサンドボックス環境
+(Linux)か、ダミーの実行ファイルによるものだったため、**本物のWindows環境・本物のNode.js
+実行ファイルでの動作**を初めて確認できた。`node --version`の出力解析(`subprocess`経由での
+呼び出し)が、プラットォームを問わず機能することの裏取りにもなる。
+
 > 確認・検知の設計に限定。攻撃の実行手順やエクスプロイトコードは含めない。
 
 ## 2026-11-08追記: R25をGate 3に区分(`verification-gates.md`棚卸しとの整合)
