@@ -611,6 +611,47 @@ Gate 0〜3の延長(「Gate 4」)としてではなく、**別軸**としてこ�
   で確認済みだが、このサンドボックスはLinux(`dnf`無し)のため、Windows側の分岐は実機
   (利用者のPC)でのボタン経由の確認がまだ。
 
+### ログファイルを読むR1-R32系・検知スクリプト自身の回帰テスト・自己診断もボタン化(2026-11-10)
+
+**きっかけ**: 「生プログラミングばかりでは扱いずらい」という指摘を受け、「ログファイルが必要」
+という理由でボタン化を見送っていたR1-R32系の検知スクリプト10本(`--log-path`方式)と、
+CIでのみ使っていた`run_detection_regression.py`・`local_scan_selfcheck.py`も統合した。
+
+- **`/scan/log_check`**: R1-R32系のうち「ログファイルを読むだけ」の10本
+  (`proxy_egress_check`・`web_recon_burst_check`・`dns_water_torture_check`・
+  `container_privilege_check`・`file_event_check`・`process_tool_check`・`jndi_rce_check`・
+  `auth_proxy_rotation_check`・`github_workflow_leak_check`・`memory_poisoning_check`)を、
+  利用者が指定した実在のログファイル1つに対して実行する、唯一の汎用エンドポイント。他の
+  ボタンと違い、対象はこのPC自身の状態ではなく、ボディで渡された`script`(ホワイトリスト
+  照合)と`log_path`(実在するファイルであることを確認)。終了コード0/1/2方式(SARIFの`--out`
+  方式ではない)のため、標準出力をそのまま1件のSARIF結果の`message.text`として返す変換を行う。
+  フロント側は、ルール選択(`<select id="lc-script">`)・パス入力(`<input id="lc-path">`)・
+  実行ボタン(`#lc-run`)という、netcheck/zgrab2と同じ形の専用UIを追加した(空ボディの
+  `data-tool`汎用ハンドラでは済まないため)。
+- **`/scan/detection_regression`**: `scripts/run_detection_regression.py`(CIの`scan`ジョブと
+  同じ、検知スクリプト18本の回帰テスト)をボタン化。出力をSARIF形式に変換。
+- **`/scan/local_selfcheck`**: `scripts/local_scan_selfcheck.py`をボタン化。このエンドポイント
+  自身が、同じサーバーの`/health`・`/scan/netcheck`・`/scan/httplite`へHTTPで問い合わせる設計
+  のため、他のスキャンと同じ`_LOCK`(一度に1件だけ)を取ると、ネストした問い合わせが同じロック
+  を待ち続けてデッドロックすることが実際に発生した(60秒タイムアウトで確認)。修正:
+  `/scan/local_selfcheck`だけを`_LOCK`の対象から除外する(`_NullLock`という何もしない
+  コンテキストマネージャを使う)。このエンドポイント自身は他のスキャンを起動しない読み取り
+  専用の自己診断のため、ロックを外しても競合の実害は無い。
+- **検証**: このサンドボックス内で、新規3エンドポイント(`log_check`の陽性/陰性フィクスチャ
+  双方・`detection_regression`・`local_selfcheck`)を`curl`経由で実行し、いずれも正しい結果が
+  返ることを確認した。デッドロック修正前後の挙動差(修正前: 60秒タイムアウト、修正後: 数秒で
+  正常応答)も実際に再現して確認済み。`vuln_triage.html`のJS側はPlaywright等での実ブラウザ確認
+  はこのセッションでは未実施(Playwright未インストール)だが、既存の`data-tool`汎用ハンドラ・
+  netcheck/zgrab2と同型の専用UIパターンの流用のため、構造的なリスクは低いと判断。
+- **正直な注意点**: `/scan/log_check`は、各スクリプトの既定の閾値(例: `dns_water_torture_check`
+  は既定200件超/NXDOMAIN率80%超、`auth_proxy_rotation_check`は既定10件超)をそのまま使う
+  (ボタン側に閾値を変更するUIは無い)。これは`detection_regression.json`用の合成ログ(CIの
+  実行時間を短くするため意図的に小さい、閾値を緩めて渡す前提のフィクスチャ)とは異なる前提
+  のため、`security-scan/detection-fixtures/dns_water_torture_check/positive.jsonl`等を
+  `--threshold`等のオプション無しでこのボタンにそのまま読み込ませると、「ヒット無し」と
+  正しく(既定閾値未満のため)判定される。これはバグではなく、既定の閾値がそのまま使われて
+  いることの確認(ボタンから渡したい閾値を変えたい場合は、現状CLIで直接実行する必要がある)。
+
 ## English summary
 
 Adds `scripts/local_scan_server.py`, a small localhost-only companion HTTP server that lets
