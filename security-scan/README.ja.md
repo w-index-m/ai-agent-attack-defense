@@ -193,7 +193,7 @@ CVEではなく未適用更新の一般的な棚卸し)、`scripts/dep_cve_check
 
 | ファイル | 内容 |
 |---|---|
-| [`os-patch-check-notes.md`](os-patch-check-notes.md) | 自分の機器の OS 更新を確認し、SARIF で `vuln_triage` に読み込む。**Linux(RHEL系)用 `scripts/os_patch_check_linux.py`** と **Windows用 `scripts/os_patch_check_windows.py`** に分けている。確認専用。実機では未検証。 |
+| [`os-patch-check-notes.md`](os-patch-check-notes.md) | 自分の機器の OS 更新を確認し、SARIF で `vuln_triage` に読み込む。**Linux(RHEL系)用 `scripts/os_patch_check_linux.py`** と **Windows用 `scripts/os_patch_check_windows.py`** に分けている。確認専用。両方とも実機で確認済み(Linux: Rocky Linux実機、10/31。Windows: 利用者自身のPC、11/10)。 |
 | [`java-cacerts-emudhra-check-notes.md`](java-cacerts-emudhra-check-notes.md) | `scripts/java_cacerts_emudhra_check.py`: ローカルJDKのcacertsに、eMudhra侵害(R14)関連のルートCAがあるかを確認し、`java -version`をIPA公表の「脆弱な版」一覧(CVE-2026-91403)と突き合わせる。確認専用。このサンドボックスの実際のJDKに対して実行・検証済み(検証中に実際のバグ――この環境では`java -version`のエラー文言がstderrではなくstdoutに出ることを発見し修正した)。該当ルートCAを実際に信頼しているJDKでは未検証。 |
 | [`patch-suggest-notes.md`](patch-suggest-notes.md) | 診断結果から修正案（diff）を作る `scripts/patch_suggest.py`。自動適用はしない（人の y/N 確認つき）。gitleaks の値は LLM に送らない。小さいモデルの限界を明記。 |
 | [`linux-kernel-infinitycore-check-notes.md`](linux-kernel-infinitycore-check-notes.md) | `scripts/linux_kernel_infinitycore_check.py`: 実行中のカーネル(`uname -r`)と`/etc/os-release`を、「Infinity Core」のLinuxカーネルLPE脆弱性チェーン(R21)と照合する。確認専用。ディストリビューションごとのバックポート差異のため、単純なバージョン番号比較での断定は避ける設計(例外はCloudLinux CL9——ベンダー公式アドバイザリで修正済みビルドが正確に判明している唯一のケース)。このサンドボックスで実行・検証済み。 |

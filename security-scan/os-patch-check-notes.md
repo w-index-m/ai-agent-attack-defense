@@ -53,8 +53,16 @@ Docker Desktop（Windows、WSL2 バックエンド）上で、2つの dnf 系デ
 - **`registry.access.redhat.com/ubi9/ubi`（Red Hat 公式 UBI）**: `dnf check-update` では約140件の更新が確認できる環境でも、`dnf updateinfo list security`（本スクリプトが使うコマンド）は**常に0件**を返した。原因を切り分けたところ、**UBIの無料リポジトリ（`ubi-9-baseos-rpms` 等）には、そもそもセキュリティ分類のメタデータ（updateinfo.xml、エラータ情報）が含まれていない**ことが判明。これはスクリプトの不具合ではなく、UBIが無料で提供する範囲の制約であり、本物のサブスクリプション登録済みRHELでしか得られない情報。
 - **`rockylinux/rockylinux:9`（無料・登録不要、RHEL互換でエラータを公開配布）**: `dnf updateinfo list security`が実際に73件の`RLSA-`アドバイザリ（Critical〜Low）を返し、本スクリプト(`os_patch_check_linux.py`)も**同じ73件**を正しく検出した（生出力の件数とスクリプトの出力件数が一致）。これにより、本スクリプトのパース・重大度判定ロジックは、本物のセキュリティアドバイザリメタデータに対して正しく動くことを実機で確認できた。
 
+### Windows系：実機での検証（2026-11-10）
+
+利用者自身の実際のWindows PCで、`python3 scripts/os_patch_check_windows.py --out os_patch_windows.sarif`
+を実行(既定、`--windows-pending`無し)。本物のPowerShell(`Get-HotFix`)から7件の適用済み
+HotFixを正しく取得し、SARIFへの書き出しに成功した(未適用0件、`--windows-pending`未指定の
+ため予期した結果)。これにより、スタブだけだったWindows側のHotFix取得・パース・SARIF変換の
+一連の流れが、本物のPowerShell出力に対して正しく動くことを実機で確認できた。
+
 **正直な限界**
-- Windows側は、依然として実機（本物のPowerShell/Windows Update API）では未実行。検証はスタブのみ。
+- `--windows-pending`(Windows Update API経由の未適用更新一覧)は、まだ実機で未確認。
 - 本物のサブスクリプション登録済みRHEL（Rocky/AlmaLinuxではなく）での確認はまだ行っていない。Rocky/AlmaLinuxはRHELのエラータをそのまま再配布しているため、内容面では同等と考えられるが、完全な同一性は未確認。
 - Windows Update API の結果は、環境（Windows のバージョン、管理者権限、WSUS の有無）で変わります。
 - 「未適用」の一覧は、**その時点の機器が見ている更新源**に基づきます。更新源（リポジトリ）の設定によっては、本当の最新と差が出ることがあります。
