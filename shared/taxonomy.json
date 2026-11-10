@@ -1,43 +1,144 @@
 {
   "_comment": "このリポジトリ全体で共有する唯一の定義（single source of truth）。検知/防御タグ・攻撃連鎖・対応スキャナ・検知ルールの網羅表をここで一元管理する。各ツール（netcheck / vuln_triage / detections / ダッシュボード / ノート）はこの定義に合わせる。ズレは tools/check_consistency.py が CI で検出する。変更したら shared/README.md の手順に従うこと。",
   "version": 1,
-
   "detection_tags": {
-    "R1": {"kind": "detection", "name": "サーバ系ホストから LLM API への外向き通信"},
-    "R2": {"kind": "detection", "name": "特権 cap / host ネットのコンテナ起動"},
-    "R3": {"kind": "detection", "name": "偵察的 Web アクセス（列挙バースト）"},
-    "R4": {"kind": "detection", "name": "サーバからのメッセージング API 通信（C2 的チャネル）"},
-    "R5": {"kind": "detection", "name": "永続化の新規作成（cron / systemd timer）"},
-    "R6": {"kind": "detection", "name": "自律エージェントの相関検知（連鎖を束ねる）"},
-    "R7": {"kind": "detection", "name": "多数のセキュリティツールの短時間連続実行"},
-    "R8": {"kind": "detection", "name": "Web シェルの設置と、Web サーバーからのシェル起動"},
-    "R9": {"kind": "detection", "name": "LLM/エージェントの、許可リスト外ドメインへの指示誘導による送信"},
-    "R10": {"kind": "detection", "name": "AIワークロードからのクラウドメタデータサービスの資格情報エンドポイントへのアクセス"},
-    "R11": {"kind": "detection", "name": "マルチエージェントのセッション内で、ユーザーの直接指示のないツール呼び出しが発生"},
-    "R12": {"kind": "detection", "name": "再帰DNSリゾルバへの、単一ドメイン配下のランダムサブドメイン問い合わせの急増（DNS水攻め/ランダムサブドメイン攻撃の兆候）"},
-    "R13": {"kind": "detection", "name": "WordPress REST API バッチエンドポイントの悪用（wp2shell連鎖: CVE-2026-63030のルート混同＋CVE-2026-60137のSQLi、Webシェル設置に悪用）"},
-    "R14": {"kind": "detection", "name": "eMudhra侵害中間CA(2026-10失効)の証明書チェーンへの接続成立、または失効済み中間CA配下の新規証明書発行（CAトラストストア更新遅延/悪用の兆候）"},
-    "R15": {"kind": "detection", "name": "PHP2Shell(CVE-2026-109618のOOM破壊/CVE-2026-109619の古いグローバル状態UAF)を狙うPHPワーカーの異常クラッシュ、またはworker再起動バースト"},
-    "R16": {"kind": "detection", "name": "Apache HTTP Server mod_http2のダブルフリー(CVE-2026-23918)を狙うHTTP/2フレームパターン、またはworkerプロセスの異常クラッシュ"},
-    "R17": {"kind": "detection", "name": "Nginx ngx_http_rewrite_moduleのヒープバッファオーバーフロー(CVE-2026-42945, 通称NGINX Rift)を狙う単発クラフトHTTPリクエスト、またはworkerプロセスの異常クラッシュ"},
-    "R18": {"kind": "detection", "name": "PHPUnitのeval-stdin.php(CVE-2017-9841)への到達、公開されたvendorディレクトリを狙う定番スキャン/RCE試行"},
-    "R19": {"kind": "detection", "name": "ThinkPHPのinvokefunction経由call_user_func_array RCE(CVE-2018-20062/CVE-2019-9082)を狙うリクエスト"},
-    "R20": {"kind": "detection", "name": "単一プロセスから複数ディレクトリにまたがる構造化Markdownファイルの短時間での散発的な書き込み（Unit 42報告のエージェント間情報受け渡し痕跡を模した探索的ヒューリスティック、未確証）"},
-    "R21": {"kind": "detection", "name": "既知の昇格経路なしに非特権プロセスがroot(UID 0)へ遷移（Infinity Core、6件のLinuxカーネルLPE脆弱性、CVE-2026-98260等を狙う探索的ヒューリスティック）"},
-    "R22": {"kind": "detection", "name": "GSS-TSIG/TKEY文脈でのnamedのassertion failureクラッシュ、またはCHAOS版数バナーでの修正前BIND検出（2026-10-21のBIND 9セキュリティリリース、CVE-2026-94300等4件）"},
-    "R23": {"kind": "detection", "name": "F5 BIG-IP APMのOAuth UserInfo要求失敗の反復、または異常に長いAuthorizationヘッダー（CVE-2026-94127、ヒープオーバーフローによる事前認証RCE、悪用確認済み・CISA KEV）"},
-    "R24": {"kind": "detection", "name": "brotli文脈近くのアプリケーションworkerクラッシュ（CVE-2026-111497、通称Node2Shell/HTTP2Shell、Brotliデコーダの境界外書き込み、探索的ヒューリスティック・未確証）"},
-    "R25": {"kind": "detection", "name": "Node.js本体の修正前バージョンでの稼働、またはbrotli文脈近くのNode.jsプロセスクラッシュ（CVE-2026-111497、Node.js公式2026-10-21リリースで修正、R24のNode.js本体版・探索的ヒューリスティック部分は未確証）"},
-    "R26": {"kind": "detection", "name": "TCP SYN/SYNACK処理近傍でのLinuxカーネルUAF/KASANクラッシュ（CVE-2026-98432、CVSS 3.1 9.8・Critical、Ubuntu優先度High、2026-10-28時点で全リリース未修正・探索的ヒューリスティック）"},
-    "R27": {"kind": "detection", "name": "CI/エージェントワークフローが、プライベートリポジトリの読み取り直後に、公開の出力先へ書き込む（GitLost: GitHub Agentic Workflowsへの間接プロンプトインジェクション、Noma Security 2026-07-06開示、未確証の探索的ヒューリスティック）"},
-    "R28": {"kind": "detection", "name": "IDE/AIコーディング拡張機能のプロセスが、インストール・更新直後にSSH鍵を作成/authorized_keysを変更（Cursorマーケットプレイスの改ざんされたClaude Code拡張、2026-10-29、未確証の探索的ヒューリスティック）"},
-    "R29": {"kind": "detection", "name": "アプリケーションプロセスが、受信直後にLDAP/RMIへ新規アウトバウンド接続（JNDIインジェクション型RCEの兆候。Log4Shell(CVE-2021-44228)系。韓国7金融機関への侵害基盤でJNDI/LDAP悪用ツールセットが確認されたとの報道(Hunt.io、2026-11-04)に基づく）"},
-    "R30": {"kind": "detection", "name": "単一のアカウント/セッションが、短時間に多数の異なる送信元IPから認証（プロキシローテーション基盤の兆候。同じ侵害基盤で約79種類の出口IPが確認されたとの報道(Hunt.io、2026-11-04)に基づく探索的ヒューリスティック、未確証）"},
-    "R31": {"kind": "detection", "name": "サーバ/本番ホストから、暗号資産取引所のAPIへの通信（同じ侵害基盤で暗号資産取引所へのアクセスツールが確認されたとの報道(Hunt.io、2026-11-04)に基づく。事件との直接的な関係は未確認）"},
-    "③": {"kind": "control", "name": "攻撃面最小化（ネット直結の露出を断つ）"},
-    "③CSP": {"kind": "control", "name": "CSP による読み込み制御"}
+    "R1": {
+      "kind": "detection",
+      "name": "サーバ系ホストから LLM API への外向き通信"
+    },
+    "R2": {
+      "kind": "detection",
+      "name": "特権 cap / host ネットのコンテナ起動"
+    },
+    "R3": {
+      "kind": "detection",
+      "name": "偵察的 Web アクセス（列挙バースト）"
+    },
+    "R4": {
+      "kind": "detection",
+      "name": "サーバからのメッセージング API 通信（C2 的チャネル）"
+    },
+    "R5": {
+      "kind": "detection",
+      "name": "永続化の新規作成（cron / systemd timer）"
+    },
+    "R6": {
+      "kind": "detection",
+      "name": "自律エージェントの相関検知（連鎖を束ねる）"
+    },
+    "R7": {
+      "kind": "detection",
+      "name": "多数のセキュリティツールの短時間連続実行"
+    },
+    "R8": {
+      "kind": "detection",
+      "name": "Web シェルの設置と、Web サーバーからのシェル起動"
+    },
+    "R9": {
+      "kind": "detection",
+      "name": "LLM/エージェントの、許可リスト外ドメインへの指示誘導による送信"
+    },
+    "R10": {
+      "kind": "detection",
+      "name": "AIワークロードからのクラウドメタデータサービスの資格情報エンドポイントへのアクセス"
+    },
+    "R11": {
+      "kind": "detection",
+      "name": "マルチエージェントのセッション内で、ユーザーの直接指示のないツール呼び出しが発生"
+    },
+    "R12": {
+      "kind": "detection",
+      "name": "再帰DNSリゾルバへの、単一ドメイン配下のランダムサブドメイン問い合わせの急増（DNS水攻め/ランダムサブドメイン攻撃の兆候）"
+    },
+    "R13": {
+      "kind": "detection",
+      "name": "WordPress REST API バッチエンドポイントの悪用（wp2shell連鎖: CVE-2026-63030のルート混同＋CVE-2026-60137のSQLi、Webシェル設置に悪用）"
+    },
+    "R14": {
+      "kind": "detection",
+      "name": "eMudhra侵害中間CA(2026-10失効)の証明書チェーンへの接続成立、または失効済み中間CA配下の新規証明書発行（CAトラストストア更新遅延/悪用の兆候）"
+    },
+    "R15": {
+      "kind": "detection",
+      "name": "PHP2Shell(CVE-2026-109618のOOM破壊/CVE-2026-109619の古いグローバル状態UAF)を狙うPHPワーカーの異常クラッシュ、またはworker再起動バースト"
+    },
+    "R16": {
+      "kind": "detection",
+      "name": "Apache HTTP Server mod_http2のダブルフリー(CVE-2026-23918)を狙うHTTP/2フレームパターン、またはworkerプロセスの異常クラッシュ"
+    },
+    "R17": {
+      "kind": "detection",
+      "name": "Nginx ngx_http_rewrite_moduleのヒープバッファオーバーフロー(CVE-2026-42945, 通称NGINX Rift)を狙う単発クラフトHTTPリクエスト、またはworkerプロセスの異常クラッシュ"
+    },
+    "R18": {
+      "kind": "detection",
+      "name": "PHPUnitのeval-stdin.php(CVE-2017-9841)への到達、公開されたvendorディレクトリを狙う定番スキャン/RCE試行"
+    },
+    "R19": {
+      "kind": "detection",
+      "name": "ThinkPHPのinvokefunction経由call_user_func_array RCE(CVE-2018-20062/CVE-2019-9082)を狙うリクエスト"
+    },
+    "R20": {
+      "kind": "detection",
+      "name": "単一プロセスから複数ディレクトリにまたがる構造化Markdownファイルの短時間での散発的な書き込み（Unit 42報告のエージェント間情報受け渡し痕跡を模した探索的ヒューリスティック、未確証）"
+    },
+    "R21": {
+      "kind": "detection",
+      "name": "既知の昇格経路なしに非特権プロセスがroot(UID 0)へ遷移（Infinity Core、6件のLinuxカーネルLPE脆弱性、CVE-2026-98260等を狙う探索的ヒューリスティック）"
+    },
+    "R22": {
+      "kind": "detection",
+      "name": "GSS-TSIG/TKEY文脈でのnamedのassertion failureクラッシュ、またはCHAOS版数バナーでの修正前BIND検出（2026-10-21のBIND 9セキュリティリリース、CVE-2026-94300等4件）"
+    },
+    "R23": {
+      "kind": "detection",
+      "name": "F5 BIG-IP APMのOAuth UserInfo要求失敗の反復、または異常に長いAuthorizationヘッダー（CVE-2026-94127、ヒープオーバーフローによる事前認証RCE、悪用確認済み・CISA KEV）"
+    },
+    "R24": {
+      "kind": "detection",
+      "name": "brotli文脈近くのアプリケーションworkerクラッシュ（CVE-2026-111497、通称Node2Shell/HTTP2Shell、Brotliデコーダの境界外書き込み、探索的ヒューリスティック・未確証）"
+    },
+    "R25": {
+      "kind": "detection",
+      "name": "Node.js本体の修正前バージョンでの稼働、またはbrotli文脈近くのNode.jsプロセスクラッシュ（CVE-2026-111497、Node.js公式2026-10-21リリースで修正、R24のNode.js本体版・探索的ヒューリスティック部分は未確証）"
+    },
+    "R26": {
+      "kind": "detection",
+      "name": "TCP SYN/SYNACK処理近傍でのLinuxカーネルUAF/KASANクラッシュ（CVE-2026-98432、CVSS 3.1 9.8・Critical、Ubuntu優先度High、2026-10-28時点で全リリース未修正・探索的ヒューリスティック）"
+    },
+    "R27": {
+      "kind": "detection",
+      "name": "CI/エージェントワークフローが、プライベートリポジトリの読み取り直後に、公開の出力先へ書き込む（GitLost: GitHub Agentic Workflowsへの間接プロンプトインジェクション、Noma Security 2026-07-06開示、未確証の探索的ヒューリスティック）"
+    },
+    "R28": {
+      "kind": "detection",
+      "name": "IDE/AIコーディング拡張機能のプロセスが、インストール・更新直後にSSH鍵を作成/authorized_keysを変更（Cursorマーケットプレイスの改ざんされたClaude Code拡張、2026-10-29、未確証の探索的ヒューリスティック）"
+    },
+    "R29": {
+      "kind": "detection",
+      "name": "アプリケーションプロセスが、受信直後にLDAP/RMIへ新規アウトバウンド接続（JNDIインジェクション型RCEの兆候。Log4Shell(CVE-2021-44228)系。韓国7金融機関への侵害基盤でJNDI/LDAP悪用ツールセットが確認されたとの報道(Hunt.io、2026-11-04)に基づく）"
+    },
+    "R30": {
+      "kind": "detection",
+      "name": "単一のアカウント/セッションが、短時間に多数の異なる送信元IPから認証（プロキシローテーション基盤の兆候。同じ侵害基盤で約79種類の出口IPが確認されたとの報道(Hunt.io、2026-11-04)に基づく探索的ヒューリスティック、未確証）"
+    },
+    "R31": {
+      "kind": "detection",
+      "name": "サーバ/本番ホストから、暗号資産取引所のAPIへの通信（同じ侵害基盤で暗号資産取引所へのアクセスツールが確認されたとの報道(Hunt.io、2026-11-04)に基づく。事件との直接的な関係は未確認）"
+    },
+    "③": {
+      "kind": "control",
+      "name": "攻撃面最小化（ネット直結の露出を断つ）"
+    },
+    "③CSP": {
+      "kind": "control",
+      "name": "CSP による読み込み制御"
+    },
+    "R32": {
+      "kind": "detection",
+      "name": "エージェントの永続メモリ/設定ファイル(CLAUDE.md等)への非エディタプロセスによる書き込み後、別セッションの最初のegressが許可リスト外ドメインへ向かう（本リポジトリ独自の発想による二次IDPI、特定事件のモデル化ではない）"
+    }
   },
-
   "governance_events": {
     "G1": "スキルの導入・自動生成・自己改変",
     "G2": "安全設定・ガードレールの変更/無効化の試行",
@@ -46,7 +147,6 @@
     "G5": "ツール権限の拡大要求/付与",
     "G6": "サブエージェントの大量スポーン／権限を広げる構成変更"
   },
-
   "attack_chain": [
     "ログイン画面の SQL インジェクション",
     "OTP が DB に平文で保存(MFA 回避)",
@@ -56,49 +156,231 @@
     "Secrets Manager の全件取得(IAM が広すぎる)",
     "カード番号の暗号鍵が同じ環境から取得可"
   ],
-
-  "triage_scanners": ["semgrep", "trivy", "gitleaks", "sarif", "netcheck", "zgrab2"],
-
+  "triage_scanners": [
+    "semgrep",
+    "trivy",
+    "gitleaks",
+    "sarif",
+    "netcheck",
+    "zgrab2"
+  ],
   "detections_coverage": {
     "_comment": "各検知タグ R1–R8 を、どの検知バックエンドで実装しているか（present = 専用コンテンツあり）。detections/README.md の網羅表と一致させる。sigma/datadog/elastic は r{n}_*.{ext} のファイル有無で、falco は単一ファイル内の R{n} 参照で検証する。",
     "backends": {
-      "sigma":   {"dir": "security-scan/detections/sigma",   "ext": "yml",  "mode": "per_tag_file"},
-      "datadog": {"dir": "security-scan/detections/datadog", "ext": "json", "mode": "per_tag_file"},
-      "elastic": {"dir": "security-scan/detections/elastic", "ext": "json", "mode": "per_tag_file"},
-      "falco":   {"dir": "security-scan/detections/falco",   "ext": "yaml", "mode": "combined_file"}
+      "sigma": {
+        "dir": "security-scan/detections/sigma",
+        "ext": "yml",
+        "mode": "per_tag_file"
+      },
+      "datadog": {
+        "dir": "security-scan/detections/datadog",
+        "ext": "json",
+        "mode": "per_tag_file"
+      },
+      "elastic": {
+        "dir": "security-scan/detections/elastic",
+        "ext": "json",
+        "mode": "per_tag_file"
+      },
+      "falco": {
+        "dir": "security-scan/detections/falco",
+        "ext": "yaml",
+        "mode": "combined_file"
+      }
     },
     "matrix": {
-      "R1": {"sigma": true,  "datadog": true,  "elastic": true,  "falco": false},
-      "R2": {"sigma": true,  "datadog": false, "elastic": true,  "falco": true},
-      "R3": {"sigma": true,  "datadog": true,  "elastic": true,  "falco": false},
-      "R4": {"sigma": true,  "datadog": true,  "elastic": true,  "falco": false},
-      "R5": {"sigma": true,  "datadog": false, "elastic": true,  "falco": true},
-      "R6": {"sigma": false, "datadog": false, "elastic": true,  "falco": false},
-      "R7": {"sigma": true,  "datadog": false, "elastic": true,  "falco": true},
-      "R8": {"sigma": true,  "datadog": false, "elastic": false, "falco": true},
-      "R9": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R10": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R11": {"sigma": false, "datadog": true,  "elastic": false, "falco": false},
-      "R12": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R13": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R14": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R15": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R16": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R17": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R18": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R19": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R20": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R21": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R22": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R23": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R24": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R25": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R26": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R27": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R28": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R29": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R30": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false},
-      "R31": {"sigma": true,  "datadog": true,  "elastic": false, "falco": false}
+      "R1": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": true,
+        "falco": false
+      },
+      "R2": {
+        "sigma": true,
+        "datadog": false,
+        "elastic": true,
+        "falco": true
+      },
+      "R3": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": true,
+        "falco": false
+      },
+      "R4": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": true,
+        "falco": false
+      },
+      "R5": {
+        "sigma": true,
+        "datadog": false,
+        "elastic": true,
+        "falco": true
+      },
+      "R6": {
+        "sigma": false,
+        "datadog": false,
+        "elastic": true,
+        "falco": false
+      },
+      "R7": {
+        "sigma": true,
+        "datadog": false,
+        "elastic": true,
+        "falco": true
+      },
+      "R8": {
+        "sigma": true,
+        "datadog": false,
+        "elastic": false,
+        "falco": true
+      },
+      "R9": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R10": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R11": {
+        "sigma": false,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R12": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R13": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R14": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R15": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R16": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R17": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R18": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R19": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R20": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R21": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R22": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R23": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R24": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R25": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R26": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R27": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R28": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R29": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R30": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R31": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R32": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      }
     }
   }
 }

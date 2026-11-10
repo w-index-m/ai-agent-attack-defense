@@ -160,7 +160,8 @@ CVEではなく未適用更新の一般的な棚卸し)、`scripts/dep_cve_check
 `vulnerable_app.py`はこのリポジトリ自身のコードではなく意図的な脆弱デモアプリのため)。
 全脆弱/修正版エンドポイントが正しく分類され続けているかを検証し、不一致を`summarize.py`の
 新しい`sqli_lab`ソース経由で報告する。 |
-| [`detection-fixtures/`](detection-fixtures/) + [`../scripts/run_detection_regression.py`](../scripts/run_detection_regression.py) | 2026-11-09追加。R1-R31系(`proxy_egress_check.py`等9本)・CVEバージョン照合系(`bind_version_check.py`等8本)の検知スクリプト17本について、合成ログの陽性/陰性入力に対する判定が壊れていないかを検証するCI回帰(`sqli-lab/run_regression.py`と同じ考え方、対象はこのリポジトリ自身のスクリプト)。それまでは「このセッション内で一度確認したのみ」で継続的な再検証の手段が無かったギャップを埋めた。`.github/workflows/security-scan.yml`の`scan`ジョブに組み込み済み、不一致は`summarize.py`の`detection_regression`ソース経由で報告する。`netcheck`・`local_scan_server`・`os_patch_check_*`・`patch_suggest.py`(LLM前提)は、実環境/LLM依存のため対象外のまま。 |
+| [`detection-fixtures/`](detection-fixtures/) + [`../scripts/run_detection_regression.py`](../scripts/run_detection_regression.py) | 2026-11-09追加。R1-R32系(`proxy_egress_check.py`等10本)・CVEバージョン照合系(`bind_version_check.py`等8本)の検知スクリプト18本について、合成ログの陽性/陰性入力に対する判定が壊れていないかを検証するCI回帰(`sqli-lab/run_regression.py`と同じ考え方、対象はこのリポジトリ自身のスクリプト)。それまでは「このセッション内で一度確認したのみ」で継続的な再検証の手段が無かったギャップを埋めた。`.github/workflows/security-scan.yml`の`scan`ジョブに組み込み済み、不一致は`summarize.py`の`detection_regression`ソース経由で報告する。`netcheck`・`local_scan_server`・`os_patch_check_*`・`patch_suggest.py`(LLM前提)は、実環境/LLM依存のため対象外のまま。 |
+| [`memory-poisoning-check-notes.md`](memory-poisoning-check-notes.md) | 2026-11-10追加。`scripts/memory_poisoning_check.py`: R32(エージェントの永続メモリ/設定ファイル(CLAUDE.md等)への汚染が、別セッションで初めて発動する「二次/蓄積型IDPI」)を、混在ログ(ファイル書き込み+セッション開始+egress)から確認する。R9(即時型IDPI)と対になる、`sqli-lab`の`second_order_sqli`/`stored_xss`と同じ構図をエージェントの永続化層に適用した、本リポジトリ独自の発想(特定の実事件のモデル化ではない)。合成ログで検証済み(Gate 2)。 |
 
 ### 【スコープ拡張】LLMシステムが標的になる側
 

@@ -5,8 +5,8 @@
 対象は2種類、security-scan/detection-fixtures/<スクリプト名>/配下の合成ログ(positive.*/
 negative.*)に対して実行する:
 
-  1. R1-R31系の「ログを読み、終了コード0(ヒット無し)/1(ヒット有り)/2(読み取り失敗)を返す」
-     スクリプト9本: positive入力で終了コード1、negative入力で終了コード0になることを確認。
+  1. R1-R32系の「ログを読み、終了コード0(ヒット無し)/1(ヒット有り)/2(読み取り失敗)を返す」
+     スクリプト10本: positive入力で終了コード1、negative入力で終了コード0になることを確認。
   2. CVEバージョン照合系の「--log-path/--outでSARIFを書き出す」スクリプト8本: これらは
      設計上、終了コードが常に0(確認専用で、何を見つけてもCIを止めない)なので、代わりに
      --outで書き出したSARIFの中身(指定したruleIdの有無、またはseverityLabel)を見る。
@@ -65,6 +65,7 @@ EXIT_CODE_CASES: list[tuple[str, list[str]]] = [
     ("jndi_rce_check", []),
     ("auth_proxy_rotation_check", ["--threshold", "3"]),
     ("github_workflow_leak_check", []),
+    ("memory_poisoning_check", ["--allowlist-suffix", "api.openai.com"]),
 ]
 
 
