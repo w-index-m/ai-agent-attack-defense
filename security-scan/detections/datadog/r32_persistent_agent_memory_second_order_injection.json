@@ -1,0 +1,20 @@
+{
+  "name": "[R32] Agent memory/config file written by a non-editor process, then a new session's first egress goes off-allowlist",
+  "type": "log_detection",
+  "message": "This repository's own construction, not a reported real-world campaign: a 'second-order'/'stored' variant of indirect prompt injection (IDPI, see R9), built the same way this repo's own sqli-lab models second_order_sqli and stored_xss. A prior session (having processed untrusted content) writes attacker-controlled text into an AI coding agent's persistent instruction/memory file (CLAUDE.md, AGENTS.md, a .claude/.codex/.cursor config, a saved memory file) that the harness re-reads as its own standing instructions on every future session start. This rule looks for a memory/config write by a process that is NOT a known interactive editor, followed by a new session whose first outbound connection goes to a domain outside the allowlist.\n\nNeeds SIEM-side correlation across two log sources (file writes; session start + egress) grouped by host, over a window that can span hours to days -- a single query cannot express this alone, same caveat as R12/R20/R30. See scripts/memory_poisoning_check.py for a standalone script implementing the same logic against a single combined log file.\n\nTreat every hit as a lead, not a confirmation -- this is a constructed heuristic illustrating a structural gap, not a vendor- or researcher-published signature.",
+  "tags": ["source:ai-agent-attack-defense", "technique:T1565.001", "technique:T1071", "tactic:persistence", "tactic:command_and_control"],
+  "queries": [
+    {
+      "name": "memory_write_event",
+      "query": "source:file_event (@file.path:(*CLAUDE.md* OR *AGENTS.md* OR *\\.claude\\/* OR *\\.codex\\/* OR *\\.cursor\\/rules* OR *copilot-instructions.md* OR *memory.json*)) -@process.image:(*\\/vim OR *\\/nvim OR *\\/nano OR *\\/emacs OR *\\/subl OR *\\/code OR *\\/pico)"
+    },
+    {
+      "name": "new_session_offallowlist_egress",
+      "query": "source:proxy @session.is_new:true -@destination.hostname:(ALLOWLISTED_DOMAINS_HERE)"
+    }
+  ],
+  "cases": [
+    { "name": "Memory/config write by a non-editor process, correlate with a later new-session off-allowlist first egress on the same host (SIEM-side join required -- see rule message)", "status": "medium", "condition": "memory_write_event > 0" }
+  ],
+  "options": { "evaluationWindow": 3600, "keepAlive": 86400, "maxSignalDuration": 604800 }
+}

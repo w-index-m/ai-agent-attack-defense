@@ -1,0 +1,94 @@
+title: Agent memory/config file written by a non-interactive process, then a later session's early egress goes to a non-allowlisted domain (second-order prompt injection via persistent memory)
+id: 8c3e5a71-4d2b-49f6-9e1a-r32memorypoison
+status: experimental
+description: >
+  This repo's own construction, not a reported real-world campaign:
+  a "second-order" / "stored" variant of indirect prompt injection (IDPI,
+  see R9), built the same way this repo's own sqli-lab models
+  second_order_sqli and stored_xss -- the injected instruction is
+  accepted and written to storage in one request/session with no
+  immediate effect, then fires later, in a DIFFERENT session that
+  itself carries nothing malicious.
+
+  The storage here is an AI coding agent's persistent instruction/memory
+  file (e.g. CLAUDE.md, AGENTS.md, a `.claude/`/`.codex/`/`.cursor/`
+  config, a saved "memory" file) rather than a database row or stored
+  HTML. Unlike R9 (an IDPI payload that steers egress within the SAME
+  session that fetched the poisoned content), this targets the harness's
+  own persistence layer: a prior session (having fetched untrusted web
+  content, read a hostile file, or processed a poisoned tool result)
+  writes attacker-controlled text into a memory/instruction file that
+  the harness re-reads and treats as its own standing instructions on
+  every future session start -- so the injection "fires" repeatedly,
+  across sessions, until the file is cleaned up, not once.
+
+  This rule looks for the two-stage shape: (1) a memory/instruction file
+  write whose writing process is NOT a known interactive editor (i.e.
+  plausibly the agent itself, acting on content it just processed,
+  rather than a human deliberately editing their own config), followed
+  by (2) a NEW session on the same host whose FIRST outbound connection
+  (within a short window of that session starting) goes to a domain
+  outside the environment's allowlist -- consistent with standing
+  instructions silently steering the new session's very first action,
+  before the user has given it anything to do.
+
+  Needs SIEM-side correlation across two different log sources (file
+  writes, session start + egress) grouped by host over a window that can
+  span hours to days (the whole point being that the write and the
+  trigger are far apart in time) -- a single Sigma selection cannot
+  express this alone, same caveat as r12_dns_water_torture.yml /
+  r20_agent_markdown_handoff_burst.yml /
+  r30_multi_egress_ip_proxy_rotation.yml. See
+  ../../scripts/memory_poisoning_check.py for a standalone script that
+  implements the same logic directly against a log file.
+references:
+  - ../defense-detection-notes.md
+  - ../openclaw-skill-supply-chain.ja.md
+  - ../../scripts/memory_poisoning_check.py
+author: ai-agent-attack-defense
+date: 2026-11-10
+logsource:
+  category: file_event
+detection:
+  selection_memory_write:
+    TargetFilename|contains:
+      - 'CLAUDE.md'
+      - 'AGENTS.md'
+      - '.claude/'
+      - '.codex/'
+      - '.cursor/rules'
+      - 'copilot-instructions.md'
+      - 'memory.json'
+  filter_known_editors:
+    Image|endswith:
+      - '/vim'
+      - '/nvim'
+      - '/nano'
+      - '/emacs'
+      - '/subl'
+      - '/code'
+      - '/pico'
+  condition: selection_memory_write and not filter_known_editors
+  # The selection above only scopes to "non-editor write to a memory/
+  # config path". The actual signal is the CORRELATION, built in the
+  # SIEM: group file-write events and (session_start + first-egress)
+  # events by host; alert when a memory-write hit is followed, within
+  # your own baseline window (hours to days), by a new session whose
+  # first outbound connection -- within a few minutes of that session
+  # starting -- targets a domain outside the environment's allowlist.
+fields:
+  - host
+  - process_guid
+  - Image
+  - TargetFilename
+  - user
+falsepositives:
+  - A human deliberately editing their own CLAUDE.md/AGENTS.md/memory file from a non-listed editor (a terminal `cat >>`, a script-based config generator, an IDE this rule's editor list doesn't recognize) -- allowlist known-legitimate automation/config-management tooling for your environment before trusting this.
+  - A new session's first egress to a genuinely new (but legitimate) domain the user just asked it to use -- correlate the "new session's first action" half with whether the user actually gave a corresponding instruction in that session, which this rule cannot see on its own.
+  - This is a constructed heuristic illustrating a structural gap (second-order IDPI via a harness's own persistence layer), not a vendor- or researcher-published signature for any specific incident -- treat every hit as a lead to investigate.
+level: high
+tags:
+  - attack.persistence
+  - attack.t1565.001
+  - attack.command_and_control
+  - attack.t1071

@@ -1,0 +1,3 @@
+{"event": "memory_write", "ts": 1000, "host": "dev-box-1", "target_file": "/home/user/project/CLAUDE.md", "writer_process": "/usr/bin/node"}
+{"event": "session_start", "ts": 5000, "host": "dev-box-1", "session_id": "sess-2"}
+{"event": "egress", "ts": 5030, "host": "dev-box-1", "session_id": "sess-2", "dest_host": "evil.example.net"}
