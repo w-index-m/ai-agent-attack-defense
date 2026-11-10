@@ -640,9 +640,25 @@ CIでのみ使っていた`run_detection_regression.py`・`local_scan_selfcheck.
 - **検証**: このサンドボックス内で、新規3エンドポイント(`log_check`の陽性/陰性フィクスチャ
   双方・`detection_regression`・`local_selfcheck`)を`curl`経由で実行し、いずれも正しい結果が
   返ることを確認した。デッドロック修正前後の挙動差(修正前: 60秒タイムアウト、修正後: 数秒で
-  正常応答)も実際に再現して確認済み。`vuln_triage.html`のJS側はPlaywright等での実ブラウザ確認
-  はこのセッションでは未実施(Playwright未インストール)だが、既存の`data-tool`汎用ハンドラ・
-  netcheck/zgrab2と同型の専用UIパターンの流用のため、構造的なリスクは低いと判断。
+  正常応答)も実際に再現して確認済み。
+
+### 実ブラウザ(Playwright/Chromium)での動作確認(2026-11-10追記)
+
+Python版のPlaywrightは未インストールだったが、Node版のPlaywright(このサンドボックスに
+事前インストール済み)で、実際のChromiumブラウザから`vuln_triage.html`を開き、以下を
+実際のクリック操作で確認した:
+
+- 「接続設定」の`<details>`を開いて`#scan-url`にlocal_scan_serverのURLを入力。
+- 汎用`data-tool`ボタン(`node_version`)をクリック → `✅ ... を取り込みました。(全体像に
+  反映済み)`という成功メッセージが`#scan-status`に表示され、本文に`node_version`の結果が
+  実際に反映されることを確認。
+- `detection_regression`ボタンをクリック → 同様に成功メッセージと結果の反映を確認。
+- 新規専用UI(「ログファイルから確認」: `#lc-script`セレクト+`#lc-path`入力+`#lc-run`
+  ボタン)で`proxy_egress_check`・陽性フィクスチャを指定してクリック → 成功メッセージと
+  `proxy_egress_check`の結果反映を確認。
+
+これにより、サーバー側のロジック(`curl`で確認済み)だけでなく、ブラウザのクリック→JS→
+`fetch`→DOM反映という一連の流れも、実際のブラウザで動作することを確認できた。
 - **正直な注意点**: `/scan/log_check`は、各スクリプトの既定の閾値(例: `dns_water_torture_check`
   は既定200件超/NXDOMAIN率80%超、`auth_proxy_rotation_check`は既定10件超)をそのまま使う
   (ボタン側に閾値を変更するUIは無い)。これは`detection_regression.json`用の合成ログ(CIの
