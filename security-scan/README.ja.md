@@ -48,6 +48,15 @@ Gambit Security レポート（2026-09-22）の AI エージェント攻撃（St
   詳しい検証記録([`local-scan-server-notes.md`](local-scan-server-notes.md))に裏付けが無かったため、
   未確認に訂正した。
   - ❌ 未着手: Hermes・PentestGPT・hackingBuddyGPT
+
+  **2026-11-10追記**: 利用者自身の実際のWindows PCで、`local_scan_server.py`のボタン経由
+  ではなく`netcheck/netcheck.py`を直接CLIで実行し(`python3 netcheck/netcheck.py` →
+  表示されたURLをブラウザで開く)、`127.0.0.1`を対象に確認を実行。実際の露出として
+  ポート135(Windows RPC、中)・445(SMB、中)・**11434(ローカルLLM API/Ollama等、高、R1
+  タグ)**を検出した。これは10/31の確認(別環境)とは独立した、Windows実機での再確認。
+  `node_version_check.py`も同じWindows PCで実行し、実際のNode.js 24.18.0が修正版
+  24.22.1未満であることを正しく`[high]`判定した(詳細は
+  [`node-version-check-notes.md`](node-version-check-notes.md)参照)。
 - **実機テストで見つかり修正した`vuln_triage.html`のバグ4件**: 二重クリックでの並行実行、
   「2. 全体像」の再描画漏れ、成功/失敗判定の取り違え、ファイルパスでの誤分類(詳細は
   [`local-scan-server-notes.md`](local-scan-server-notes.md)参照)
