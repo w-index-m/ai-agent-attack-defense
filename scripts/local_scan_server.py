@@ -237,7 +237,31 @@ def _run_version_check_script(script_name, extra_args=None):
         return {"error": "%s の結果ファイルができませんでした。" % script_name, "returncode": rc,
                 "stderr": err[-2000:]}
     with open(out_path, encoding="utf-8") as f:
-        return json.load(f)
+        sarif = json.load(f)
+    _fill_missing_sarif_titles(sarif)
+    return sarif
+
+
+_MAX_AUTO_TITLE_LEN = 80
+
+
+def _fill_missing_sarif_titles(sarif):
+    """vuln_triage.html側は、一覧の太字見出しにproperties.titleを使う(無いと
+    「ruleId: ruleId」という意味の無い見出しになる)。node_version_check.py等、
+    このリポジトリの検知スクリプトの大半は、もともとCLI出力用のSARIFしか作っておらず
+    properties.titleを持たない。ここで、持っていない結果だけに、message.textの先頭
+    (短く切った1行)をtitleとして補う(各スクリプト自身は変更しない、UI統合側だけの
+    後処理)。"""
+    for run in (sarif.get("runs") or []):
+        for r in (run.get("results") or []):
+            props = r.setdefault("properties", {})
+            if props.get("title"):
+                continue
+            text = ((r.get("message") or {}).get("text") or "").strip()
+            first_line = text.splitlines()[0] if text else ""
+            if len(first_line) > _MAX_AUTO_TITLE_LEN:
+                first_line = first_line[:_MAX_AUTO_TITLE_LEN] + "..."
+            props["title"] = first_line or r.get("ruleId", "")
 
 
 def scan_os_patch():
@@ -310,9 +334,13 @@ def scan_sqli_lab_regression():
         results.append({
             "ruleId": "sqli_lab_regression",
             "level": _SQLI_LAB_SEVERITY_TO_LEVEL.get(sev, "warning"),
-            "message": {"text": "%s: %s" % (item.get("title", ""), item.get("detail", ""))},
+            "message": {"text": item.get("detail", "")},
             "locations": [{"physicalLocation": {"artifactLocation": {"uri": str(item.get("location", ""))}}}],
-            "properties": {"severityLabel": sev},
+            # properties.titleは、vuln_triage.html側が一覧の太字見出しに使う短い表示名
+            # (無いと「ruleId: ruleId」という意味の無い見出しになってしまう)。
+            # run_regression.py自身が付けた、どのクラスのどのパスが誤判定されたかという
+            # 説明(例: "regression: sqli scanner misclassified /login")をそのまま使う。
+            "properties": {"severityLabel": sev, "title": item.get("title", "")},
         })
     return {
         "version": "2.1.0",
@@ -347,9 +375,10 @@ def scan_detection_regression():
         results.append({
             "ruleId": "detection_regression",
             "level": _SQLI_LAB_SEVERITY_TO_LEVEL.get(sev, "warning"),
-            "message": {"text": "%s: %s" % (item.get("title", ""), item.get("detail", ""))},
+            "message": {"text": item.get("detail", "")},
             "locations": [{"physicalLocation": {"artifactLocation": {"uri": str(item.get("location", ""))}}}],
-            "properties": {"severityLabel": sev},
+            # properties.title: 上のscan_sqli_lab_regression()と同じ理由。
+            "properties": {"severityLabel": sev, "title": item.get("title", "")},
         })
     return {
         "version": "2.1.0",
@@ -404,6 +433,21 @@ LOG_CHECK_SCRIPTS = {
     "memory_poisoning_check": [],   # R32
 }
 
+# /scan/log_checkの結果一覧で、一覧の太字見出し(properties.title)に使う短い表示名。
+# vuln_triage.html側のプルダウン(#lc-script)の選択肢と同じ文言(どのRタグ・どんなログか)。
+LOG_CHECK_LABELS = {
+    "proxy_egress_check": "R1・R4・R9・R10・R31(フォワードプロキシのアクセスログ)",
+    "web_recon_burst_check": "R3・R18・R19(Webサーバーのアクセスログ)",
+    "dns_water_torture_check": "R12(DNSクエリログ)",
+    "container_privilege_check": "R2(コンテナランタイムのイベントログ)",
+    "file_event_check": "R5・R8(設置側)・R20・R28(ファイル書き込みイベントログ)",
+    "process_tool_check": "R6・R7・R8(起動側)(プロセス実行ログ)",
+    "jndi_rce_check": "R29(ネットワーク接続ログ)",
+    "auth_proxy_rotation_check": "R30(認証イベントログ)",
+    "github_workflow_leak_check": "R27(GitHubイベントログ)",
+    "memory_poisoning_check": "R32(混在ログ: memory_write/session_start/egress)",
+}
+
 
 def scan_log_check(body):
     """R1-R32系の「ログファイルを読むだけ」のスクリプトを、利用者が指定した実際のログ
@@ -434,6 +478,9 @@ def scan_log_check(body):
             "level": "warning",
             "message": {"text": text[-5000:] or "(ヒットしましたが出力がありませんでした)"},
             "locations": [{"physicalLocation": {"artifactLocation": {"uri": log_path}}}],
+            # properties.title: vuln_triage.html側が一覧の太字見出しに使う短い表示名
+            # (無いと「ruleId: ruleId」という意味の無い見出しになる)。
+            "properties": {"title": LOG_CHECK_LABELS.get(script, script)},
         })
     return {
         "version": "2.1.0",

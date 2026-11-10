@@ -685,6 +685,45 @@ Python版のPlaywrightは未インストールだったが、Node版のPlaywrigh
   正しく(既定閾値未満のため)判定される。これはバグではなく、既定の閾値がそのまま使われて
   いることの確認(ボタンから渡したい閾値を変えたい場合は、現状CLIで直接実行する必要がある)。
 
+### 実機で見つかった表示バグ: 一覧の太字見出しが「ruleId: ruleId」になる(2026-11-10)
+
+利用者が実際のWindows PCで「sqli-labの回帰テストを実行」ボタンを押したところ、一覧の各行の
+太字見出しがすべて「sqli_lab_regression: sqli_lab_regression」という、意味の無い表示になった
+(本来は「どのクラスの、どのパスが誤判定されたか」が表示されるべき)。
+
+原因: `vuln_triage.html`側のSARIF解析ロジックは、一覧の太字見出しを**`properties.title`**
+フィールドから取り、無ければ`"ドライバ名: ruleId"`にフォールバックする設計になっている
+(`var pt=r.properties&&r.properties.title; ... title:pt?String(pt):(drv+": "+(rid||"指摘"))`)。
+今回新規に追加した`scan_sqli_lab_regression()`・`scan_detection_regression()`・
+`scan_log_check()`は、どれも`properties.title`を設定していなかったため、常にフォールバック側
+(ドライバ名とruleIdが同じ文字列なので「X: X」という重複表示)になっていた。
+
+さらに調査したところ、CVEバージョン照合系8本(`node_version_check.py`・
+`bind_version_check.py`・`php_version_check.py`・`java_cacerts_emudhra_check.py`・
+`linux_kernel_cve202698432_check.py`・`linux_kernel_infinitycore_check.py`・
+`python_brotli_check.py`)も、もともと`properties.title`を持たない設計だった(唯一
+`os_patch_check_linux.py`/`os_patch_check_windows.py`だけが元から`properties.title`を
+設定しており、これらのボタンだけは最初から正しく表示されていた)。これらのスクリプト
+自身は、CLIでの単体実行・CI回帰では`message.text`しか使わないため、このバグはCI
+(`run_detection_regression.py`)では検出できなかった(SARIF出力の内容そのものは正しく、
+UIでの**見出しの選び方**だけの問題だったため)。
+
+**修正**: 各スクリプト自身は変更せず、UI統合層(`local_scan_server.py`)側で、SARIFを
+返す直前に後処理する形で直した。
+- `scan_sqli_lab_regression()`・`scan_detection_regression()`: 元の`item["title"]`
+  (`run_regression.py`/`run_detection_regression.py`自身が付けた、クラス名とパスを含む
+  説明)を`properties.title`に設定するよう変更。
+- `scan_log_check()`: `LOG_CHECK_LABELS`という新しい辞書(`#lc-script`のプルダウン選択肢と
+  同じ文言)を追加し、`properties.title`に設定。
+- CVEバージョン照合系8本: 共通ヘルパー`_run_version_check_script()`の中に
+  `_fill_missing_sarif_titles()`という後処理を追加し、`properties.title`が無い結果にだけ、
+  `message.text`の先頭1行(80字まで)を自動で補うようにした。
+
+**検証**: このサンドボックス内で、`node_version`・`sqli_lab_regression`・`log_check`の
+3エンドポイントを`curl`で実行し、`properties.title`が意味のある文字列になっていることを
+確認した。`tools/check_consistency.py`・`scripts/run_detection_regression.py`も再確認し、
+影響が無いことを確認した。
+
 ## English summary
 
 Adds `scripts/local_scan_server.py`, a small localhost-only companion HTTP server that lets
