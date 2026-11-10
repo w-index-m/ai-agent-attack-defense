@@ -70,6 +70,14 @@ python3 scripts/local_scan_server.py            # 既定ポート 8766
 python3 scripts/local_scan_server.py --port 9000
 ```
 
+Windowsでターミナルを開かずに起動したい場合は、リポジトリ直下の
+[`start-local-scan-server.bat`](../start-local-scan-server.bat)をダブルクリックする
+(既定ポート8766。別ポートで起動したい場合は、このファイルへのショートカットを作り、
+「リンク先」の末尾に半角スペース+ポート番号を追加する)。ブラウザからはJavaScriptの
+サンドボックス制約上、OSのプロセスを起動すること自体ができない(これが
+`local_scan_server.py`という橋渡し役が別プロセスとして必要な理由)ため、このサーバー
+自身の起動だけは、`.bat`ダブルクリックか、ターミナルでのコマンド実行のいずれかが必要。
+
 ブラウザで`vuln_triage.html`を開き、「1. 診断結果を取り込む」の「ローカルスキャナーを呼び出す」から
 各ボタンを押す。エンドポイントURL(既定`http://localhost:8766`)はこの端末のlocalStorageに保存される。
 
