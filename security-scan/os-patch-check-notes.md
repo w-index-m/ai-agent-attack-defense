@@ -60,6 +60,11 @@ Docker Desktop（Windows、WSL2 バックエンド）上で、2つの dnf 系デ
 HotFixを正しく取得し、SARIFへの書き出しに成功した(未適用0件、`--windows-pending`未指定の
 ため予期した結果)。これにより、スタブだけだったWindows側のHotFix取得・パース・SARIF変換の
 一連の流れが、本物のPowerShell出力に対して正しく動くことを実機で確認できた。
+生成した`os_patch_windows.sarif`を、実際のブラウザ(利用者自身のWindows PC)で
+`vuln_triage.html`に「ファイルを選ぶ」経由で読み込んだところ、7件すべてが正しく取り込まれ、
+重大度別件数(低: 7件)・KB番号を含む一覧(例: `KB5127694`)として表示されることを確認した。
+これにより、`vuln_triage.html`側のSARIF取り込み・表示も、ヘッドレスブラウザではなく実際の
+ブラウザ・実際のファイルで確認できた。
 
 **正直な限界**
 - `--windows-pending`(Windows Update API経由の未適用更新一覧)は、まだ実機で未確認。
