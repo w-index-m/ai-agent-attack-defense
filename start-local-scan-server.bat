@@ -1,11 +1,15 @@
 @echo off
-rem start-local-scan-server.bat: scripts\local_scan_server.py を、このファイルがある
-rem リポジトリのルートから起動する(ダブルクリック用)。ウィンドウはサーバーが動いて
-rem いる間ずっと開いたままになる(終了するにはCtrl+Cか、ウィンドウを閉じる)。
+rem start-local-scan-server.bat: double-click launcher for scripts\local_scan_server.py.
+rem Starts the server from this file's own folder (the repo root), keeping the window
+rem open while the server runs (stop with Ctrl+C, or just close the window).
 rem
-rem 使い方: このファイルをダブルクリックするだけ。
-rem 既定ポート以外を使いたい場合は、このファイルにショートカットを作り、「リンク先」の
-rem 末尾に半角スペース + ポート番号を追加する(例: ...\start-local-scan-server.bat 8767)。
+rem Usage: double-click this file. To use a non-default port, make a shortcut to this
+rem file and add a space + port number at the end of the shortcut's "Target" field
+rem (example: ...\start-local-scan-server.bat 8767).
+rem
+rem Note: this file is plain ASCII on purpose (no Japanese text) -- Windows cmd.exe can
+rem misread non-ASCII characters in a .bat file depending on the active code page,
+rem which then breaks command parsing (not just garbled text).
 
 cd /d "%~dp0"
 
@@ -17,13 +21,13 @@ if %errorlevel%==0 (
 )
 
 if "%~1"=="" (
-  echo local_scan_server.py を既定ポート(8766)で起動します...
+  echo Starting local_scan_server.py on the default port 8766 ...
   %PY% scripts\local_scan_server.py
 ) else (
-  echo local_scan_server.py をポート %1 で起動します...
+  echo Starting local_scan_server.py on port %1 ...
   %PY% scripts\local_scan_server.py --port %1
 )
 
 echo.
-echo サーバーが終了しました(エラーが出ている場合は、上のメッセージを確認してください)。
+echo The server has stopped. If you see an error above, check it for details.
 pause
