@@ -33,6 +33,16 @@ POSTする。
 | `POST /scan/multiproto` | `scripts/multi_proto_lite.py`(zgrab2が無くても使える軽量な代替)で、`module`で指定したプロトコル(ssh/ftp/telnet/smtp/redis/memcached/mysql/postgres/tls/mongodb/mssql/oracle/smb/rdp/snmp/mqtt/amqp/ipp/socks5/pptp/modbus)へ接続する | ボディに`i_own_these: true`が無いと一切実行しない。許可範囲判定はnetcheck/zgrab2と同じ。`port`省略時はモジュールごとの既定ポート。Python標準ライブラリのみで動く(TLSの証明書有効期限だけは`cryptography`パッケージが無いと省略される)。mssql/oracle/pptpは実機未検証(自作の模擬応答での自己テストのみ、結果に明示)。OT/ICSはModbus(読み取り専用コマンドのみ)だけに対応、他(DNP3/BACnet/Siemens等)は非対応。出力はzgrab2の各モジュールと互換の形式で返すため、GUI側はzgrab2として自動判別する |
 | `POST /scan/strix` | [usestrix/strix](https://github.com/usestrix/strix)のモックLLM版PoC(`strix-local-poc/`)を実行し、生成された`findings.sarif`を返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`STRIX_LOCAL_DIR`に、事前にclone・パッチ適用・`uv sync`済みのStrix作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneやパッチ適用は行わない)。対象(`targets`、既定`127.0.0.1`)は、netcheck/zgrab2と同じ許可範囲判定(`netcheck/config.json`)を通した1台のみ指定可。既定(127.0.0.1)の場合だけこのリポジトリ自身の`sqli-lab`デモアプリを自動起動し、それ以外を指定した場合は対象側であらかじめ同等のアプリを起動しておく必要がある |
 | `POST /scan/cairn` | [oritera/Cairn](https://github.com/oritera/Cairn)を、Dockerワーカー・LLMを使わず`CairnClient`で直接駆動し(`cairn-lab/run_real_scan.py`)、実際にSQLi認証バイパスを再現してCairnのFactとして記録、エクスポートしたFactをSARIF形式に変換して返す | ボディに`i_own_these: true`が無いと一切実行しない。環境変数`CAIRN_LOCAL_DIR`に、事前にclone・`uv sync --project cairn`済みのCairn作業コピーのパスを設定しておく必要がある(このエンドポイント自身は第三者リポジトリのcloneは行わない)。対象(`targets`、既定`127.0.0.1`)はStrixと同じ許可範囲判定・1台のみ。Cairnの実ディスパッチャ(`cairn dispatch`)は使わない(下記「なぜディスパッチャを使わないか」参照) |
+| `POST /scan/os_patch` | `platform.system()`でこのサーバーを起動しているOSを自動判別し、`scripts/os_patch_check_linux.py`または`scripts/os_patch_check_windows.py`を実行 | 対象はこのPC自身に固定。RHEL系以外のLinux(`dnf`が無い環境)では、その旨のエラーをそのまま返す(2026-11-10追記参照) |
+| `POST /scan/node_version` | `scripts/node_version_check.py`(R25) | 対象はこのPC自身に固定。Node.js未インストールでもエラーにはならず「見つからない」という結果になる |
+| `POST /scan/python_brotli` | `scripts/python_brotli_check.py`(R24) | 同上 |
+| `POST /scan/php_version` | `scripts/php_version_check.py`(R15) | 同上 |
+| `POST /scan/bind_version` | `scripts/bind_version_check.py`(R22) | 同上(ローカルモードのみ。ネットワーク問い合わせは行わない) |
+| `POST /scan/f5_bigip_apm` | `scripts/f5_bigip_apm_check.py`(R23) | 同上(既定のログ/ディレクトリパスのみ参照。F5実機が無い一般的なPCでは「見つからない」という結果になる) |
+| `POST /scan/java_cacerts_emudhra` | `scripts/java_cacerts_emudhra_check.py`(R14) | 同上(ローカルのJava cacertsのみ参照) |
+| `POST /scan/linux_kernel_cve202698432` | `scripts/linux_kernel_cve202698432_check.py`(R26) | 同上(`--dmesg`等のログ確認オプションは付けず、バージョン判定のみ) |
+| `POST /scan/linux_kernel_infinitycore` | `scripts/linux_kernel_infinitycore_check.py`(R21) | 同上 |
+| `POST /scan/sqli_lab_regression` | `security-scan/sqli-lab/run_regression.py`を実行し、`vulnerable_app.py`を自動起動して19クラス38パターンを検証。出力(`sqli_lab.json`と同じ配列形式)はSARIF形式に変換してから返す | 「このリポジトリの脆弱性」ではなく「ラボ自身の検出スクリプトが壊れていないか」の確認。対象欄は使わない |
 
 どのツールも、生のJSON出力をそのまま返す（加工しない）。ページ側は、既存の`addJson()`（貼り付け/
 ファイル読み込みと同じ関数）にそのまま渡すので、解析ロジックは一本化されている。`strix`が返す
@@ -567,6 +577,39 @@ HTMLを含む回答を返す)とPlaywrightで、次を確認した。
   (`window.__xss`は未定義のまま、`#llm-ans`配下にimg/scriptノードは生成されない)、ページエラー0件。
 - 確認環境: Linux(このサンドボックス)+偽のLLM。変更後の版を実機(Windows+Ollama)で動かす確認は
   まだ(ロジックは実ブラウザで確認済み)。
+
+### CVEバージョン照合系・OS更新確認・sqli-lab回帰テストをボタン化(2026-11-10)
+
+**きっかけ**: 利用者が実機(Windows PC)で`node_version_check.py`・`netcheck.py`・
+`os_patch_check_windows.py`をCLIで直接実行して実機確認を進めていたところ、「このスクリプトを
+理解しないで(コマンドの意味が分からなくても)実行したい」という要望があり、`vuln_triage.html`の
+ボタン経由で実行・自動取り込みできるようにした。
+
+**UI統合の方針(ルール化)**: `verification-gates.md`のGate 0〜3は「検知の主張がどれだけ
+正しいと裏付けられているか」という**正確性の証拠の強さ**の軸であり、「ボタン1つで実行・
+自動解析まで統合されているか」という**使いやすさ/アクセシビリティ**の軸とは独立している
+(Gate 3まで裏取り済みでも、CLIでしか動かせないツールは多い)。そのため、UI統合状況は
+Gate 0〜3の延長(「Gate 4」)としてではなく、**別軸**としてこの節で管理する。
+
+- 対象の選び方: Gate 2以上に到達済みで、かつ「対象への能動的な攻撃」を伴わない
+  (確認専用・このPC自身が対象)スクリプトから優先的にボタン化する。
+- 今回ボタン化したもの: OS更新確認(`os_patch_check_linux.py`/`os_patch_check_windows.py`、
+  `platform.system()`で自動判別)・Node.js(R25)・Python brotli(R24)・PHP(R15)・
+  BIND(R22)・F5 BIG-IP APM(R23)・Java cacerts(R14)・Linuxカーネル×2(R21・R26)・
+  sqli-labの回帰テスト(`run_regression.py`)の計10エンドポイント。いずれも「まとめて実行」
+  にも追加済み。
+- 実装方式: 各CVEバージョン照合スクリプトは元々`--out`でSARIFを書き出せる設計だったため、
+  共通ヘルパー`_run_version_check_script()`(`[python, script.py, --out, tmp.sarif]`を実行し
+  てSARIFを読むだけ)で統一的に扱える。`sqli-lab/run_regression.py`だけは独自のJSON配列形式
+  (`sqli_lab.json`と同じ)を返すため、`scan_sqli_lab_regression()`内でSARIF形状に変換してから
+  返している。
+- フロント側は、既存の`data-tool="X"`属性による汎用クリックハンドラ(`POST /scan/X`へ空ボディで
+  送るだけ)にそのまま乗せられたため、`vuln_triage.html`側の新規JSコードはボタン追加のみで済んだ。
+- **検証**: このサンドボックス内で、10エンドポイントすべてを`local_scan_server.py`経由で
+  `curl`実行し、OS更新確認(Linux側、`dnf`が無い環境でのエラー表示を含む)以外の9件が正しく
+  結果(SARIF)を返すことを確認した。`os_patch`はWindows側の自動判別ロジック自体はコードレビュー
+  で確認済みだが、このサンドボックスはLinux(`dnf`無し)のため、Windows側の分岐は実機
+  (利用者のPC)でのボタン経由の確認がまだ。
 
 ## English summary
 

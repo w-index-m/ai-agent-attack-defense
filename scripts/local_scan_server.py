@@ -28,6 +28,7 @@ import http.server
 import importlib.util
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -218,6 +219,110 @@ def scan_dep_cve():
                 "stderr": err[-2000:]}
     with open(out_path, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _run_version_check_script(script_name, extra_args=None):
+    """node_version_check.py等の「確認だけ・--outでSARIFを書き出す」版スクリプトに共通の
+    呼び出し方。このホスト(local_scan_server.pyを起動したPC自身)に対して実行する。
+    スクリプト自身がコマンド不在等を検知済み/未検出として扱うため、ここでは常に結果SARIFを
+    返す(「見つからなかった」ことも、確認結果の1つとして扱う。他のボタンと同じ設計)。"""
+    out_path = os.path.join(RESULTS_DIR, "%s.sarif" % script_name)
+    cmd = [sys.executable, "-I", os.path.join(HERE, "%s.py" % script_name), "--out", out_path]
+    cmd += extra_args or []
+    rc, _out, err = _run(cmd, cwd=REPO_ROOT)
+    if not os.path.exists(out_path):
+        return {"error": "%s の結果ファイルができませんでした。" % script_name, "returncode": rc,
+                "stderr": err[-2000:]}
+    with open(out_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def scan_os_patch():
+    """このホスト自身のOS更新状態を確認する。OSごとに別スクリプト
+    (os_patch_check_linux.py / os_patch_check_windows.py)があるため、
+    platform.system()でこのサーバーが動いているOSを判定し、該当する方を実行する
+    (利用者がボタンを押すだけで、OSを意識せず使えるようにするため)。"""
+    system = platform.system()
+    if system == "Windows":
+        return _run_version_check_script("os_patch_check_windows")
+    if system == "Linux":
+        return _run_version_check_script("os_patch_check_linux")
+    return {"error": "os_patch_check は Linux(RHEL系)とWindowsのみ対応です(検出したOS: %s)。" % system}
+
+
+def scan_node_version():
+    return _run_version_check_script("node_version_check")
+
+
+def scan_python_brotli():
+    return _run_version_check_script("python_brotli_check")
+
+
+def scan_php_version():
+    return _run_version_check_script("php_version_check")
+
+
+def scan_bind_version():
+    return _run_version_check_script("bind_version_check")
+
+
+def scan_f5_bigip_apm():
+    return _run_version_check_script("f5_bigip_apm_check")
+
+
+def scan_java_cacerts_emudhra():
+    return _run_version_check_script("java_cacerts_emudhra_check")
+
+
+def scan_linux_kernel_cve202698432():
+    return _run_version_check_script("linux_kernel_cve202698432_check")
+
+
+def scan_linux_kernel_infinitycore():
+    return _run_version_check_script("linux_kernel_infinitycore_check")
+
+
+_SQLI_LAB_SEVERITY_TO_LEVEL = {"critical": "error", "high": "error", "medium": "warning", "low": "note"}
+
+
+def scan_sqli_lab_regression():
+    """sqli-lab自身の回帰テスト(run_regression.py)を実行する。対象は、このリポジトリの
+    意図的に脆弱なデモアプリ(sqli-lab/vulnerable_app.py)で、vulnerable_app.py自身を
+    ローカルに自動起動してから検証し、終了後に止める(run_regression.py自身の設計)。
+    『このリポジトリの脆弱性』ではなく『ラボ自身の検出スクリプトが壊れていないか』の確認
+    (詳細: sqli-lab/README.ja.mdのTODOセクション)。出力はrun_regression.py独自の
+    JSON配列(sqli_lab.json形式)のため、他のボタンと同じSARIF形式に変換してから返す。"""
+    out_path = os.path.join(RESULTS_DIR, "sqli_lab_regression.json")
+    lab_dir = os.path.join(REPO_ROOT, "security-scan", "sqli-lab")
+    cmd = [sys.executable, os.path.join(lab_dir, "run_regression.py"), "--out", out_path]
+    rc, _out, err = _run(cmd, cwd=lab_dir, timeout=120)
+    if not os.path.exists(out_path):
+        return {"error": "sqli-lab/run_regression.py の結果ファイルができませんでした。",
+                "returncode": rc, "stderr": err[-2000:]}
+    with open(out_path, encoding="utf-8") as f:
+        findings = json.load(f)
+    results = []
+    for item in findings:
+        sev = str(item.get("severity", "high")).lower()
+        results.append({
+            "ruleId": "sqli_lab_regression",
+            "level": _SQLI_LAB_SEVERITY_TO_LEVEL.get(sev, "warning"),
+            "message": {"text": "%s: %s" % (item.get("title", ""), item.get("detail", ""))},
+            "locations": [{"physicalLocation": {"artifactLocation": {"uri": str(item.get("location", ""))}}}],
+            "properties": {"severityLabel": sev},
+        })
+    return {
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {"driver": {"name": "sqli_lab_regression",
+                                "informationUri": "https://github.com/w-index-m/ai-agent-attack-defense"}},
+            "results": results,
+        }],
+        "_skip_reason": ("" if findings else
+                          "sqli-labの全クラスが正しく分類されました(回帰なし)。これは"
+                          "『このリポジトリの脆弱性が無い』ではなく、『ラボ自身の検出スクリプトが"
+                          "壊れていない』ことの確認です。"),
+    }
 
 
 _ARTEX_RESULT_LINE = re.compile(r"^(OK|NG)\s+(.*)$")
@@ -777,6 +882,16 @@ ROUTES = {
     "/scan/gitleaks": lambda body: scan_gitleaks(),
     "/scan/dep_cve": lambda body: scan_dep_cve(),
     "/scan/artex_pattern": lambda body: scan_artex_pattern(),
+    "/scan/os_patch": lambda body: scan_os_patch(),
+    "/scan/node_version": lambda body: scan_node_version(),
+    "/scan/python_brotli": lambda body: scan_python_brotli(),
+    "/scan/php_version": lambda body: scan_php_version(),
+    "/scan/bind_version": lambda body: scan_bind_version(),
+    "/scan/f5_bigip_apm": lambda body: scan_f5_bigip_apm(),
+    "/scan/java_cacerts_emudhra": lambda body: scan_java_cacerts_emudhra(),
+    "/scan/linux_kernel_cve202698432": lambda body: scan_linux_kernel_cve202698432(),
+    "/scan/linux_kernel_infinitycore": lambda body: scan_linux_kernel_infinitycore(),
+    "/scan/sqli_lab_regression": lambda body: scan_sqli_lab_regression(),
     "/scan/netcheck": lambda body: scan_netcheck(body),
     "/scan/zgrab2": lambda body: scan_zgrab2(body),
     "/scan/httplite": lambda body: scan_httplite(body),
