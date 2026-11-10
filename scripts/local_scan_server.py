@@ -41,6 +41,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(HERE)
 RESULTS_DIR = os.path.join(REPO_ROOT, "results", "local-scan")
 TIMEOUT_SEC = 300
+# local_scan_selfcheck.py --url の既定値と合わせるための、このサーバー自身の待ち受けポート。
+# main()が--portを解釈した時点で上書きする(既定 8766)。
+SERVER_PORT = 8766
 # sqli-labデモアプリ(vulnerable_app.py)の既定ポート。環境変数VULN_APP_PORTで変更できる
 # (例: Windowsでウイルス対策ソフト等が5000/5001番を常時専有している場合の回避策)。
 # vulnerable_app.py自身も同じ環境変数を見るので、起動時に渡す環境にも含めておけば一致する。
@@ -322,6 +325,124 @@ def scan_sqli_lab_regression():
                           "sqli-labの全クラスが正しく分類されました(回帰なし)。これは"
                           "『このリポジトリの脆弱性が無い』ではなく、『ラボ自身の検出スクリプトが"
                           "壊れていない』ことの確認です。"),
+    }
+
+
+def scan_detection_regression():
+    """scripts/run_detection_regression.pyを実行する。R1-R32系・CVEバージョン照合系の
+    検知スクリプト自身(このリポジトリのコードそのもの)が、同梱の合成ログ(陽性/陰性)に対して
+    壊れていないかの回帰テスト(CIのscanジョブと同じもの)。出力(detection_regression.json
+    と同じJSON配列形式)をSARIF形式に変換してから返す。"""
+    out_path = os.path.join(RESULTS_DIR, "detection_regression.json")
+    cmd = [sys.executable, "-I", os.path.join(HERE, "run_detection_regression.py"), "--out", out_path]
+    rc, _out, err = _run(cmd, cwd=REPO_ROOT, timeout=120)
+    if not os.path.exists(out_path):
+        return {"error": "scripts/run_detection_regression.py の結果ファイルができませんでした。",
+                "returncode": rc, "stderr": err[-2000:]}
+    with open(out_path, encoding="utf-8") as f:
+        findings = json.load(f)
+    results = []
+    for item in findings:
+        sev = str(item.get("severity", "high")).lower()
+        results.append({
+            "ruleId": "detection_regression",
+            "level": _SQLI_LAB_SEVERITY_TO_LEVEL.get(sev, "warning"),
+            "message": {"text": "%s: %s" % (item.get("title", ""), item.get("detail", ""))},
+            "locations": [{"physicalLocation": {"artifactLocation": {"uri": str(item.get("location", ""))}}}],
+            "properties": {"severityLabel": sev},
+        })
+    return {
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {"driver": {"name": "detection_regression",
+                                "informationUri": "https://github.com/w-index-m/ai-agent-attack-defense"}},
+            "results": results,
+        }],
+        "_skip_reason": ("" if findings else
+                          "検知スクリプト18本が、合成ログの陽性/陰性入力をすべて正しく分類しました"
+                          "(回帰なし)。"),
+    }
+
+
+def scan_local_selfcheck():
+    """scripts/local_scan_selfcheck.pyを実行する。local_scan_server.py自身・対応する
+    外部コマンド(Semgrep/Trivy/gitleaks等)の有無・ポートの状態を自己診断する。確認専用。"""
+    cmd = [sys.executable, "-I", os.path.join(HERE, "local_scan_selfcheck.py"),
+           "--url", "http://127.0.0.1:%d" % SERVER_PORT]
+    rc, out, err = _run(cmd, cwd=REPO_ROOT, timeout=60)
+    text = (out or b"").decode("utf-8", "replace")
+    # local_scan_selfcheck.pyは--out未対応でJSONではなく読みやすいテキストの要約を標準出力に
+    # 出す設計のため、そのまま1件のSARIF結果として返す(ボタンを押すだけで画面に出ることを優先)。
+    return {
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {"driver": {"name": "local_selfcheck",
+                                "informationUri": "https://github.com/w-index-m/ai-agent-attack-defense"}},
+            "results": [{
+                "ruleId": "local_selfcheck",
+                "level": "note" if rc == 0 else "warning",
+                "message": {"text": text[-3000:] or err[-3000:] or "(出力なし)"},
+                "locations": [{"physicalLocation": {"artifactLocation": {"uri": "local_scan_selfcheck"}}}],
+            }],
+        }],
+    }
+
+
+# R1-R32系の「ログファイルを読むだけ」のスクリプト。script名 -> 追加のCLI引数(既定のままで
+# 良いものが大半なので、ほぼ空リスト)。どれも標準で --log-path を受け取り、終了コード
+# 0(ヒット無し)/1(ヒット有り)/2(読み取り失敗)を返す(--outでSARIFを書き出す上の版とは別方式)。
+LOG_CHECK_SCRIPTS = {
+    "proxy_egress_check": [],       # R1・R4・R9・R10・R31
+    "web_recon_burst_check": [],    # R3・R18・R19
+    "dns_water_torture_check": [],  # R12
+    "container_privilege_check": [],  # R2
+    "file_event_check": [],         # R5・R8(設置側)・R20・R28
+    "process_tool_check": [],       # R6・R7・R8(起動側)
+    "jndi_rce_check": [],           # R29
+    "auth_proxy_rotation_check": [],  # R30
+    "github_workflow_leak_check": [],  # R27
+    "memory_poisoning_check": [],   # R32
+}
+
+
+def scan_log_check(body):
+    """R1-R32系の「ログファイルを読むだけ」のスクリプトを、利用者が指定した実際のログ
+    ファイルに対して実行する。他のボタンと違い、対象はこのPC自身の状態ではなく、利用者が
+    明示的に指定したローカルのログファイル1つ(このサーバー自身がローカルでしか待ち受けない
+    のと同じ理由で、パスで指定された任意のローカルファイルを読む設計。外部には一切送信しない)。"""
+    script = body.get("script")
+    if script not in LOG_CHECK_SCRIPTS:
+        return {"error": "scriptは次のいずれかを指定してください: %s" % ", ".join(sorted(LOG_CHECK_SCRIPTS))}
+    log_path = (body.get("log_path") or "").strip()
+    if not log_path:
+        return {"error": "ログファイルのパスを指定してください。"}
+    if not os.path.isfile(log_path):
+        return {"error": "指定されたログファイルが見つかりません: %s" % log_path}
+
+    cmd = [sys.executable, "-I", os.path.join(HERE, "%s.py" % script), "--log-path", log_path]
+    cmd += LOG_CHECK_SCRIPTS[script]
+    rc, out, err = _run(cmd, cwd=REPO_ROOT, timeout=120)
+    text = (out or b"").decode("utf-8", "replace")
+    if rc not in (0, 1):
+        return {"error": "%s の実行に失敗しました(終了コード%s)。" % (script, rc),
+                "returncode": rc, "stderr": err[-2000:]}
+
+    results = []
+    if rc == 1:
+        results.append({
+            "ruleId": script,
+            "level": "warning",
+            "message": {"text": text[-5000:] or "(ヒットしましたが出力がありませんでした)"},
+            "locations": [{"physicalLocation": {"artifactLocation": {"uri": log_path}}}],
+        })
+    return {
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {"driver": {"name": script,
+                                "informationUri": "https://github.com/w-index-m/ai-agent-attack-defense"}},
+            "results": results,
+        }],
+        "_skip_reason": "" if rc == 1 else ("%s: 該当するパターンは見つかりませんでした。" % script),
     }
 
 
@@ -892,6 +1013,9 @@ ROUTES = {
     "/scan/linux_kernel_cve202698432": lambda body: scan_linux_kernel_cve202698432(),
     "/scan/linux_kernel_infinitycore": lambda body: scan_linux_kernel_infinitycore(),
     "/scan/sqli_lab_regression": lambda body: scan_sqli_lab_regression(),
+    "/scan/detection_regression": lambda body: scan_detection_regression(),
+    "/scan/local_selfcheck": lambda body: scan_local_selfcheck(),
+    "/scan/log_check": lambda body: scan_log_check(body),
     "/scan/netcheck": lambda body: scan_netcheck(body),
     "/scan/zgrab2": lambda body: scan_zgrab2(body),
     "/scan/httplite": lambda body: scan_httplite(body),
@@ -901,6 +1025,15 @@ ROUTES = {
 }
 
 _LOCK = threading.Lock()  # 一度に1つのスキャンだけ(同じツールの結果ファイルを使い回すため)
+
+
+class _NullLock:
+    """_LOCKを取らないエンドポイント(local_selfcheck)用の、何もしないコンテキストマネージャ。"""
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -970,7 +1103,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except Exception as e:  # noqa
             return self._send(500, {"error": "監査ログ(%s)に書き込めないため、実行しません: %s" % (AUDIT_PATH, e)})
         t0 = time.monotonic()
-        with _LOCK:
+        # /scan/local_selfcheckは、このサーバー自身へ(/health・/scan/netcheck・/scan/httplite等)
+        # 別のHTTPリクエストとして問い合わせる設計(local_scan_selfcheck.py自身の挙動)。それらの
+        # 先がここと同じ_LOCKを取ろうとするため、ここで_LOCKを取ったままだとデッドロックする。
+        # この1エンドポイントだけ_LOCKの対象から外す(実行する処理自体は他のスキャンを起動しない、
+        # 読み取り専用の自己診断のため、同時実行による競合の実害も無い)。
+        use_lock = self.path != "/scan/local_selfcheck"
+        lock_ctx = _LOCK if use_lock else _NullLock()
+        with lock_ctx:
             try:
                 result = ROUTES[self.path](body)
             except Exception as e:  # noqa
@@ -987,11 +1127,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 def main():
-    global AUDIT_PATH
+    global AUDIT_PATH, SERVER_PORT
     ap = argparse.ArgumentParser(description="vuln_triage.html から、このリポジトリ自身を対象に"
                                               "各診断ツールを実際に呼び出す、ローカル専用の補助サーバー")
     ap.add_argument("--port", type=int, default=8766, help="待ち受けポート(既定 8766)")
     a = ap.parse_args()
+    SERVER_PORT = a.port
     os.makedirs(RESULTS_DIR, exist_ok=True)
     if a.port != 8766:
         # 2つ目のサーバー(例: WSL2でStrix用に8767で起動)が同じ作業フォルダを使うと、同じ監査ログへ
