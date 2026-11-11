@@ -21,6 +21,17 @@ English: [`llm-defense-checklist.en.md`](llm-defense-checklist.en.md)
 - [ ] エージェントのプロセスから、**想定外の子プロセスが起動していないか**を監視している（R7/R8 と同じ発想）。
 - [ ] MCP サーバーなど、**外部から指示を受け取る経路**（カスタム指示、プラグイン設定など）に、変更の監査ログがある（G1・G4）。
 
+> **実例：許可リストの無い CLI ラッパー型 MCP サーバー（ffuf-mcp、2026-11 確認）**
+>
+> `cyproxio/mcp-for-security`（2026年3月アーカイブ、後継は `cyberstrikeus/bolt`）の `ffuf-mcp/src/index.ts` は、
+> `do-ffuf` という単一ツールを公開し、`url`（zod で URL 形式のみ検証）と `ffuf_args`（文字列配列、**内容は無検証**）を
+> 受け取って `spawn("ffuf", ["-u", url, ...ffuf_args])` を実行する。シェルを経由しない `spawn` を使っている点は良い
+> 設計だが、`ffuf_args` にどんな ffuf オプションでも素通りするため、ffuf 自身が持つ `-input-cmd`（**任意のシェル
+> コマンドを実行するオプション**）や `-input-shell` をそのまま渡せてしまい、**プロンプトインジェクション一つで
+> ホスト上の任意コマンド実行につながる**。上の「ツール呼び出しが許可リスト化されており」の項目が、個々のツール
+> だけでなく**ツールに渡す引数の中身**にも及ぶべき理由を示す実例。このリポジトリの `scripts/local_scan_server.py`
+> は対照的に、呼べるスクリプト・引数を `LOG_CHECK_SCRIPTS` のような辞書で固定し、任意引数を受け付けない設計。
+
 ## B. システムプロンプトの漏洩
 
 - [ ] システムプロンプトに、**認証情報・内部 URL・他のユーザーの情報など、漏れて困るものを書いていない**。
@@ -51,6 +62,7 @@ English: [`llm-defense-checklist.en.md`](llm-defense-checklist.en.md)
 - このリポジトリの既存ツールとの対応：
   - A（ファイルパスの検証、許可リスト）→ 自分のコードの確認は `patch_suggest.py`、`vuln_triage.html`（Semgrep の取り込み）
   - A（監査ログの有無）→ G1・G4 の考え方（`defense-detection-notes.md` §7）
+  - A（ツール引数の許可リスト）→ `scripts/local_scan_server.py` の `LOG_CHECK_SCRIPTS`（固定引数のみ許可）と、上記 ffuf-mcp の実例を対比
   - D（認証情報の棚卸し）→ `gitleaks`（CI）
   - D（クラウドの IAM の最小権限）→ Gambit 連鎖⑥の対策（`defense-playbook.ja.md`）と同じ
 
