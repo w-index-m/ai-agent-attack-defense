@@ -804,3 +804,30 @@ history already established; and, by code review, that the subprocess timeout / 
 `results[].ruleId|message|locations|level` shape already confirmed for Strix's real output in
 `strix-local-backend-notes.md`'s 検証5). Full verification needs a machine that can actually reach
 GitHub to prepare a patched Strix checkout.
+
+### sqli-labの回帰テストが実機(Windows)で大量誤検知: ポート5000/5001固定が原因(2026-11-11)
+
+ユーザーが実機のWindows PCで「sqli-labの回帰テストを実行」ボタンを押したところ、19クラス全体で
+大量の誤判定(安全なパスまで「脆弱」と判定される等)が発生した。原因は`run_regression.py`が
+`vulnerable_app.py`を起動する際のポートを環境変数`VULN_APP_PORT`/`VULN_INTERNAL_PORT`が未設定
+なら常に`5000`/`5001`固定で使っていたこと。Windows機ではHyper-V/WSL2が動的ポート範囲を予約して
+いたり、他の常駐ソフトが同じポートを使っていたりすることが珍しくなく、その場合`vulnerable_app.py`
+の起動自体は成功する(別プロセスが握っているポートにbindしようとしてエラーになるか、意図しない
+別サービスに接続してしまう)ため、回帰テストの各リクエストが想定外の相手に届き、結果が軒並み
+おかしくなる。これまでの回避策はユーザーが`$env:VULN_APP_PORT="5100"`を手動で設定することだったが、
+「普通に使っていれば発生しない」ようにしてほしいという要望を受け、自動化した。
+
+修正(`security-scan/sqli-lab/run_regression.py`): `VULN_APP_PORT`が環境変数として明示的に設定
+されておらず、かつ`--no-start-app`(既存アプリに接続するモード)でもない場合、OSに2つの空きTCP
+ポートを選んでもらい(`socket.bind(("127.0.0.1", 0))`)、`VULN_APP_PORT`/`VULN_INTERNAL_PORT`に
+設定してから`vulnerable_app.py`を起動する。ユーザーが明示的に環境変数を設定した場合や
+`--no-start-app`を使う場合は、従来どおりその値(未設定なら`5000`/`5001`)を使う。
+
+ハマった点: `auto_vuln_scanner.py`はSSRFテスト用の攻撃ペイロード(`VULN_INTERNAL_PORT`を埋め込んだ
+URL)を**モジュール読み込み時に**`os.environ`から一度だけ読んで固定する設計だった。最初の実装では
+ポート選択を`main()`関数の中(`run_regression.py`の`from auto_vuln_scanner import ...`より後)で
+行ったため、`auto_vuln_scanner`は古いデフォルト値`5001`のままペイロードを組み立ててしまい、実際に
+起動した`vulnerable_app.py`(新しいランダムポート)とズレてSSRFテストだけが毎回失敗した。修正は、
+ポート選択のコードを`auto_vuln_scanner`/`session_vuln_check`をimportするより前(モジュールの先頭)
+に移動すること。サンドボックスで3回連続実行し、毎回別々のポートが選ばれつつ19クラス38パターン
+すべて正しく判定されることを確認した。

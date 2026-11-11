@@ -27,12 +27,36 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+
+def _two_free_ports() -> tuple[int, int]:
+    """空いているTCPポートを2つ選んで返す(OSに割り当てさせる)。Windows実機でよく
+    起きる「ポート5000/5001が別のソフト(Hyper-V/WSLの予約範囲や他のWebサーバー等)に
+    使われていて、vulnerable_app.pyの起動自体は成功するが接続先がずれて誤判定になる」
+    という問題を、ユーザーが毎回VULN_APP_PORTを手動設定しなくても避けられるようにする。
+    2つのソケットを同時にbindしたまま取得することで、同じポートが重複しないようにする。"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s1, \
+            socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s2:
+        s1.bind(("127.0.0.1", 0))
+        s2.bind(("127.0.0.1", 0))
+        return s1.getsockname()[1], s2.getsockname()[1]
+
+
+# ポートを自動選択するのは、(a) VULN_APP_PORTが明示指定されておらず、かつ
+# (b) このプロセス自身がvulnerable_app.pyを起動する場合(--no-start-appでない)
+# の時だけ。auto_vuln_scanner.pyがモジュール読み込み時にVULN_INTERNAL_PORTを
+# 読むため、このimportより前に環境変数を確定させる必要がある。
+if "VULN_APP_PORT" not in os.environ and "--no-start-app" not in sys.argv:
+    _app_port, _internal_port = _two_free_ports()
+    os.environ["VULN_APP_PORT"] = str(_app_port)
+    os.environ.setdefault("VULN_INTERNAL_PORT", str(_internal_port))
 
 import requests
 
