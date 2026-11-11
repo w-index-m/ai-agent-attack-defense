@@ -167,11 +167,15 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
       </div>
       <div class="row" id="scan-buttons" style="margin-top:6px">
         <button type="button" class="primary" id="run-all">まとめて実行(netcheck→依存関係→ARTEXパターン→OS更新→各種バージョン確認→gitleaks→Trivy→Semgrep)</button>
+
+        <span class="note" style="width:100%;margin-top:10px">コード診断(このリポジトリ自身)</span>
         <button type="button" data-tool="semgrep">Semgrepを実行</button>
         <button type="button" data-tool="trivy">Trivyを実行</button>
         <button type="button" data-tool="gitleaks">gitleaksを実行</button>
         <button type="button" data-tool="dep_cve">依存関係の脆弱性を確認(dep_cve_check)</button>
         <button type="button" data-tool="artex_pattern">ARTEXパターン(R29/R30/R31)を確認</button>
+
+        <span class="note" style="width:100%;margin-top:10px">このPC自身の確認(OS更新・CVEバージョン照合)</span>
         <button type="button" data-tool="os_patch">OS更新状態を確認(Linux/Windows自動判別)</button>
         <button type="button" data-tool="node_version">Node.jsのバージョンを確認(R25)</button>
         <button type="button" data-tool="python_brotli">Pythonのbrotliパッケージを確認(R24)</button>
@@ -180,13 +184,19 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
         <button type="button" data-tool="java_cacerts_emudhra">Javaのcacertsを確認(R14)</button>
         <button type="button" data-tool="linux_kernel_cve202698432">Linuxカーネルを確認(R26)</button>
         <button type="button" data-tool="linux_kernel_infinitycore">Linuxカーネル(Infinity Core)を確認(R21)</button>
+
+        <span class="note" style="width:100%;margin-top:10px">このリポジトリ自身の検知スクリプトの検証</span>
         <button type="button" data-tool="sqli_lab_regression">sqli-labの回帰テストを実行(19クラス38パターン)</button>
         <button type="button" data-tool="detection_regression">検知スクリプトの回帰テストを実行(18本)</button>
         <button type="button" data-tool="local_selfcheck">このPCの自己診断(local_scan_selfcheck)</button>
+
+        <span class="note" style="width:100%;margin-top:10px">対象への確認(netcheck・zgrab2等)</span>
         <button type="button" id="nc-run">netcheckを実行</button>
         <button type="button" id="zg-run">zgrab2を実行</button>
         <button type="button" id="hl-run">HTTPバナー取得(軽量・zgrab2不要)</button>
         <button type="button" id="mp-run">追加プロトコルを確認(軽量)</button>
+
+        <span class="note" style="width:100%;margin-top:10px">エージェントシミュレーション(能動的な攻撃実行)</span>
         <button type="button" id="strix-run">Strixを実行(数分かかることがあります)</button>
         <button type="button" id="cairn-run">Cairnを実行</button>
       </div>
