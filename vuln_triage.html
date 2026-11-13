@@ -166,39 +166,47 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
         <label>ポート(空欄で既定値)<input class="f" id="mp-port" placeholder="例: 22" inputmode="numeric"></label>
       </div>
       <div class="row" id="scan-buttons" style="margin-top:6px">
-        <button type="button" class="primary" id="run-all">まとめて実行(netcheck→依存関係→ARTEXパターン→OS更新→各種バージョン確認→gitleaks→Trivy→Semgrep)</button>
+        <button type="button" class="primary" id="run-all" title="対象への能動的なスキャン(zgrab2・Strix・Cairn等)を含まない、読み取り専用の確認だけを順番にまとめて実行する(netcheckは127.0.0.1自身への受動確認)">まとめて実行(netcheck→依存関係→ARTEXパターン→OS更新→各種バージョン確認→gitleaks→Trivy→Semgrep)</button>
 
         <span class="note" style="width:100%;margin-top:10px">コード診断(このリポジトリ自身)</span>
-        <button type="button" data-tool="semgrep">Semgrepを実行</button>
-        <button type="button" data-tool="trivy">Trivyを実行</button>
-        <button type="button" data-tool="gitleaks">gitleaksを実行</button>
-        <button type="button" data-tool="dep_cve">依存関係の脆弱性を確認(dep_cve_check)</button>
-        <button type="button" data-tool="artex_pattern">ARTEXパターン(R29/R30/R31)を確認</button>
+        <button type="button" data-tool="semgrep" title="このリポジトリ自身のコードを静的解析(SAST)で確認する">Semgrepを実行</button>
+        <button type="button" data-tool="gitleaks" title="このリポジトリ自身のコードに秘密情報(APIキー等)が含まれていないか確認する">gitleaksを実行</button>
+        <button type="button" data-tool="artex_pattern" title="R29/R30/R31の検知ロジックを、1つの最小アプリで動かして確認する(ポート80の待ち受けに管理者/root権限が必要)">ARTEXパターン(R29/R30/R31)を確認</button>
 
-        <span class="note" style="width:100%;margin-top:10px">このPC自身の確認(OS更新・CVEバージョン照合)</span>
-        <button type="button" data-tool="os_patch">OS更新状態を確認(Linux/Windows自動判別)</button>
-        <button type="button" data-tool="node_version">Node.jsのバージョンを確認(R25)</button>
-        <button type="button" data-tool="python_brotli">Pythonのbrotliパッケージを確認(R24)</button>
-        <button type="button" data-tool="php_version">PHPのバージョンを確認(R15)</button>
-        <button type="button" data-tool="bind_version">BINDのバージョンを確認(R22)</button>
-        <button type="button" data-tool="java_cacerts_emudhra">Javaのcacertsを確認(R14)</button>
-        <button type="button" data-tool="linux_kernel_cve202698432">Linuxカーネルを確認(R26)</button>
-        <button type="button" data-tool="linux_kernel_infinitycore">Linuxカーネル(Infinity Core)を確認(R21)</button>
+        <span class="note" style="width:100%;margin-top:10px">脆弱性調査(既知のCVE・バージョンを確認)</span>
+        <button type="button" data-tool="trivy" title="このリポジトリ自身の依存関係・コンテナイメージを既知の脆弱性(CVE)データベースと照合する">Trivyを実行</button>
+        <button type="button" data-tool="dep_cve" title="requirements.txt・pom.xml等をOSV.devに照合する(このリポジトリは標準ライブラリのみで動くため通常は対象ファイルが無く0件)">依存関係の脆弱性を確認(dep_cve_check)</button>
+        <button type="button" data-tool="os_patch" title="local_scan_server.pyを起動しているこのPC自身のOSを自動判別し、適用済み更新を確認する">OS更新状態を確認(Linux/Windows自動判別)</button>
+        <button type="button" data-tool="node_version" title="このPC自身にインストールされているNode.jsのバージョンをCVEデータベースと照合する(未インストールでもエラーにはならない)">Node.jsのバージョンを確認(R25)</button>
+        <button type="button" data-tool="python_brotli" title="このPC自身のPython brotliパッケージのバージョンを確認する(未インストールでもエラーにはならない)">Pythonのbrotliパッケージを確認(R24)</button>
+        <button type="button" data-tool="php_version" title="このPC自身のPHPのバージョンを確認する(未インストールでもエラーにはならない)">PHPのバージョンを確認(R15)</button>
+        <button type="button" data-tool="bind_version" title="このPC自身のBINDのバージョンを確認する(未インストールでもエラーにはならない)">BINDのバージョンを確認(R22)</button>
+        <button type="button" data-tool="java_cacerts_emudhra" title="このPC自身のJavaのcacertsを確認する(未インストールでもエラーにはならない)">Javaのcacertsを確認(R14)</button>
+        <button type="button" data-tool="linux_kernel_cve202698432" title="このPC自身のLinuxカーネルのバージョンを確認する(Linux以外でもエラーにはならない)">Linuxカーネルを確認(R26)</button>
+        <button type="button" data-tool="linux_kernel_infinitycore" title="このPC自身のLinuxカーネルのバージョンを確認する(Linux以外でもエラーにはならない)">Linuxカーネル(Infinity Core)を確認(R21)</button>
 
-        <span class="note" style="width:100%;margin-top:10px">このリポジトリ自身の検知スクリプトの検証</span>
-        <button type="button" data-tool="sqli_lab_regression">sqli-labの回帰テストを実行(19クラス38パターン)</button>
-        <button type="button" data-tool="detection_regression">検知スクリプトの回帰テストを実行(18本)</button>
-        <button type="button" data-tool="local_selfcheck">このPCの自己診断(local_scan_selfcheck)</button>
+        <details style="width:100%;margin-top:10px">
+          <summary class="note" style="cursor:pointer">このリポジトリ自身の検知スクリプトの検証(開発・CI向け。クリックで表示)</summary>
+          <div class="row" style="margin-top:6px">
+            <button type="button" data-tool="sqli_lab_regression" title="sqli-labの検出スクリプトが壊れていないかを19クラス38パターンで確認する(このリポジトリの脆弱性ではなく、ラボ自身の健全性チェック)">sqli-labの回帰テストを実行(19クラス38パターン)</button>
+            <button type="button" data-tool="detection_regression" title="R1-R32系・CVEバージョン照合系18本が、同梱の合成ログ(陽性/陰性)を正しく分類し続けているか確認する(CIのscanジョブと同じもの)">検知スクリプトの回帰テストを実行(18本)</button>
+            <button type="button" data-tool="local_selfcheck" title="local_scan_selfcheck.pyでPython/Docker/各種コマンドの有無やポートの状態を確認する">このPCの自己診断(local_scan_selfcheck)</button>
+          </div>
+        </details>
 
         <span class="note" style="width:100%;margin-top:10px">対象への確認(netcheck・zgrab2等)</span>
-        <button type="button" id="nc-run">netcheckを実行</button>
-        <button type="button" id="zg-run">zgrab2を実行</button>
-        <button type="button" id="hl-run">HTTPバナー取得(軽量・zgrab2不要)</button>
-        <button type="button" id="mp-run">追加プロトコルを確認(軽量)</button>
+        <button type="button" id="nc-run" title="対象への受動的なポート確認(接続だけして中身は送らない)">netcheckを実行</button>
+        <button type="button" id="zg-run" title="対象への能動スキャナでバナーを取得する(zgrab2本体が必要)">zgrab2を実行</button>
+        <button type="button" id="hl-run" title="zgrab2が無い場合の代替。ポート80(HTTP)・443(HTTPS)へのGETのみで簡易バナー取得する">HTTPバナー取得(軽量・zgrab2不要)</button>
+        <button type="button" id="mp-run" title="zgrab2不要で、SSH/FTP/Telnet/SMTP/MySQL/SMB等その他プロトコルのバナー・応答を確認する">追加プロトコルを確認(軽量)</button>
 
-        <span class="note" style="width:100%;margin-top:10px">エージェントシミュレーション(能動的な攻撃実行)</span>
-        <button type="button" id="strix-run">Strixを実行(数分かかることがあります)</button>
-        <button type="button" id="cairn-run">Cairnを実行</button>
+        <details style="width:100%;margin-top:10px">
+          <summary class="note" style="cursor:pointer">エージェントシミュレーション(能動的な攻撃実行・事前設定が必要。クリックで表示)</summary>
+          <div class="row" style="margin-top:6px">
+            <button type="button" id="strix-run" title="自律型ペネトレーションAIエージェント(モックLLM版)。既定でsqli-labデモアプリへSQLi認証バイパスを実行する。事前にSTRIX_LOCAL_DIR環境変数の設定が必要(数分かかることがあります)">Strixを実行(数分かかることがあります)</button>
+            <button type="button" id="cairn-run" title="自律型ペネトレーションAIエージェント(モックLLM版)。事前にCAIRN_LOCAL_DIR環境変数の設定が必要">Cairnを実行</button>
+          </div>
+        </details>
       </div>
       <div class="row" style="margin-top:10px">
         <label>ログファイルから確認するルール<select class="f" id="lc-script">
@@ -214,7 +222,7 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
           <option value="memory_poisoning_check">R32(混在ログ: memory_write/session_start/egress)</option>
         </select></label>
         <label>ログファイルのパス(このPC上の実在するファイル)<input class="f" id="lc-path" placeholder="例: C:\logs\proxy_access.log"></label>
-        <button type="button" id="lc-run">このログファイルを確認</button>
+        <button type="button" id="lc-run" title="選択したルールで、指定したログファイルを直接読んで確認する(このPC自身の状態ではなく、入力したパスのファイルを読む。外部への送信は一切しない)">このログファイルを確認</button>
       </div>
       <div id="scan-status" class="note" role="status"></div>
       <p class="note">「まとめて実行」=対象への能動的なスキャン(zgrab2・Strix・Cairn等)を含まない、読み取り専用の確認だけを順番にまとめて実行する(netcheckは127.0.0.1自身への受動確認)。依存関係の脆弱性の確認=<a class="src" href="security-scan/dep-cve-check-notes.md">dep_cve_check</a>(requirements.txt・pom.xml等をOSV.devに照合。このリポジトリは標準ライブラリのみで動くため、通常は対象ファイルが無く0件)。ARTEXパターンの確認=<a class="src" href="security-scan/artex-pattern-lab/README.ja.md">artex-pattern-lab</a>(R29/R30/R31の検知ロジックを、1つの最小アプリで動かして確認。ポート80の待ち受けに管理者/root権限が必要)。</p>
