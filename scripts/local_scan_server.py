@@ -64,6 +64,52 @@ def _which(name):
     return shutil.which(name)
 
 
+_ZGRAB2_BUILD_DIR = os.path.join(os.path.expanduser("~"), ".cache", "local_scan_server", "bin")
+_ZGRAB2_BUILD_ATTEMPTED = False
+_ZGRAB2_BUILD_TIMEOUT_SEC = 300
+
+
+def _ensure_zgrab2():
+    """zgrab2本体のパスを返す(見つからなければNone)。PATH上に無ければ、過去にこの
+    サーバーが自前でビルドした分(_ZGRAB2_BUILD_DIR)を探す。それも無く、かつこのサーバー
+    プロセスでまだ試していなければ、Go(https://github.com/zmap/zgrab2、本家ソース)から
+    `go install`で1回だけビルドを試みる(goが無い/ビルド失敗の場合は以後このプロセスでは
+    再試行しない。再度試したい場合はサーバーを再起動する)。
+    zgrab2はデフォルトで~/.config/zgrab2/blocklist.confを要求し、無いと起動時に
+    fatalで落ちるため、空ファイルが無ければ作っておく(スキャン対象を狭めるものではなく、
+    単に『除外リストが空』という設定を明示するだけ)。"""
+    global _ZGRAB2_BUILD_ATTEMPTED
+    found = _which("zgrab2")
+    if found is None:
+        cached = os.path.join(_ZGRAB2_BUILD_DIR, "zgrab2")
+        if os.path.exists(cached):
+            found = cached
+    if found is None and not _ZGRAB2_BUILD_ATTEMPTED:
+        _ZGRAB2_BUILD_ATTEMPTED = True
+        go = _which("go")
+        if go is not None:
+            os.makedirs(_ZGRAB2_BUILD_DIR, exist_ok=True)
+            env = dict(os.environ)
+            env["GOBIN"] = _ZGRAB2_BUILD_DIR
+            env.setdefault("GOPROXY", "https://proxy.golang.org,direct")
+            try:
+                subprocess.run([go, "install", "github.com/zmap/zgrab2/cmd/zgrab2@latest"],
+                                env=env, capture_output=True, timeout=_ZGRAB2_BUILD_TIMEOUT_SEC)
+            except subprocess.TimeoutExpired:
+                pass
+            cached = os.path.join(_ZGRAB2_BUILD_DIR, "zgrab2")
+            if os.path.exists(cached):
+                found = cached
+    if found is not None:
+        blocklist_dir = os.path.join(os.path.expanduser("~"), ".config", "zgrab2")
+        blocklist_path = os.path.join(blocklist_dir, "blocklist.conf")
+        if not os.path.exists(blocklist_path):
+            os.makedirs(blocklist_dir, exist_ok=True)
+            with open(blocklist_path, "w", encoding="utf-8"):
+                pass
+    return found
+
+
 def _resolve_single_target(body, default_host="127.0.0.1"):
     """能動攻撃系エンドポイント(Strix/Cairn)向けに、対象を1つだけ解決する。
     netcheck/zgrab2_guardと同じ許可範囲判定(netcheck/config.jsonのallowed_ranges)を
@@ -1023,12 +1069,15 @@ def scan_zgrab2(body):
         if line not in seen:
             seen.add(line)
             lines.append(line)
-    if _which("zgrab2") is None:
-        return {"error": "zgrab2本体がこの機器にインストールされていません。"
-                          "https://github.com/zmap/zgrab2 を参照してビルド・配置してください。"
+    zgrab2_bin = _ensure_zgrab2()
+    if zgrab2_bin is None:
+        return {"error": "zgrab2本体がこの機器にインストールされていません。Go(https://go.dev)が"
+                          "入っていれば自動ビルドを試みますが、今回は失敗したか、goコマンド自体が"
+                          "見つかりませんでした。手動で入れる場合は go install "
+                          "github.com/zmap/zgrab2/cmd/zgrab2@latest を実行してください。"
                           "(許可範囲チェックは通過しました: %s)" % ", ".join(lines)}
     module = str(body.get("module", "http") or "http")
-    cmd = ["zgrab2", module]
+    cmd = [zgrab2_bin, module]
     try:
         p = subprocess.run(cmd, input=("\n".join(lines) + "\n").encode("utf-8"),
                             capture_output=True, timeout=TIMEOUT_SEC)
