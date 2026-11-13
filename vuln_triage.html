@@ -170,12 +170,12 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
 
         <span class="note" style="width:100%;margin-top:10px">コード診断(このリポジトリ自身)</span>
         <button type="button" data-tool="semgrep">Semgrepを実行</button>
-        <button type="button" data-tool="trivy">Trivyを実行</button>
         <button type="button" data-tool="gitleaks">gitleaksを実行</button>
-        <button type="button" data-tool="dep_cve">依存関係の脆弱性を確認(dep_cve_check)</button>
         <button type="button" data-tool="artex_pattern">ARTEXパターン(R29/R30/R31)を確認</button>
 
-        <span class="note" style="width:100%;margin-top:10px">このPC自身の確認(OS更新・CVEバージョン照合)</span>
+        <span class="note" style="width:100%;margin-top:10px">脆弱性調査(既知のCVE・バージョンを確認)</span>
+        <button type="button" data-tool="trivy">Trivyを実行</button>
+        <button type="button" data-tool="dep_cve">依存関係の脆弱性を確認(dep_cve_check)</button>
         <button type="button" data-tool="os_patch">OS更新状態を確認(Linux/Windows自動判別)</button>
         <button type="button" data-tool="node_version">Node.jsのバージョンを確認(R25)</button>
         <button type="button" data-tool="python_brotli">Pythonのbrotliパッケージを確認(R24)</button>
