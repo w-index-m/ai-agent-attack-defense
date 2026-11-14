@@ -2,6 +2,16 @@
 
 English: [`artex-analysis.en.md`](artex-analysis.en.md)
 
+> **2026-11-14 追記**: GTIG/Mandiant の一次報告「ARTEX and Friends」(2026-10-30)との突き合わせを
+> [`artex-gtig-crosscheck.ja.md`](artex-gtig-crosscheck.ja.md) にまとめた。本書に関係する更新点:
+> - 記事によれば、**元リポジトリは作者が2026年10月に、悪用の多発を理由に削除**し、フォーク
+>   (ScopeWeaver、商用のARTEX PRO)で拡散している。下の本家リンクは、**切れている可能性がある**(未確認)。
+> - 記事は、**脅威アクターがARTEXを実際に運用していること**をGTIG/Mandiantが一次で観測したとしている
+>   (2026年8月下旬から)。§5の韓国の金融機関の件の確認ではなく、別の観測。
+> - 記事は構成を「**6つの専門サブエージェント**」と説明する(本書§2は、v0.3.15の静的レビューによる
+>   planner/worker+共有グラフ。見方の違いで、矛盾とは断定できない)。
+> - 記事には、ARTEXの実行に紐づくモデル名は無い(§5のモデル名は、引き続き二次情報)。
+
 自律型ペネトレ AI エージェント **ARTEX**（[Autumn-27/ARTEX](https://github.com/Autumn-27/ARTEX)）を、
 本リポの防御研究（Strix/Cairn/Hermes と同じ粒度）で**アーキ分解し、防御観測点に対応づけた**もの。
 

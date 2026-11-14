@@ -2,6 +2,13 @@
 
 日本語: [`artex-analysis.ja.md`](artex-analysis.ja.md)
 
+> **Update 2026-11-14**: a cross-check against GTIG/Mandiant's primary report "ARTEX and Friends"
+> (2026-10-30) is in [`artex-gtig-crosscheck.ja.md`](artex-gtig-crosscheck.ja.md) (Japanese). Per that
+> report, the original repository was taken down by its author in October 2026 (forks such as
+> ScopeWeaver and a commercial "ARTEX PRO" continue), so the upstream link below may be dead
+> (unverified), and GTIG/Mandiant observed threat actors operating ARTEX in real intrusions since
+> late August 2026.
+
 A defensive decomposition of the autonomous AI pentest agent **ARTEX**
 ([Autumn-27/ARTEX](https://github.com/Autumn-27/ARTEX)), at the same depth as this repo's
 Strix/Cairn/Hermes analysis, mapped to our defensive observation points.

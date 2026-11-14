@@ -154,6 +154,7 @@ CVEではなく未適用更新の一般的な棚卸し)、`scripts/dep_cve_check
 |---|---|
 | [`defense-detection-notes.md`](defense-detection-notes.md) | 3ツール横断の防御・検知ノート。SOC 運用レイヤー（データソース対応、検知ルール R1–R8、MITRE ATT&CK、トリアージ）と、攻撃用AIエージェントの広域マップ（§6）。 |
 | [`artex-analysis.ja.md`](artex-analysis.ja.md) / [`.en.md`](artex-analysis.en.md) | 自律型ペネトレ AI エージェント **ARTEX** の防御解析（一次情報の静的レビュー）。アーキ分解＋R1–R8/G1–G6 対応。攻撃手順は含まない。 |
+| [`artex-gtig-crosscheck.ja.md`](artex-gtig-crosscheck.ja.md) | **GTIG/Mandiant の一次報告「ARTEX and Friends」(2026-10-30)と既存資料の突き合わせ**。文言のズレ、記事の観測と既存ルール(R1–R32)の対応(拾える/一部/ギャップ)、追加でチェックできる点の候補(A〜J)と、進め方。候補は提案のみ(未実装)。 |
 | [`unit42-ai-assisted-intrusion.ja.md`](unit42-ai-assisted-intrusion.ja.md) / [`.en.md`](unit42-ai-assisted-intrusion.en.md) | Unit 42 の実インシデント報告「AI支援サイバー攻撃」の分析。人間の攻撃者が frontier AI エージェントで侵入を自動化し、2週間相当の作業を10時間未満で完了。MITRE ATT&CK×ATLAS対応表、R1–R8/G1–G6 との接続点つき。 |
 | [`jp-advisory-mapping.ja.md`](jp-advisory-mapping.ja.md) / [`.en.md`](jp-advisory-mapping.en.md) | **国内の注意喚起（2026年10月、JPCERT/CC・個人情報保護委員会など）と、このリポジトリの対応表**。API の不正操作、既知の脆弱性（BI ツールを含む）、管理不備、Web シェルの 4 つの型ごとに、予防・検知・足りない点を整理。二次情報に基づくので、原典で確認すること。 |
 | [`fortimanager-peerstitch-notes.ja.md`](fortimanager-peerstitch-notes.ja.md) / [`.en.md`](fortimanager-peerstitch-notes.en.md) | **【AI関与なし】** Unit 42 の実インシデント報告「PEERSTITCH」の分析。FortiManagerの脆弱性（CVE-2024-47575）から500台超のFortiGateへ波及した侵害と、メモリ常駐型インプラントの技術解説。Gambit連鎖⑥（過剰な権限）との接続点つき。AIが関与しない対照事例として収録。 |
