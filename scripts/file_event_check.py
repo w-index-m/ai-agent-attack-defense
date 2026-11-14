@@ -2,7 +2,7 @@
 """file_event_check: ファイル作成/変更イベントのログを読み、R5(cron/systemd永続化の新規作成)・
 R8設置側(Webルート配下への実行可能コンテンツの書き込み。書き込み主体がDBサーバーの場合は
 高確度として区別して「R8-DB」と表示)・R20(Markdownファイルの散発書き込み)・
-R28(エディタ拡張機能によるSSH鍵の作成)相当のパターンを確認する(確認専用、読み取りのみ)。
+R28(エディタ拡張機能によるSSH鍵の作成)・R34(非エディタによるAI・IDE設定ファイルの書き込み)相当のパターンを確認する(確認専用、読み取りのみ)。
 
 背景:
   - `security-scan/detections/sigma/r5_persistence_cron_systemd.yml`: cron設定・systemdの
@@ -67,6 +67,15 @@ R20_MIN_DISTINCT_DIRS = 2
 R28_EDITOR_PARENT_SUBSTRINGS = ("Cursor", "Code - Insiders", "code", "extensionHost")
 R28_SSH_TARGET_SUBSTRINGS = ("/.ssh/authorized_keys", "/.ssh/id_")
 
+# r34_ai_ide_config_write_by_non_editor.yml の selection_config_* / filter_* と完全に同じ(2026-11-14追加)。
+# GTIGの2026年9月のレポートが、DUSTMAKER等による、AI・IDEの隠し設定ディレクトリへの書き込みと、
+# 設定・hooksの乗っ取りを報告。ファイル名の一覧は、レポートが挙げたものではなく、コマンドを実行
+# できる設定の置き場所として、このリポジトリが選んだもの(探索的ヒューリスティック)。Linux形式のパスのみ。
+R34_CONFIG_SUBSTRINGS = ("/.claude/settings.json", "/.claude/settings.local.json", "/.claude/hooks/", "/.claude/commands/", "/.vscode/tasks.json", "/.vscode/settings.json", "/.vscode/launch.json", "/.cursor/mcp.json", "/.cursor/rules/", "/.codex/config.toml")
+R34_CONFIG_SUFFIXES = ("/.mcp.json", "/.cursorrules")
+R34_KNOWN_WRITER_SUFFIXES = ("/code", "/code-insiders", "/cursor", "/codium", "/claude", "/codex", "/git", "/vim", "/nvim", "/nano", "/emacs", "/subl")
+R34_EXCLUDE_SUBSTRINGS = ("/node_modules/", "/site-packages/")
+
 
 @dataclass
 class FileEvent:
@@ -128,6 +137,15 @@ def _matches_r28(ev: FileEvent) -> bool:
     return any(s in ev.target_file for s in R28_SSH_TARGET_SUBSTRINGS)
 
 
+def _matches_r34(ev: FileEvent) -> bool:
+    t = ev.target_file
+    if not (any(s in t for s in R34_CONFIG_SUBSTRINGS) or t.endswith(R34_CONFIG_SUFFIXES)):
+        return False
+    if any(s in t for s in R34_EXCLUDE_SUBSTRINGS):
+        return False
+    return not ev.process_name.endswith(R34_KNOWN_WRITER_SUFFIXES)
+
+
 def _is_r20_candidate(target_file: str) -> bool:
     if not target_file.endswith(".md"):
         return False
@@ -177,6 +195,8 @@ def scan_log(log_path: str) -> tuple[list[tuple[FileEvent, str]], list[str], int
             hits.append((ev, "R8-DB" if _is_r8_db_writer(ev) else "R8"))
         if _matches_r28(ev):
             hits.append((ev, "R28"))
+        if _matches_r34(ev):
+            hits.append((ev, "R34"))
 
     r20_findings = check_r20(events)
     return hits, r20_findings, len(lines), None
@@ -187,6 +207,7 @@ _RULE_LABELS = {
     "R8": "Webシェル設置(Webルート配下への実行可能コンテンツ書き込み)",
     "R8-DB": "Webシェル設置(書き込み主体がDBサーバー。R8設置側の高確度版)",
     "R28": "エディタ拡張機能によるSSH鍵の作成/authorized_keysの変更",
+    "R34": "非エディタのプロセスによる、AI・IDEの設定ファイル(実行・自動化に関わるもの)の書き込み",
 }
 
 
@@ -197,7 +218,7 @@ def print_report(
     print("-" * 60)
     all_hits = list(hits) + list(r20_findings)
     if not all_hits:
-        print("R5・R8(設置側)・R20・R28相当のパターンは見つかりませんでした。")
+        print("R5・R8(設置側)・R20・R28・R34相当のパターンは見つかりませんでした。")
         return all_hits
 
     if hits:

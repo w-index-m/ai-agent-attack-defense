@@ -301,6 +301,13 @@ def severity_level(vuln):
     return "warning"
 
 
+def is_malicious_package(vuln):
+    """OSV の MAL- で始まる ID は、悪性パッケージ(マルウェア)の通知(OpenSSFの悪性パッケージのデータベース由来)。
+    脆弱性ではなく「既に悪意のあるコードが入っている」ことを意味し、対応は「更新」ではなく「削除と、
+    資格情報の更新・調査」になる。重大度の明示は無いことが多いので、ID で見分ける(2026-11-14追加)。"""
+    return str(vuln.get("id", "")).startswith("MAL-")
+
+
 _LEVEL_RANK = {"note": 0, "warning": 1, "error": 2}
 
 
@@ -319,6 +326,8 @@ def merge_by_cve(findings):
             merged[key] = dict(f, osv_ids=[f["osv_id"]], fixed=list(f["fixed"]))
             continue
         m["osv_ids"].append(f["osv_id"])
+        if f.get("malicious"):
+            m["malicious"], m["level"], m["explicit"] = True, "error", True
         if f["explicit"] and (not m["explicit"] or _LEVEL_RANK[f["level"]] > _LEVEL_RANK[m["level"]]):
             m["level"], m["explicit"] = f["level"], True
         for v in f["fixed"]:
@@ -380,6 +389,9 @@ def to_sarif(findings, errors):
             msg += "（OSV: %s）" % ", ".join(f["osv_ids"])
         if f["fixed"]:
             msg += "（修正版: %s）" % ", ".join(_fmt_fixed(v) for v in f["fixed"])
+        if f.get("malicious"):
+            msg += ("（既知の悪性パッケージです。直ちに削除し、これを入れた環境(開発端末・CI)の資格情報の更新と、"
+                    "不審な動きの調査をしてください。更新では直りません）")
         results.append({
             "ruleId": rule_id,
             "level": f["level"],
@@ -389,6 +401,7 @@ def to_sarif(findings, errors):
                 # 別の道具（crosscheck_osv_ghsa.py）が、GitHub のアドバイザリと突き合わせるために使う
                 "package": f["name"], "version": f["version"], "ecosystem": f.get("ecosystem"),
                 "fixed": f["fixed"], "osv_ids": f.get("osv_ids", [f["osv_id"]]),
+                "malicious": bool(f.get("malicious")),
             },
             "locations": [{
                 "physicalLocation": {
@@ -466,13 +479,15 @@ def main():
                             "reason": "OSV に接続できなかった（%s）" % e})
             continue
         for vuln in resp.get("vulns", []):
+            mal = is_malicious_package(vuln)
             findings.append({
                 "manifest": manifest, "name": name, "version": version, "ecosystem": ecosystem,
                 "osv_id": vuln.get("id", "OSV-UNKNOWN"),
                 "cve": cve_alias(vuln),
-                "summary": vuln.get("summary", ""),
-                "level": severity_level(vuln),
-                "explicit": bool((vuln.get("database_specific") or {}).get("severity")),
+                "summary": ("[悪性パッケージ] " if mal else "") + vuln.get("summary", ""),
+                "level": "error" if mal else severity_level(vuln),
+                "explicit": mal or bool((vuln.get("database_specific") or {}).get("severity")),
+                "malicious": mal,
                 "fixed": fixed_versions_for(vuln, name, ecosystem),
             })
 

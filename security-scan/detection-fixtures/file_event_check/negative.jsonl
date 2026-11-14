@@ -2,3 +2,7 @@
 {"target_file": "/var/lib/mysql/general.log", "process_name": "/usr/sbin/mysqld"}
 {"target_file": "/var/www/html/export.csv", "process_name": "/usr/sbin/mysqld"}
 {"target_file": "/var/www/html/index.php", "process_name": "/usr/bin/apt"}
+{"target_file": "/home/dev/proj/.vscode/settings.json", "process_name": "/usr/share/code/code"}
+{"target_file": "/home/dev/proj/.claude/settings.json", "process_name": "/usr/bin/git"}
+{"target_file": "/home/dev/proj/.claude/cache/x.bin", "process_name": "/usr/bin/node"}
+{"target_file": "/home/dev/proj/node_modules/pkg/.vscode/settings.json", "process_name": "/usr/bin/npm"}

@@ -52,8 +52,8 @@ description: >
   into the same places, not an agent writing its own memory after reading
   untrusted content: the two-stage shape of THIS rule (write, then a later
   session's first egress to a non-allowlisted domain) remains this repo's
-  own construction. A simpler single-stage variant (a non-editor process
-  writing into these directories) is a proposal, not implemented. See
+  own construction. The simpler single-stage variant (a non-editor process
+  writing an execution-capable config file in these directories) is R34. See
   ../gtig-ai-threat-tracker-2026-09-crosscheck.ja.md.
 references:
   - ../defense-detection-notes.md

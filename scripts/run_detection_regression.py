@@ -100,6 +100,7 @@ OUTPUT_CONTAINS_CASES: list[tuple[str, list[str], str, list[str]]] = [
     ("proxy_egress_check", ["--format", "jsonl"], "positive_r33.jsonl", ["[R33]"]),
     ("file_event_check", [], "positive_r8_db.jsonl", ["[R8-DB]"]),
     ("file_event_check", [], "positive_r8_generic.jsonl", ["[R8]"]),
+    ("file_event_check", [], "positive_r34.jsonl", ["[R34]"]),
 ]
 
 
