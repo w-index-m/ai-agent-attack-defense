@@ -66,6 +66,7 @@ EXIT_CODE_CASES: list[tuple[str, list[str]]] = [
     ("auth_proxy_rotation_check", ["--threshold", "3"]),
     ("github_workflow_leak_check", []),
     ("memory_poisoning_check", ["--allowlist-suffix", "api.openai.com"]),
+    ("cloud_audit_check", []),  # 下書き(実ログで未確認)。合成ログでの動作の確認のみ
 ]
 
 
@@ -101,6 +102,10 @@ OUTPUT_CONTAINS_CASES: list[tuple[str, list[str], str, list[str]]] = [
     ("file_event_check", [], "positive_r8_db.jsonl", ["[R8-DB]"]),
     ("file_event_check", [], "positive_r8_generic.jsonl", ["[R8]"]),
     ("file_event_check", [], "positive_r34.jsonl", ["[R34]"]),
+    ("cloud_audit_check", [], "positive_aws.jsonl", ["[CLOUD-AWS-1]", "[CLOUD-AWS-2]"]),
+    ("cloud_audit_check", [], "positive_gcp.jsonl", ["[CLOUD-GCP-1]", "[CLOUD-GCP-2]", "[CLOUD-GCP-3]", "[CLOUD-GCP-4]", "[CLOUD-GCP-5]"]),
+    ("cloud_audit_check", [], "positive_github.jsonl", ["[CLOUD-GH-1]"]),
+    ("cloud_audit_check", [], "positive_burst.jsonl", ["[CLOUD-BURST]", "[CLOUD-DRYRUN]"]),
 ]
 
 

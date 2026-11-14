@@ -1,0 +1,120 @@
+# DRAFT (unverified against real logs) -- see README.md in this directory.
+# Field names follow the SigmaHQ convention for Google Cloud audit logs (gcp.audit.*); adapt to your pipeline.
+title: DRAFT - GCP service account created or key exported
+id: draft-gcp-sa-key-0001
+status: experimental
+description: >
+  DRAFT. GTIG's September 2026 AI Threat Tracker report (per the text a user pasted into this session)
+  describes a Mandiant case in which an intruder created a rogue service account with Editor privileges
+  and exported its authentication keys. Method names: google.iam.admin.v1.CreateServiceAccount and
+  CreateServiceAccountKey (confidence high). Routine administration also does this.
+references:
+  - ../../cloud-audit-check-notes.md
+author: ai-agent-attack-defense
+date: 2026/11/14
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    gcp.audit.method_name|endswith:
+      - '.CreateServiceAccountKey'
+      - '.CreateServiceAccount'
+  condition: selection
+falsepositives:
+  - Provisioning and key-rotation automation. Allowlist those identities.
+level: low
+tags:
+  - attack.persistence
+  - attack.t1098.001
+---
+# DRAFT. LOWER confidence: where the added members appear differs by service and log version. The
+# python script reads protoPayload.serviceData.policyDelta.bindingDeltas (ADD entries); Sigma cannot
+# express "same array element" correlation, so this only approximates it.
+title: DRAFT - GCP IAM policy change that grants access to allUsers / allAuthenticatedUsers
+id: draft-gcp-public-0002
+status: experimental
+description: >
+  DRAFT. The Mandiant case in the report deployed container images to Cloud Run services exposed with
+  invoker bindings to allUsers. A policy change that adds allUsers / allAuthenticatedUsers makes the
+  resource public.
+references:
+  - ../../cloud-audit-check-notes.md
+author: ai-agent-attack-defense
+date: 2026/11/14
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection_method:
+    gcp.audit.method_name|endswith: 'SetIamPolicy'
+  selection_member:
+    protoPayload.serviceData.policyDelta.bindingDeltas.member:
+      - 'allUsers'
+      - 'allAuthenticatedUsers'
+  condition: selection_method and selection_member
+falsepositives:
+  - Intentionally public services (public websites, public buckets). Allowlist those resources.
+level: high
+tags:
+  - attack.initial_access
+  - attack.t1190
+---
+# DRAFT. Medium confidence on the exact method names (serviceusage v1).
+title: DRAFT - GCP AI-related API enabled
+id: draft-gcp-ai-api-0003
+status: experimental
+description: >
+  DRAFT. The Mandiant case enabled Generative Language / Gemini-related settings and provisioned AI
+  workloads on a victim project (LLMjacking: using someone else's cloud for unauthorized AI work).
+references:
+  - ../../cloud-audit-check-notes.md
+author: ai-agent-attack-defense
+date: 2026/11/14
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection_method:
+    gcp.audit.method_name|endswith:
+      - '.EnableService'
+      - '.BatchEnableServices'
+  selection_api:
+    protoPayload.request|contains:
+      - 'generativelanguage.googleapis.com'
+      - 'aiplatform.googleapis.com'
+  condition: selection_method and selection_api
+falsepositives:
+  - A team legitimately starting to use these APIs.
+level: medium
+tags:
+  - attack.impact
+  - attack.t1496
+---
+# DRAFT. Medium confidence on the exact method names (cloudquotas v1).
+title: DRAFT - GCP quota increase requested
+id: draft-gcp-quota-0004
+status: experimental
+description: >
+  DRAFT. The Mandiant case requested quota increases for GPU hardware to run additional compute
+  instances and sustain unauthorized AI workloads. This rule cannot see WHICH quota; it flags any
+  quota preference creation/update, so expect legitimate hits.
+references:
+  - ../../cloud-audit-check-notes.md
+author: ai-agent-attack-defense
+date: 2026/11/14
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    gcp.audit.method_name|endswith:
+      - '.CreateQuotaPreference'
+      - '.UpdateQuotaPreference'
+  condition: selection
+falsepositives:
+  - Capacity planning by the owning team.
+level: low
+tags:
+  - attack.impact
+  - attack.t1496

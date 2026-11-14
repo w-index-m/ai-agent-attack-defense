@@ -1,0 +1,30 @@
+# DRAFT (unverified against real logs) -- see README.md in this directory.
+title: DRAFT - GitHub Actions workflow run deleted
+id: draft-gh-run-delete-0001
+status: experimental
+description: >
+  DRAFT. GTIG's September 2026 AI Threat Tracker report (per the text a user pasted into this session)
+  says the DUSTMAKER malware issues API calls to delete workflow execution logs so security teams do not
+  notice its pipeline tasks in the GitHub UI. LOWER confidence on the audit-log action names:
+  workflows.delete_workflow_run (medium) and workflows.delete_workflow_run_logs (low: I am not sure this
+  action exists). Also note that some GitHub audit-log events are only available to organizations or
+  enterprises; check what your plan records before relying on this.
+references:
+  - ../../cloud-audit-check-notes.md
+author: ai-agent-attack-defense
+date: 2026/11/14
+logsource:
+  product: github
+  service: audit
+detection:
+  selection:
+    action:
+      - 'workflows.delete_workflow_run'
+      - 'workflows.delete_workflow_run_logs'
+  condition: selection
+falsepositives:
+  - Housekeeping: people or retention scripts that delete old runs. Allowlist the retention automation.
+level: medium
+tags:
+  - attack.defense_evasion
+  - attack.t1070
