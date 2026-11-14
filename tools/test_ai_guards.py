@@ -8,6 +8,7 @@
   3b. scripts/patch_suggest.py(信頼できないコードをLLMに渡す側と、LLMが作ったdiffの検査)と、
       agent_tool_guard.py のパッケージ追加の扱い、dep_cve_check.py の悪性パッケージ(MAL-)の扱い(2026-11-14追加)。
   3c. scripts/llm_instruction_in_code_check.py(コード中のLLM宛の指示を探す検査。2026-11-14追加)。
+  3d. scripts/cloud_audit_check.py(クラウド・CIの監査ログの下書き。実ログでは未確認。2026-11-14追加)。
   4. リポジトリ内のテキストに、不可視文字・双方向制御文字(Trojan Source)・行区切り文字が無いこと。
      U+2028等がJavaScriptの正規表現に紛れ込むと、ページ全体のスクリプトが動かなくなる(実際に起きかけた)。
 
@@ -631,6 +632,79 @@ class TestLlmInstructionInCode(unittest.TestCase):
             f.write("x = 1" + NL)
         self.assertEqual(run("--path", clean).returncode, 0)
         self.assertEqual(run("--path", os.path.join(clean, "nope")).returncode, 2)
+
+
+class TestCloudAuditCheck(unittest.TestCase):
+    """scripts/cloud_audit_check.py(下書き): ログの読み込み・時刻の解析・除外・窓。実ログでは未確認。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load("scripts/cloud_audit_check.py", "cloud_audit_t")
+
+    def aws(self, name, t, arn="arn:aws:iam::1:user/dev", err=None):
+        e = {"eventTime": t, "eventSource": "ec2.amazonaws.com", "eventName": name, "userIdentity": {"arn": arn}}
+        if err:
+            e["errorCode"] = err
+        return e
+
+    def test_timestamps_with_nanoseconds_offsets_and_epoch_milliseconds(self):
+        p = self.mod.parse_ts
+        base = p("2026-11-14T10:00:00Z")
+        self.assertAlmostEqual(p("2026-11-14T10:00:00.123456789Z") - base, 0.123456, places=5)
+        self.assertAlmostEqual(p("2026-11-14T19:00:00+09:00"), base)
+        self.assertAlmostEqual(p("2026-11-14T19:00:00+0900"), base)
+        self.assertAlmostEqual(p(int(base * 1000)), base)
+        self.assertIsNone(p("not a time"))
+        self.assertIsNone(p(None))
+
+    def test_loads_json_array_records_and_lines_and_ignores_unknown_events(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        ev = self.aws("CreateKeyPair", "2026-11-14T10:00:00Z")
+        files = {"arr.json": json.dumps([ev, {"foo": 1}]), "rec.json": json.dumps({"Records": [ev]}),
+                 "lines.jsonl": json.dumps(ev) + NL + "{broken" + NL + json.dumps({"x": 1}) + NL}
+        for name, text in files.items():
+            with open(os.path.join(tmp, name), "w", encoding="utf-8", newline="\n") as f:
+                f.write(text)
+            events, bad = self.mod.load_events(os.path.join(tmp, name))
+            self.assertEqual(len(events), 1, name)
+            self.assertEqual(events[0]["provider"], "aws")
+        self.assertEqual(self.mod.load_events(os.path.join(tmp, "lines.jsonl"))[1], 1, "読めなかった行を数える")
+
+    def test_allow_principal_excludes_matching_identities_only(self):
+        evs = [self.mod.normalize(self.aws("CreateKeyPair", "2026-11-14T10:00:00Z", arn="arn:aws:iam::1:role/terraform")),
+               self.mod.normalize(self.aws("CreateKeyPair", "2026-11-14T10:00:01Z", arn="arn:aws:iam::1:user/dev"))]
+        for i, e in enumerate(evs, 1):
+            e["line"] = i
+        self.assertEqual(len(self.mod.scan(evs)), 2)
+        hits = self.mod.scan(evs, allow=["role/terraform"])
+        self.assertEqual([h["principal"] for h in hits], ["arn:aws:iam::1:user/dev"])
+
+    def test_burst_window_threshold_and_per_identity(self):
+        def mk(n, step, arn):
+            out = []
+            for i in range(n):
+                t = "2026-11-14T10:%02d:%02dZ" % ((i * step) // 60, (i * step) % 60)
+                e = self.mod.normalize(self.aws("DescribeInstances", t, arn=arn))
+                e["line"] = i + 1
+                out.append(e)
+            return out
+        fast = mk(25, 1, "arn:fast")
+        self.assertEqual([h["rule"] for h in self.mod.scan(fast)], ["CLOUD-BURST"])
+        self.assertEqual(self.mod.scan(fast[:24]), [], "件数が足りない")
+        self.assertEqual(self.mod.scan(mk(25, 20, "arn:slow")), [], "窓(30秒)に収まらない")
+        mixed = mk(13, 1, "arn:a") + mk(13, 1, "arn:b")
+        self.assertEqual(self.mod.scan(mixed), [], "IDごとに数える(合算しない)")
+
+    def test_gcp_policy_without_deltas_is_a_weak_public_check_only(self):
+        e = {"timestamp": "2026-11-14T10:00:00Z", "protoPayload": {
+            "serviceName": "run.googleapis.com", "methodName": "google.cloud.run.v1.Services.SetIamPolicy",
+            "authenticationInfo": {"principalEmail": "a@example.com"},
+            "request": {"policy": {"bindings": [{"role": "roles/run.invoker", "members": ["allUsers"]},
+                                                {"role": "roles/owner", "members": ["user:a@example.com"]}]}}}}
+        ev = self.mod.normalize(e)
+        ev["line"] = 1
+        self.assertEqual([h["rule"] for h in self.mod.scan([ev])], ["CLOUD-GCP-2"], "追加か既存か分からないowner は判定しない")
 
 
 class TestNoInvisibleCharacters(unittest.TestCase):

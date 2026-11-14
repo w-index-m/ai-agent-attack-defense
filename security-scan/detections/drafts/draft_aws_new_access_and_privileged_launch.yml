@@ -1,0 +1,66 @@
+# DRAFT (unverified against real logs) -- see README.md in this directory.
+title: DRAFT - AWS new access method created (key pair, access key, login profile, user, Elastic IP)
+id: draft-aws-new-access-0001
+status: experimental
+description: >
+  DRAFT. Unverified against real CloudTrail logs (the event names below are from public CloudTrail
+  documentation as I know it; confidence is high for these well-known names). GTIG's "ARTEX and
+  Friends" article (2026-10-30) reports an ARTEX-assisted intrusion that created a new SSH key pair,
+  a dedicated Elastic IP and jump-host instances, took over accounts by password reset, and created
+  new accounts. Each of these events is also routine administration: scope to non-automation
+  identities and baseline before trusting it.
+references:
+  - https://cloud.google.com/blog/topics/threat-intelligence/artex-and-friends-enter-agentic-offensive-frameworks
+  - ../../cloud-audit-check-notes.md
+author: ai-agent-attack-defense
+date: 2026/11/14
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName:
+      - 'CreateKeyPair'
+      - 'ImportKeyPair'
+      - 'AllocateAddress'
+      - 'CreateAccessKey'
+      - 'CreateLoginProfile'
+      - 'UpdateLoginProfile'
+      - 'CreateUser'
+  condition: selection
+falsepositives:
+  - Routine administration, onboarding, and infrastructure-as-code. Allowlist automation identities.
+level: low
+tags:
+  - attack.persistence
+  - attack.t1136
+  - attack.t1098
+---
+# DRAFT (unverified against real logs). Lower confidence: the field path requestParameters.iamInstanceProfile.
+title: DRAFT - AWS instance launched with an IAM instance profile
+id: draft-aws-privileged-launch-0002
+status: experimental
+description: >
+  DRAFT. An instance launched with an instance profile gives code on it the profile's credentials. The
+  ARTEX article reports launches with high-value IAM roles used to fetch temporary credentials, which
+  failed in that case on invalid instance-profile ARNs. Unverified: the exact requestParameters shape
+  (confidence medium). Most launches with a profile are legitimate; this is informational context for
+  correlation with the other drafts, not an alert on its own.
+references:
+  - https://cloud.google.com/blog/topics/threat-intelligence/artex-and-friends-enter-agentic-offensive-frameworks
+author: ai-agent-attack-defense
+date: 2026/11/14
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventName: 'RunInstances'
+    requestParameters.iamInstanceProfile|exists: true
+  condition: selection
+falsepositives:
+  - Any normal workload launch that uses an instance profile.
+level: informational
+tags:
+  - attack.privilege_escalation
+  - attack.t1078.004
