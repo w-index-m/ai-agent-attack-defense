@@ -9,6 +9,7 @@
       agent_tool_guard.py のパッケージ追加の扱い、dep_cve_check.py の悪性パッケージ(MAL-)の扱い(2026-11-14追加)。
   3c. scripts/llm_instruction_in_code_check.py(コード中のLLM宛の指示を探す検査。2026-11-14追加)。
   3d. scripts/cloud_audit_check.py(クラウド・CIの監査ログの下書き。実ログでは未確認。2026-11-14追加)。
+  3e. scripts/ai_tool_config_secret_check.py(AI開発ツールの設定ファイルの平文の秘密情報の点検。2026-11-14追加)。
   4. リポジトリ内のテキストに、不可視文字・双方向制御文字(Trojan Source)・行区切り文字が無いこと。
      U+2028等がJavaScriptの正規表現に紛れ込むと、ページ全体のスクリプトが動かなくなる(実際に起きかけた)。
 
@@ -705,6 +706,153 @@ class TestCloudAuditCheck(unittest.TestCase):
         ev = self.mod.normalize(e)
         ev["line"] = 1
         self.assertEqual([h["rule"] for h in self.mod.scan([ev])], ["CLOUD-GCP-2"], "追加か既存か分からないowner は判定しない")
+
+
+class TestAiToolConfigSecretCheck(unittest.TestCase):
+    """scripts/ai_tool_config_secret_check.py: AI開発ツールの設定ファイルの平文の秘密情報を点検する。
+    本物に似た文字列を、このファイルのソースに書かないよう、実行時に組み立てる(CIの秘密情報の検査に拾われないため)。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load("scripts/ai_tool_config_secret_check.py", "ai_tool_secret_t")
+        import random
+        cls.rnd = random.Random(20261114)
+
+    def tok(self, n, alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"):
+        return "".join(self.rnd.choice(alphabet) for _ in range(n))
+
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.home, True)
+
+    def write(self, rel, text, mode=None):
+        full = os.path.join(self.home, *rel.split("/"))
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w", encoding="utf-8", newline="\n") as f:
+            f.write(text)
+        if mode is not None and os.name != "nt":
+            os.chmod(full, mode)
+        return full
+
+    def run_home(self, **kw):
+        return self.mod.run(self.home, **kw)
+
+    def kinds(self, results):
+        return {(os.path.basename(r["path"]), r["kind"]) for r in results}
+
+    def test_finds_each_kind_in_known_locations(self):
+        up = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        keys = {"anthropic": "sk-ant-" + self.tok(40), "openai": "sk-" + self.tok(40), "google": "AIza" + self.tok(35),
+                "github": "ghp_" + self.tok(36), "aws": "AKIA" + self.tok(16, up), "slack": "xoxb-" + self.tok(24),
+                "huggingface": "hf_" + self.tok(34), "groq": "gsk_" + self.tok(44)}
+        self.write(".continue/config.yaml", "models:\n  - provider: anthropic\n    apiKey: %s\n  - note: %s\n" % (keys["anthropic"], keys["openai"]))
+        self.write(".cursor/mcp.json", json.dumps({"mcpServers": {"x": {"env": {"A": keys["google"], "B": keys["github"]}}}}))
+        self.write(".codex/auth.json", json.dumps({"id": keys["aws"]}))
+        self.write(".config/Code/User/globalStorage/saoudrizwan.claude-dev/secrets.json",
+                   json.dumps({"hf": keys["huggingface"], "slack": keys["slack"], "groq": keys["groq"]}))
+        results, checked, errors, env, nfiles = self.run_home()
+        got = self.kinds(results)
+        for name, kind in (("config.yaml", "anthropic"), ("config.yaml", "openai"), ("mcp.json", "google"), ("mcp.json", "github"),
+                           ("auth.json", "aws"), ("secrets.json", "huggingface"), ("secrets.json", "slack"), ("secrets.json", "groq")):
+            self.assertIn((name, kind), got)
+        self.assertEqual(errors, [])
+        self.assertTrue(any(ok for _, ok in checked))
+        self.assertEqual(len([r for r in results if r["kind"] == "anthropic"]), 1, "同じ位置を、種類ごとに二重に数えない")
+
+    def test_one_secret_is_reported_once_as_the_most_specific_kind(self):
+        k = "sk-ant-" + self.tok(40)
+        self.write(".continue/config.yaml", "apiKey: %s%s" % (k, NL))
+        results, *_ = self.run_home()
+        self.assertEqual([r["kind"] for r in results], ["anthropic"], "OpenAI形式や汎用の項目として、二重に指摘しない")
+
+    def test_values_are_never_printed_to_screen_or_sarif(self):
+        k1, k2 = "sk-ant-" + self.tok(40), "ghp_" + self.tok(36)
+        self.write(".continue/config.yaml", "apiKey: %s\ntoken: %s\n" % (k1, k2))
+        out = os.path.join(self.home, "out.sarif")
+        r = subprocess.run([sys.executable, "-I", os.path.join(ROOT, "scripts", "ai_tool_config_secret_check.py"),
+                            "--home", self.home, "--out", out], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(r.returncode, 1)
+        with open(out, encoding="utf-8") as f:
+            sarif_text = f.read()
+        for text in (r.stdout, r.stderr, sarif_text):
+            for k in (k1, k2):
+                self.assertNotIn(k, text)
+                self.assertNotIn(k[:10], text, "キーの一部も出さない")
+                self.assertNotIn(k[-10:], text)
+        self.assertIn("%d文字" % len(k1), r.stdout, "長さは出す")
+        self.assertEqual(json.loads(sarif_text)["version"], "2.1.0")
+
+    def test_env_references_placeholders_and_non_secrets_are_not_flagged(self):
+        self.write(".continue/config.yaml", NL.join([
+            "apiKey: ${ANTHROPIC_API_KEY}", "apiKey: $OPENAI_API_KEY_FOR_THIS_TOOL", "token: env:MY_TOKEN_VARIABLE_NAME",
+            "apiKey: YOUR_API_KEY_GOES_HERE_PLEASE", "token: xxxxxxxxxxxxxxxxxxxxxxxx", "apiKey: short",
+            "apiKeyPath: /home/u/.keys/anthropic-key-file", "max_tokens: 40960000000000000000", "tokenizer: sentencepiece-model-name-long",
+            "model: claude-sonnet-5-5-with-a-long-model-name"]) + NL)
+        results, _, _, env, _ = self.run_home()
+        self.assertEqual(results, [])
+        self.assertGreaterEqual(env, 3, "環境変数の参照を数える(推奨の形)")
+
+    def test_generic_secret_fields_need_a_secret_like_name_and_value(self):
+        v1, v2 = self.tok(40), self.tok(30)
+        self.write(".cursor/mcp.json", json.dumps({"apiKey": v1, "weak": {"apiKey": "a" * 30}}))
+        self.write(".codex/config.toml", 'password = "%s"%s' % (v2, NL))
+        results, *_ = self.run_home()
+        self.assertEqual(self.kinds(results), {("mcp.json", "generic-secret-field"), ("config.toml", "generic-secret-field")})
+        self.assertEqual(len(results), 2, "単純すぎる値(同じ文字の繰り返し)は指摘しない")
+
+    def test_private_key_block(self):
+        header = "-----BEGIN " + "OPENSSH" + " PRIVATE " + "KEY-----"  # 実行時に組み立てる(CIの秘密情報の検査に拾われないため)
+        self.write(".codex/auth.json", header + NL)
+        results, *_ = self.run_home()
+        self.assertEqual(self.kinds(results), {("auth.json", "private-key")})
+
+    @unittest.skipIf(os.name == "nt", "POSIXの権限のみ")
+    def test_permission_warning(self):
+        k = "sk-ant-" + self.tok(40)
+        self.write(".continue/config.yaml", "apiKey: %s%s" % (k, NL), mode=0o644)
+        self.write(".cursor/mcp.json", json.dumps({"a": "sk-ant-" + self.tok(40)}), mode=0o600)
+        results, *_ = self.run_home()
+        by = {os.path.basename(r["path"]): r["perm"] for r in results}
+        self.assertIn("0o644", by["config.yaml"])
+        self.assertEqual(by["mcp.json"], "")
+
+    def test_cli_exit_codes_and_what_was_checked(self):
+        script = os.path.join(ROOT, "scripts", "ai_tool_config_secret_check.py")
+
+        def run(*args):
+            return subprocess.run([sys.executable, "-I", script, *args], capture_output=True, text=True, encoding="utf-8")
+
+        empty = run("--home", self.home)
+        self.assertEqual(empty.returncode, 0)
+        self.assertIn("存在したもの 0 箇所", empty.stdout)
+        self.assertEqual(run("--home", self.home, "--no-default-locations", "--path", os.path.join(self.home, "nope")).returncode, 2)
+        self.write(".cursor/mcp.json", json.dumps({"a": "sk-ant-" + self.tok(40)}))
+        found = run("--home", self.home)
+        self.assertEqual(found.returncode, 1)
+        self.assertIn("存在: ", found.stdout, "存在した場所を表示する")
+
+    def test_extra_paths_no_default_locations_symlinks_and_size(self):
+        self.write(".cursor/mcp.json", json.dumps({"a": "sk-ant-" + self.tok(40)}))
+        proj = os.path.join(self.home, "proj")
+        self.write("proj/.cursor/extra.json", json.dumps({"b": "ghp_" + self.tok(36)}))
+        results, *_ = self.run_home(extra_paths=[proj], use_defaults=False)
+        self.assertEqual(self.kinds(results), {("extra.json", "github")}, "既定の場所を調べない")
+        self.write("proj/big.json", json.dumps({"c": "ghp_" + self.tok(36)}) + " " * 600)
+        results, *_ = self.run_home(extra_paths=[proj], use_defaults=False, max_bytes=300)
+        self.assertNotIn("big.json", {os.path.basename(r["path"]) for r in results}, "大きすぎるファイルは読まない")
+        outside = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, outside, True)
+        with open(os.path.join(outside, "evil.json"), "w", encoding="utf-8") as f:
+            f.write(json.dumps({"d": "ghp_" + self.tok(36)}))
+        try:
+            os.symlink(outside, os.path.join(proj, "linkdir"))
+            os.symlink(os.path.join(outside, "evil.json"), os.path.join(proj, "linkfile.json"))
+        except (OSError, NotImplementedError):
+            return
+        results, *_ = self.run_home(extra_paths=[proj], use_defaults=False)
+        names = {os.path.basename(r["path"]) for r in results}
+        self.assertNotIn("evil.json", names)
+        self.assertNotIn("linkfile.json", names)
 
 
 class TestNoInvisibleCharacters(unittest.TestCase):
