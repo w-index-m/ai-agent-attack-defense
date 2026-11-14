@@ -1,0 +1,137 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>R7が数える8つのツール ── それぞれ何者か</title>
+<style>
+:root{
+  --bg:#f3f6f6; --sf:#ffffff; --ln:#d3dcde; --fg:#18262b; --mu:#566a71;
+  --font:"Hiragino Sans","Yu Gothic","Noto Sans JP",system-ui,sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+  --web:#7a2e8a; --auth:#c0511d; --smb:#0f6f68; --fw:#8a6d1d;
+  --guard:#3f6f94; --guard-bg:#e1ecf5;
+  --warn:#8a6d1d; --warn-bg:#f8efd2;
+  --ok:#0f6f68; --ok-bg:#e3f0ef;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);padding:28px 30px}
+.fig{width:1180px;margin:auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:22px;line-height:1.3}
+h1 small{font-size:13px;color:var(--mu);font-weight:400;display:block;margin-top:3px;line-height:1.5}
+.views{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.view{background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:11px 16px;font-size:12.5px;line-height:1.65}
+.view .vt{font-weight:700;font-size:13px;margin-bottom:2px}
+.view.recv{border-left:6px solid var(--warn)} .view.recv .vt{color:var(--warn)}
+.view.run{border-left:6px solid var(--guard)} .view.run .vt{color:var(--guard)}
+.legend{display:flex;gap:16px;font-size:11.5px;color:var(--mu);align-items:center}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--sf);border:1px solid var(--ln);border-top-width:6px;border-radius:10px;padding:13px 16px;display:flex;flex-direction:column;gap:7px}
+.card.web{border-top-color:var(--web)} .card.auth{border-top-color:var(--auth)} .card.smb{border-top-color:var(--smb)} .card.fw{border-top-color:var(--fw)}
+.top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.nm{font-family:var(--mono);font-size:17px;font-weight:700}
+.kind{font-size:12px;font-weight:700}
+.card.web .kind{color:var(--web)} .card.auth .kind{color:var(--auth)} .card.smb .kind{color:var(--smb)} .card.fw .kind{color:var(--fw)}
+.what{font-size:12.5px;line-height:1.6}
+.row{display:grid;grid-template-columns:78px 1fr;gap:8px;font-size:12px;line-height:1.55}
+.row .k{font-weight:700;font-size:11px;padding-top:1px}
+.row.see .k{color:var(--warn)} .row.def .k{color:var(--ok)} .row.rep .k{color:var(--guard)}
+code{font-family:var(--mono);font-size:11.5px;background:var(--bg);padding:0 4px;border-radius:4px}
+.note{font-size:11px;color:var(--mu);line-height:1.6}
+.legit{background:var(--sf);border:1px solid var(--ln);border-left:6px solid var(--smb);border-radius:10px;padding:10px 16px;font-size:12.5px;line-height:1.7}
+</style></head>
+<body><div class="fig">
+
+  <h1>R7が数える、ほかの8つのツール ── それぞれ何者か
+    <small>どれも、公開されている普通のツール。自分が管理する/許可を得た対象に使えば、正当な診断の道具。ここでは「何をするか」と「守る側にどう見えるか」だけを紹介する。</small>
+  </h1>
+
+  <div class="views">
+    <div class="view recv">
+      <div class="vt">① 受ける側(狙われたサーバーのログ)で見る</div>
+      <div>WebサーバーやDNS・認証のログに、<b>ツールの動きの形</b>が残る。例: 大量の404、ログイン失敗の連発。本リポジトリでは<b>R3</b>などが見る。</div>
+    </div>
+    <div class="view run">
+      <div class="vt">② 動かす側(ツールを起動したホスト)で見る</div>
+      <div>踏み台にされたサーバーや、エージェントの実行環境で、<b>1つの親プロセスが多数のツールを短時間に起動</b>する。これを見るのが<b>R7</b>。</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--web)"></i>Web・DNSを調べる/試す</span>
+    <span><i style="background:var(--auth)"></i>ログインを破る</span>
+    <span><i style="background:var(--smb)"></i>Windows/ファイル共有</span>
+    <span><i style="background:var(--fw)"></i>攻撃の枠組み(操作画面)</span>
+  </div>
+
+  <div class="grid">
+
+    <div class="card web">
+      <div class="top"><span class="nm">gobuster</span><span class="kind">隠れたもの探し(ffufの仲間)</span></div>
+      <div class="what">Webサイトの<b>隠れたパス・ファイル</b>、DNSの<b>サブドメイン</b>、仮想ホスト名などを、<b>単語の一覧で総当たり</b>して探す。Go製。ffufより単機能。</div>
+      <div class="row see"><span class="k">受ける側</span><span>短時間に大量のリクエストで、<b>404が大量</b>。DNSなら、存在しない名前の問い合わせ(NXDOMAIN)が大量。User-Agentに"gobuster"と出る場合がある(変更可能)。</span></div>
+      <div class="row def"><span class="k">防ぎ方</span><span>「隠れている」ことに頼らない(公開しない・認証)。レート制限。内部用のサブドメイン名を外に出さない。</span></div>
+    </div>
+
+    <div class="card web">
+      <div class="top"><span class="nm">nikto</span><span class="kind">既知の弱点チェッカー(古参)</span></div>
+      <div class="what">Webサーバーに、<b>危険な既定ファイル・古いバージョン・危ない設定</b>など、数千項目の「既知の問題」を片っ端から確認する。Perl製。</div>
+      <div class="row see"><span class="k">受ける側</span><span><b>非常に騒がしい</b>。既知の問題のあるパスへの大量のアクセスが短時間に来る。User-Agentに"Nikto"と出る場合がある。</span></div>
+      <div class="row def"><span class="k">防ぎ方</span><span>ソフトを最新に。サンプル・既定ファイルを消す。バージョン表示を隠す。WAF。</span></div>
+    </div>
+
+    <div class="card web">
+      <div class="top"><span class="nm">nuclei</span><span class="kind">既知の脆弱性をテンプレートで一括照合</span></div>
+      <div class="what">「この脆弱性は、こう確認できる」を書いた<b>テンプレート</b>(YAML)を大量に使い、<b>多数のサイトを速く</b>照合する。公開テンプレートが数千ある。ProjectDiscovery製、Go。</div>
+      <div class="row see"><span class="k">受ける側</span><span>脆弱性ごとに特有のリクエストが、<b>短時間に多種類</b>来る(1つ1つは単発に見える)。</span></div>
+      <div class="row def"><span class="k">防ぎ方</span><span>公開された脆弱性は<b>早く直す</b>。外から見える製品を把握する。</span></div>
+      <div class="row rep"><span class="k">本リポジトリ</span><span>CVEごとの検知(R13〜R19など)、<code>dep_cve_check.py</code>。</span></div>
+    </div>
+
+    <div class="card web">
+      <div class="top"><span class="nm">wpscan</span><span class="kind">WordPress専用の診断</span></div>
+      <div class="what">WordPressの<b>版・入っているプラグインとテーマ・ユーザー名</b>を調べ、既知の脆弱性の一覧と照合する。Ruby製。</div>
+      <div class="row see"><span class="k">受ける側</span><span>プラグインやテーマのフォルダへの、<b>多数の名前でのアクセス</b>。ユーザー名を調べるアクセス。</span></div>
+      <div class="row def"><span class="k">防ぎ方</span><span>本体とプラグインを更新。使わないプラグインを消す。ユーザー名が見えない設定。ログインの保護。</span></div>
+      <div class="row rep"><span class="k">本リポジトリ</span><span>WordPressの件はR13。</span></div>
+    </div>
+
+    <div class="card web">
+      <div class="top"><span class="nm">sqlmap</span><span class="kind">SQLインジェクションの自動試行</span></div>
+      <div class="what">入力欄やURLの値に<b>SQLの構文を混ぜた値を次々試し</b>、SQLインジェクションがあるかを自動で判定する。見つかると、データベースの中身を読み出す機能もある。Python製。</div>
+      <div class="row see"><span class="k">受ける側</span><span>同じURLに、<b>引用符やSQL構文を含む値</b>を少しずつ変えて大量に。DBのエラーが増える。User-Agentに"sqlmap"と出る場合がある。</span></div>
+      <div class="row def"><span class="k">防ぎ方</span><span><b>パラメータ化クエリ</b>を使う。DBの権限を最小に。エラーを画面に出さない。WAF。</span></div>
+      <div class="row rep"><span class="k">本リポジトリ</span><span>攻撃連鎖①(ログイン画面のSQLi)、Semgrepの検出。</span></div>
+    </div>
+
+    <div class="card auth">
+      <div class="top"><span class="nm">hydra / medusa</span><span class="kind">ログインのパスワード総当たり</span></div>
+      <div class="what">SSH・FTP・Webのログイン画面・リモートデスクトップ・DBなど、<b>ログインのあるサービス</b>に、ユーザー名とパスワードの組み合わせを<b>大量に試す</b>。</div>
+      <div class="row see"><span class="k">受ける側</span><span>認証ログに、<b>ログイン失敗の大量発生</b>。1つの送信元から連続、または<b>多数の送信元に分散</b>。</span></div>
+      <div class="row def"><span class="k">防ぎ方</span><span><b>多要素認証</b>。失敗が続いたら遅くする/ロック。SSH・RDPをネットに直接出さない。SSHは鍵認証。</span></div>
+      <div class="row rep"><span class="k">本リポジトリ</span><span><code>netcheck</code>(露出)、R30(多数の送信元IPからの認証)。</span></div>
+    </div>
+
+    <div class="card smb">
+      <div class="top"><span class="nm">enum4linux</span><span class="kind">Windows/Sambaの情報の列挙</span></div>
+      <div class="what">Windowsやsamba(ファイル共有)に<b>SMB</b>という仕組みで問い合わせ、<b>ユーザー名・グループ・共有フォルダ・パスワードの規則</b>などを集める。Perl製。</div>
+      <div class="row see"><span class="k">受ける側</span><span><b>139/445番(SMB)</b>への、短時間の多数の問い合わせ。<b>認証なし</b>の問い合わせ。</span></div>
+      <div class="row def"><span class="k">防ぎ方</span><span>認証なしの問い合わせを許さない設定。<b>445番をネットに出さない</b>(内部だけ)。SMB署名。更新。</span></div>
+      <div class="row rep"><span class="k">本リポジトリ</span><span><code>netcheck</code>が445番(SMB)の露出を見る。</span></div>
+    </div>
+
+    <div class="card fw">
+      <div class="top"><span class="nm">msfconsole</span><span class="kind">攻撃フレームワークの操作画面</span></div>
+      <div class="what"><b>Metasploit</b>(Rapid7製、Ruby)の操作画面。<b>既知の脆弱性を突く部品</b>や、侵入後に使う部品を大量に束ねていて、選んで実行・管理できる。診断(ペンテスト)の標準的な道具。</div>
+      <div class="row see"><span class="k">受ける側</span><span>脆弱性を突くリクエスト(IDS/WAFの署名に引っかかることが多い)や、<b>侵入後の外向きの接続</b>。</span></div>
+      <div class="row def"><span class="k">防ぎ方</span><span>公開された脆弱性を<b>早く直す</b>。<b>外向き通信を絞る</b>。EDR。</span></div>
+      <div class="row rep"><span class="k">本リポジトリ</span><span>起動をR7が見る。</span></div>
+    </div>
+
+  </div>
+
+  <div class="legit">
+    <b>AIエージェントだと何が変わる?</b> LLMが結果を見て「次はこのツール」と選び、これらを<b>人間より速く、休まず</b>呼ぶだけで、ツール自体は同じ。
+    だから守る側は、ツール名より、<b>短時間の大量アクセス・ログイン失敗の連発・404の連発</b>のような<b>動きの形</b>を見る方が効く(User-Agentの名乗りは、簡単に変えられる)。
+  </div>
+
+  <div class="note">参照: <code>ai-agent-attack-tools.png</code>(nmapとffuf) / <code>security-scan/glossary.ja.md</code> / <code>security-scan/detections/</code>(R3・R7・R13・R30)。防御・検知の説明に限定しており、攻撃の実行手順ではない。</div>
+
+</div></body></html>
