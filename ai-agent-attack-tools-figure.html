@@ -1,0 +1,138 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8">
+<title>「普通のツール」の正体 ── nmap と ffuf</title>
+<style>
+:root{
+  --bg:#f3f6f6; --sf:#ffffff; --ln:#d3dcde; --fg:#18262b; --mu:#566a71;
+  --font:"Hiragino Sans","Yu Gothic","Noto Sans JP",system-ui,sans-serif;
+  --mono:ui-monospace,Menlo,Consolas,monospace;
+  --net:#c0511d; --net-bg:#fbe9dd;
+  --web:#7a2e8a; --web-bg:#efe3f3;
+  --guard:#3f6f94; --guard-bg:#e1ecf5;
+  --ok:#0f6f68; --ok-bg:#e3f0ef;
+  --warn:#8a6d1d; --warn-bg:#f8efd2;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);padding:28px 30px}
+.fig{width:1180px;margin:auto;display:flex;flex-direction:column;gap:16px}
+h1{font-size:22px;line-height:1.3}
+h1 small{font-size:13px;color:var(--mu);font-weight:400;display:block;margin-top:3px;line-height:1.5}
+.house{background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:12px 18px;font-size:13px;line-height:1.7;display:flex;gap:14px;align-items:center}
+.house .ic{font-size:22px}
+.house b.n{color:var(--net)} .house b.w{color:var(--web)}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{background:var(--sf);border:1px solid var(--ln);border-top-width:6px;border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:11px}
+.card.net{border-top-color:var(--net)} .card.web{border-top-color:var(--web)}
+.tag{font-size:12.5px;font-weight:700}
+.card.net .tag{color:var(--net)} .card.web .tag{color:var(--web)}
+.card h2{font-size:20px;line-height:1.3}
+.card h2 span{font-size:13px;font-weight:400;color:var(--mu);margin-left:6px}
+.desc{font-size:13px;line-height:1.65}
+.sec{display:flex;flex-direction:column;gap:4px}
+.sec .lb{font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.03em}
+.sec .tx{font-size:12.5px;line-height:1.6}
+.like{background:var(--bg);border-radius:8px;padding:9px 12px;font-size:12.5px;line-height:1.6}
+.code{font-family:var(--mono);font-size:11.5px;background:var(--bg);border-radius:6px;padding:7px 10px;color:var(--fg)}
+.codes{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px;align-items:baseline}
+.codes .c{font-family:var(--mono);font-weight:700;font-size:12px}
+.see{background:var(--warn-bg);border:1px solid var(--warn);border-radius:8px;padding:9px 12px}
+.see .lb{color:var(--warn)}
+.here{background:var(--guard-bg);border:1px solid var(--guard);border-radius:8px;padding:9px 12px}
+.here .lb{color:var(--guard)}
+.def{background:var(--ok-bg);border:1px solid var(--ok);border-radius:8px;padding:9px 12px}
+.def .lb{color:var(--ok)}
+.others{background:var(--sf);border:1px solid var(--ln);border-radius:10px;padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+.others .hd{font-size:13px;font-weight:700}
+.others .hd small{font-size:11.5px;font-weight:400;color:var(--mu);margin-left:8px}
+.chips{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.chip{border:1px solid var(--ln);border-radius:8px;padding:8px 10px;background:var(--bg)}
+.chip .nm{font-family:var(--mono);font-size:12px;font-weight:700}
+.chip .ds{font-size:11.5px;line-height:1.5;margin-top:2px;color:var(--fg)}
+.agent{background:var(--sf);border:1px solid var(--ln);border-left:6px solid var(--web);border-radius:10px;padding:12px 18px;font-size:12.5px;line-height:1.7}
+.note{font-size:11px;color:var(--mu);line-height:1.6}
+</style></head>
+<body><div class="fig">
+
+  <h1>「普通のツール」の正体 ── nmap と ffuf は、何を調べているのか
+    <small>「AIエージェント攻撃とは」の図の「実行（手）」で使われる道具。どちらも、人間のペンテスターが使う、公開されている普通のツール。<br>LLMは「どのツールを、どんな引数で呼ぶか」を決めるだけで、実際に通信するのはこのツール自身。</small>
+  </h1>
+
+  <div class="house">
+    <span class="ic">🏢</span>
+    <div>建物にたとえると ── <b class="n">nmap</b> は「建物に<b>ドアが何枚あって、どれが開いているか</b>」を調べる。
+    <b class="w">ffuf</b> は、開いているドアの中に入ったあと、「<b>部屋の名前の一覧を片っ端から呼んで、返事のある部屋</b>を探す」。</div>
+  </div>
+
+  <div class="two">
+
+    <div class="card net">
+      <div class="tag">① ネットワークの入口を調べる</div>
+      <h2>nmap<span>＝ ポートスキャン</span></h2>
+      <div class="desc">相手のコンピューターの、どの<b>「ポート」(通信の入口の番号)</b>が開いていて、そこで<b>何のサービス</b>(Web・SSH・データベースなど)が動いているかを調べる。</div>
+      <div class="like">🚪 ドアが何枚あり、どれが開いているかを、<b>端から確認して回る</b>。<b>建物の外から</b>でも、できる。</div>
+      <div class="codes">
+        <span class="c">open</span><span>開いている(サービスが応答する)</span>
+        <span class="c">closed</span><span>閉じている(応答はあるが、サービスは動いていない)</span>
+        <span class="c">filtered</span><span>見えない(ファイアウォール等が遮っていて、判別できない) ← <b>守りが効いている状態</b></span>
+      </div>
+      <div class="sec see">
+        <div class="lb">守る側には、こう見える</div>
+        <div class="tx">同じ送信元から、<b>多数のポートへ、短時間に接続</b>が来る(ファイアウォールやフローのログ)。</div>
+      </div>
+      <div class="sec here">
+        <div class="lb">このリポジトリでは</div>
+        <div class="tx">自分側の確認は <code>netcheck</code>(開いているポートの棚卸し)。nmapの<b>起動</b>はR7(ホスト側のツール連続起動)が見る。<b>ポートスキャンそのものを検知するルールは、現状は無い。</b></div>
+      </div>
+      <div class="sec def">
+        <div class="lb">防ぎ方</div>
+        <div class="tx">不要なポートは<b>閉じる/そもそも公開しない</b>。ファイアウォールで、<b>許可した送信元だけ</b>に絞る。自分の側から<code>netcheck</code>で、「外から見えているもの」を棚卸しする。</div>
+      </div>
+    </div>
+
+    <div class="card web">
+      <div class="tag">② Webサイトの中を調べる</div>
+      <h2>ffuf<span>＝ Webの「隠れたパス」の総当たり</span></h2>
+      <div class="desc">Webサイトの中に<b>どんなページやフォルダがあるか</b>を、<b>単語の一覧</b>(wordlist)を片っ端から当てはめて探す。URLの<code>FUZZ</code>の部分に、一覧の単語(admin・backup・login …)を<b>1つずつ入れて大量にアクセス</b>し、返事で「ある/ない」を見分ける。Go言語製のオープンソース。名前は "Fuzz Faster U Fool" から。</div>
+      <div class="like">🔑 ドアの中に入ったあと、<b>部屋の名前の一覧を片っ端から呼ぶ</b>。公開しているつもりのない<b>管理画面やバックアップ</b>が見つかることがある。</div>
+      <div class="codes">
+        <span class="c">200 / 301</span><span>ある(または別の場所へ移動)</span>
+        <span class="c">403 / 401</span><span>ある。ただし、入るには許可が要る</span>
+        <span class="c">404</span><span>無い ← <b>大半はこれ</b>(だから、404が大量に出るのが特徴)</span>
+      </div>
+      <div class="sec see">
+        <div class="lb">守る側には、こう見える</div>
+        <div class="tx">同じ送信元から、<b>短時間に大量のリクエスト</b>。存在しないパスが多く、<b>404が大量に混ざる</b>。User-Agentに"Fuzz Faster U Fool"と出る場合もある(ただし<b>簡単に変えられる</b>ので、これに頼らない)。</div>
+      </div>
+      <div class="sec here">
+        <div class="lb">このリポジトリでは</div>
+        <div class="tx"><b>R3</b>(管理画面系パスの401/403/404の列挙バースト)、<code>web_recon_burst_check.py</code>(ログを読む版)。ffufの<b>起動</b>はR7が見る。</div>
+      </div>
+      <div class="sec def">
+        <div class="lb">防ぎ方</div>
+        <div class="tx">管理画面・バックアップ・<code>.git</code>・<code>.env</code>を<b>公開しない</b>/外から見えなくする。認証を必須に。レート制限・WAFのボット対策。<code>netcheck</code>で露出を確認。</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="others">
+    <div class="hd">R7が数える、ほかのツール<small>(R7は、1つの親プロセスが、これらを短時間に何本も起動することを見る)</small></div>
+    <div class="chips">
+      <div class="chip"><div class="nm">gobuster</div><div class="ds">ffufと同種。パスやサブドメインの総当たり</div></div>
+      <div class="chip"><div class="nm">nikto</div><div class="ds">Webサーバーの、既知の弱点や危ない設定のチェック</div></div>
+      <div class="chip"><div class="nm">nuclei</div><div class="ds">既知の脆弱性を、テンプレートで一括照合</div></div>
+      <div class="chip"><div class="nm">wpscan</div><div class="ds">WordPress専用の診断</div></div>
+      <div class="chip"><div class="nm">sqlmap</div><div class="ds">SQLインジェクションの自動試行</div></div>
+      <div class="chip"><div class="nm">hydra / medusa</div><div class="ds">ログインのパスワードの総当たり</div></div>
+      <div class="chip"><div class="nm">enum4linux</div><div class="ds">Windows/Sambaの、共有やユーザー情報の列挙</div></div>
+      <div class="chip"><div class="nm">msfconsole</div><div class="ds">Metasploit(攻撃フレームワーク)の操作画面</div></div>
+    </div>
+  </div>
+
+  <div class="agent">
+    <b>AIエージェントだと何が変わる?</b> LLMが「このポートが開いている → 次はffufでパス一覧を試そう」と<b>判断</b>し、ツールを呼ぶ。つまり、<b>人間が手で打っていた作業が、速く、休まず繰り返される</b>だけで、ツール自体は変わらない。
+    だから守る側も、「ツール名」より、<b>短時間の大量アクセス(バースト)</b>や、<b>同じ送信元からの404の連発</b>のような、<b>動きの形</b>を見る方が効く。
+  </div>
+
+  <div class="note">参照: <code>ai-agent-attack-concept.png</code>(「AIエージェント攻撃」とは) / <code>security-scan/glossary.ja.md</code> / <code>security-scan/detections/</code>(R3・R7)。防御・検知の説明に限定しており、攻撃の実行手順ではない。</div>
+
+</div></body></html>

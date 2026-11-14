@@ -96,6 +96,7 @@ For the full list from R9 onward (LLM-targeted attacks, real individual-CVE resp
 | Elastic / Datadog | Log analysis and monitoring platforms. This repo's `summarize.py` can output in these formats too. |
 | Semgrep / Trivy / gitleaks | Tools for code analysis / vulnerability & misconfiguration scanning / secret detection, respectively. |
 | ZAP / nmap | Standard tools for web-app testing and port scanning, respectively. |
+| ffuf | A Go tool that brute-forces hidden paths/pages on a website by substituting entries from a wordlist into a `FUZZ` placeholder in the URL and reading the responses (200/301 = exists, 401/403 = exists but needs permission, 404 = not found). Its signature on the defender's side is a burst of requests from one source with many 404s (R3; the launch of the tool itself is seen by R7). See the figure `ai-agent-attack-tools.png` (Japanese). |
 | SARIF | The standard format for static-analysis results. Tools like CodeQL emit it; `vuln_triage` can ingest it. |
 | zgrab2 | The ZMap project's application-layer scanner. Actually connects to a target and records responses (banners, TLS, etc.) as JSON Lines. It has no built-in scope limit, so use it only on assets you own (`scripts/zgrab2_guard.py` narrows the target list). |
 | JSON Lines | A format with one JSON object per line (what zgrab2 and similar tools emit). `vuln_triage` can read it as-is. |
