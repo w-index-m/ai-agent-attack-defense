@@ -120,3 +120,24 @@ DBのログ出力の機能を使い、JSPのWebシェルを作らせた例を詳
   (デプロイ用ツールとして除外)は一致しない。`run_detection_regression.py`に表示を確かめるケースを追加し、
   判定を無効にすると失敗することを確認した。
 
+## R34(非エディタによる、AI・IDEの設定ファイルの書き込み)の追加(2026-11-14)
+
+GTIGの2026年9月のレポート(利用者が貼り付けた本文に基づく)が、マルウェア(DUSTMAKER)が、AI・IDEの隠し設定
+ディレクトリ(`.claude/`・`.vscode/`・`.cursor/`)に書き込み、IDE/AI拡張がワークスペースを開くたびにコマンドが
+動くようにし、設定ファイルでAIアシスタントにコマンドを実行させること、また、別の集団(MIDNIGHT NEPTUNE)が
+Claude CLIのhooksを改ざんしたことを報告している。R32(エージェントが自分のメモリを書く2段の形)とは別の、
+**外部のプロセスが、実行に関わる設定を書く1段の形**として、`file_event_check.py`に`[R34]`を追加した。
+
+- 対象: `.claude/settings.json`・`settings.local.json`・`hooks/`・`commands/`、`.vscode/tasks.json`・`settings.json`・
+  `launch.json`、`.cursor/mcp.json`・`rules/`、`.codex/config.toml`、`.mcp.json`、`.cursorrules`。
+  **レポートが挙げているのはディレクトリ名までで、このファイル名の一覧は、「コマンドを実行できる設定の置き場所」
+  として、このリポジトリが選んだもの**(探索的ヒューリスティック。特定キャンペーンのシグネチャではない)。
+- 除外(既知の書き込み元): エディタ(`code`・`cursor`・`codium`・`vim`など)、`git`、AIアシスタント自身
+  (`claude`・`codex`)。`node_modules/`・`site-packages/`配下も除外。
+- 誤検知の見込み: Claude CodeをNodeで動かしている場合、許可の記録でnodeが`.claude/settings.local.json`を書く。
+  nodeを許可すると、JavaScriptのローダーも見逃すので、環境ごとに判断する。scaffoldingや構成管理ツールの書き込みも対象になる。
+- Linux形式のパスのみ(Windowsのパスは未対応)。
+- 確認(合成ログ): `node`・`bash`・`python3`・`curl`による4件が`[R34]`。エディタ・`git`・設定ではない`.claude/cache`・
+  `node_modules`配下は一致しない。`run_detection_regression.py`に表示を確かめるケースを追加し、判定を無効にする・
+  書き込み元の除外を外す・依存フォルダの除外を外す、の3通りで、失敗することを確認した。
+

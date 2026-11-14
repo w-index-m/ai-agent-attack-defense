@@ -1,0 +1,77 @@
+title: Non-editor process writes an execution-capable AI/IDE configuration file
+id: 4b8e2d71-5c93-4a1f-8e60-r34aiidecfg00
+status: experimental
+description: >
+  R34. Detects a process that is NOT a known editor, version-control tool, or the AI assistant itself
+  writing an execution- or automation-capable configuration file of an AI coding assistant or IDE:
+  Claude settings and hooks, VS Code tasks/settings/launch, Cursor MCP and rules, Codex config, and
+  project-level MCP configuration. Single-stage; the two-stage, agent-writes-its-own-memory shape is
+  R32 (a different mechanism).
+  Google Threat Intelligence Group's September 2026 AI Threat Tracker report (per the text a user
+  pasted into this session; the full URL was not verified) reports malware doing this in real campaigns: the DUSTMAKER credential
+  stealer drops or modifies files in hidden AI-assistant and IDE workspace directories (.claude/,
+  .vscode/, .cursor/) so that its commands run automatically when the IDE or an AI extension opens the
+  workspace, and uses configuration files to make the AI assistant run commands; MIDNIGHT NEPTUNE
+  (DPRK-nexus) altered Claude CLI hooks. The report names directories, not exact file names: the
+  file list here is this repo's choice of the places where such configuration can run commands, so
+  an exploratory heuristic and not a signature for any campaign.
+  Linux-style paths only (file_event). Tune the known-writer list for your environment.
+references:
+  - ../gtig-ai-threat-tracker-2026-09-crosscheck.ja.md
+  - r32_persistent_agent_memory_second_order_injection.yml
+author: ai-agent-attack-defense
+date: 2026/11/14
+logsource:
+  product: linux
+  category: file_event
+detection:
+  selection_config_contains:
+    TargetFilename|contains:
+      - '/.claude/settings.json'
+      - '/.claude/settings.local.json'
+      - '/.claude/hooks/'
+      - '/.claude/commands/'
+      - '/.vscode/tasks.json'
+      - '/.vscode/settings.json'
+      - '/.vscode/launch.json'
+      - '/.cursor/mcp.json'
+      - '/.cursor/rules/'
+      - '/.codex/config.toml'
+  selection_config_endswith:
+    TargetFilename|endswith:
+      - '/.mcp.json'
+      - '/.cursorrules'
+  filter_known_writers:
+    Image|endswith:
+      - '/code'
+      - '/code-insiders'
+      - '/cursor'
+      - '/codium'
+      - '/claude'
+      - '/codex'
+      - '/git'
+      - '/vim'
+      - '/nvim'
+      - '/nano'
+      - '/emacs'
+      - '/subl'
+  filter_dependencies:
+    TargetFilename|contains:
+      - '/node_modules/'
+      - '/site-packages/'
+  condition: (selection_config_contains or selection_config_endswith) and not filter_known_writers and not filter_dependencies
+fields:
+  - TargetFilename
+  - Image
+  - ParentImage
+  - User
+falsepositives:
+  - The AI assistant itself writing its own settings (for example Claude Code run as a node process recording a permission you approved). The assistant's own binary is allowlisted above, but a node-hosted CLI appears as node: allowlist it only if you accept that it is also how a JavaScript loader would appear.
+  - Scaffolding and onboarding scripts, dotfile managers, configuration-management tools (Ansible etc.), and shell one-liners that a developer runs on purpose to create .vscode/ or .claude/ settings.
+  - git checkout/pull rewriting tracked config files (git is allowlisted; a wrapper process is not).
+level: medium
+tags:
+  - attack.persistence
+  - attack.execution
+  - attack.t1546
+  - attack.t1059

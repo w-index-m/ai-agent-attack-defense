@@ -138,6 +138,10 @@
       "kind": "detection",
       "name": "エージェントの永続メモリ/設定ファイル(CLAUDE.md等)への非エディタプロセスによる書き込み後、別セッションの最初のegressが許可リスト外ドメインへ向かう（本リポジトリ独自の発想による二次IDPI、特定事件のモデル化ではない）"
     },
+    "R34": {
+      "kind": "detection",
+      "name": "非エディタのプロセスが、AI・IDEの設定ファイル(.claude/settings*.json・hooks、.vscode/tasks.json、.cursor/mcp.json等、実行や自動化に関わるもの)へ書き込む（GTIGの2026年9月のレポートが、DUSTMAKER・MIDNIGHT NEPTUNEによる同種の設定・hooksの乗っ取りを報告。特定キャンペーンのシグネチャではない、探索的ヒューリスティック）"
+    },
     "R33": {
       "kind": "detection",
       "name": "サーバ/本番ホストから、外部のwebhook・リクエスト受け皿・OAST系サービスへの通信（GTIG/Mandiantの記事(2026-10-30)が、ARTEXの運用で、webhook.siteの多数のURLが結果の送り先に使われたと報告。固有名は記事にwebhook.siteのみで、他は一般に知られる公開サービスの例）"
@@ -386,6 +390,12 @@
         "falco": false
       },
       "R33": {
+        "sigma": true,
+        "datadog": true,
+        "elastic": false,
+        "falco": false
+      },
+      "R34": {
         "sigma": true,
         "datadog": true,
         "elastic": false,

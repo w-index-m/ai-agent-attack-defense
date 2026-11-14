@@ -1,0 +1,30 @@
+{
+  "name": "[R34] Non-editor process writes an execution-capable AI/IDE configuration file",
+  "type": "log_detection",
+  "message": "A process that is not a known editor, version-control tool, or the AI assistant itself wrote an execution- or automation-capable configuration file of an AI coding assistant or IDE (Claude settings/hooks, VS Code tasks/settings/launch, Cursor MCP/rules, Codex config, project .mcp.json). GTIG's September 2026 AI Threat Tracker report describes malware (DUSTMAKER) and a DPRK-nexus cluster (MIDNIGHT NEPTUNE) doing this in real campaigns; the file list is this repository's choice of places where such configuration can run commands (exploratory heuristic, not a campaign signature). Single-stage; the two-stage agent-memory shape is R32.\n\nTune: allowlist scaffolding/config-management tools and, if you accept the trade-off, a node-hosted AI CLI.",
+  "tags": [
+    "source:ai-agent-attack-defense",
+    "technique:T1546",
+    "technique:T1059",
+    "tactic:persistence",
+    "tactic:execution"
+  ],
+  "queries": [
+    {
+      "name": "ai_ide_config_write",
+      "query": "source:file_event @file.path:(*\\/\\.claude\\/settings\\.json* OR *\\/\\.claude\\/settings\\.local\\.json* OR *\\/\\.claude\\/hooks\\/* OR *\\/\\.claude\\/commands\\/* OR *\\/\\.vscode\\/tasks\\.json* OR *\\/\\.vscode\\/settings\\.json* OR *\\/\\.vscode\\/launch\\.json* OR *\\/\\.cursor\\/mcp\\.json* OR *\\/\\.cursor\\/rules\\/* OR *\\/\\.codex\\/config\\.toml* OR *\\/\\.mcp\\.json OR *\\/\\.cursorrules) -@process.image:(*\\/code OR *\\/code-insiders OR *\\/cursor OR *\\/codium OR *\\/claude OR *\\/codex OR *\\/git OR *\\/vim OR *\\/nvim OR *\\/nano OR *\\/emacs OR *\\/subl) -@file.path:(*\\/node_modules\\/* OR *\\/site-packages\\/*)"
+    }
+  ],
+  "cases": [
+    {
+      "name": "Non-editor process wrote an AI/IDE execution-capable configuration file",
+      "status": "medium",
+      "condition": "ai_ide_config_write > 0"
+    }
+  ],
+  "options": {
+    "evaluationWindow": 300,
+    "keepAlive": 3600,
+    "maxSignalDuration": 86400
+  }
+}

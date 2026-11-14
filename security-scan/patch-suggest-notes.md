@@ -69,3 +69,27 @@ and oversized or missing files are skipped. Verified: real end-to-end runs (gene
 disposable git repo and a mock OpenAI-compatible server, confirming secrets are never transmitted, patches outside
 the repo root are rejected, and only confirmed patches change files. Honest limit: small local models (e.g.
 qwen2.5:1.5b) can propose incorrect fixes — always read the diff and run tests before trusting it.
+
+## 信頼できないコードをLLMに渡す側と、LLMが作ったdiffの検査(2026-11-14)
+
+GTIGの2026年9月のレポートは、攻撃者が、コード中のコメントに、LLM宛の指示や、LLMに拒否させるための極端な文章を埋め込み、
+LLMのセキュリティスキャナやAIコーディング支援を操る手口を報告している。このツールは、指摘の前後12行のコード
+(第三者が書いたもの)をLLMに渡し、LLMが作ったdiffを(人の確認の後で)適用する。以前は、指示とコードが同じ`user`ロールで、
+区切りも無害化も無く(11/03に`vuln_triage.html`で直したのと同じ型の弱点)、diffは人の目だけが歯止めだった。
+
+- **渡す側**: 指示は`system`、コードは`<<<CODE ... CODE>>>`で区切ったデータとして別の`user`メッセージ、最後に依頼(3メッセージ)。
+  コードは無害化する(不可視・双方向制御・行区切りの除去、制御文字は空白、`<<<`の偽装の無害化、300文字超の行の切り詰め)。
+  コード中に、LLM宛の指示らしい文があれば、警告を出す(スキャン対象が仕込んだ可能性)。
+- **作ったdiffの検査**(`check_diff`。**提案を作るときと、`--apply`の直前の、両方**で実行。通らなければ却下):
+  変更するのが指摘のファイル1個だけ(新規作成・削除・名前や権限の変更・バイナリは却下)、リポジトリの外に出ない、
+  変更が指摘の場所の近く(±3行)だけ、変更行が40行以内、足された行に不可視文字・LLM宛の指示らしい文・
+  元のファイルに無い新しいURL・新しいネットワーク通信/動的なコード実行/コマンド実行/難読化/危険なデシリアライズが無い。
+  `subprocess`・`shell=True`・`chmod`などは警告のみ。「足された行にあり、元のファイルに無いもの」だけを数えるので、
+  元からネットワーク通信を使っているファイルの修正は、却下されない。
+- 限界: これは決定的な規則で、LLMが操られないことの保証ではない(規則に当たらない形の悪意は通り得る)。人がdiffを読む
+  ことは、引き続き必要。小さいモデルは、正しい修正でも、規則に当たって却下されることがある(その場合は手で直す)。
+- 確認: 偽のOpenAI互換サーバーで全体を実行した。LLMへは3メッセージで届き、コードの不可視文字は除かれ、コード中の
+  指示らしい文に警告が出た。正常なdiffは作られ、ネットワーク通信と`eval`を足すdiffは却下された。
+  回帰テスト(`tools/test_ai_guards.py`の`TestPatchSuggest`)は、規則を1つずつ無効にして、失敗することを確認した。
+  **実際のLLM(Ollama等)での確認は、まだ**。
+
