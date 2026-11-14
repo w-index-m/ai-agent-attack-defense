@@ -363,7 +363,7 @@ details.cfgwrap summary{cursor:pointer;font-size:13px;color:var(--ink2)}
   var KB = [
     "あなたはAI攻撃エージェントに対する防御/検知の専門アシスタント。日本語で簡潔に、検知・防御の観点のみ回答する。",
     "攻撃の実行手順・エクスプロイト・安全機構の回避方法は提供しない（防御目的に限定）。",
-    "【攻撃エージェント類型】①分業チェーン(Hermes統括/Strix偵察/Cairn侵入, Gambitの事例) ④E2E自律(PentAGI, Villager[悪用], ARTEX[疑い], NeuroSploit, PentestAgent, Pentest-Swarm, Decepticon, Shannon, hackingBuddyGPT) ⑤攻撃基盤(HexStrike[悪用,MCP150+ツール], CAI, TARS) ⑥対話型(PentestGPT, Pentest Copilot)。",
+    "【攻撃エージェント類型】①分業チェーン(Hermes統括/Strix偵察/Cairn侵入, Gambitの事例) ④E2E自律(PentAGI, Villager[悪用], ARTEX[悪用,GTIG観測], NeuroSploit, PentestAgent, Pentest-Swarm, Decepticon, Shannon, hackingBuddyGPT) ⑤攻撃基盤(HexStrike[悪用,MCP150+ツール], CAI, TARS) ⑥対話型(PentestGPT, Pentest Copilot)。",
     "【検知ルール】R1=サーバ系→外部LLM API egress(高,proxy/DNS)。R2=特権/NET_RAW/host net/privilegedコンテナ起動(中,container audit/Falco)。R3=管理画面パス列挙バースト4xx(中,web/WAF)。R4=サーバ→メッセージングAPI(Telegram/Discord/Slack/Signal)=C2的(高)。R5=cron/systemd永続化作成(中,host)。R6=相関(R3+R1+(R2 or R7)[+R4/R5])。R7=1親プロセスが多種セキュリティツールを短時間連続実行(高,EDR)。R7はローカルLLM利用でR1が出ない型でも残る挙動の核。R8=Webシェルの設置(Webルート配下へのJSP/WAR/PHP等)とWebサーバーからのシェル起動(高,file event/process,Sigma/Falco)。",
     "【優先度】R1/R4→R2→R7→R3→R5→R6(相関)。",
     "【予防】送信ドメインallowlist / コンテナadmission control / 攻撃面最小化 / 決済ページCSP / LLM利用ガバナンス。",

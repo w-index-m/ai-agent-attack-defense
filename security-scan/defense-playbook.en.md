@@ -191,6 +191,18 @@ This expands on "a WAF is supplementary" from step ①. **A WAF is not a substit
 Go **alert only → blocking with human approval → limited automatic blocking**. Jumping straight to auto-blocking lets false positives take down your own service.
 Automatic IP blocking is weak against distributed IPs and slow attacks; combine it with allowlists and rate limits.
 
+### 4.4 Against machine-speed attacks, time from detection to containment decides the outcome
+GTIG/Mandiant's report (see [`artex-gtig-crosscheck.ja.md`](artex-gtig-crosscheck.ja.md), Japanese) says
+autonomous attack frameworks keep the same techniques but move to the next stage in **bursts of seconds to
+tens of seconds**, and that detection and disruption/response are different functions — **detecting alone
+does not stop the attacker from completing the objective**. Without changing the staged approach of §4.3,
+decide in advance:
+- **Small, pre-approved automatic actions** (e.g. temporarily revoking a suspect identity's session or
+  short-lived credentials, temporarily blocking a host's egress). Only low-impact, quickly reversible ones.
+- **Actions that wait for a human** (disabling accounts, isolating hosts, production network changes), and
+  **who approves and how to reach them**.
+- A **target time** from detection to first action per signal; measure it in exercises (§7).
+
 ---
 
 ## 5. Decoy-based detection (honeytokens) — design memo [not implemented]
