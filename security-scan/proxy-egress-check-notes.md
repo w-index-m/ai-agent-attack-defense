@@ -140,3 +140,20 @@ Unit 42自身の記事に差し替えた。直接fetchはいずれもブロッ�
 陰性入力は必ず誤検知0件であることを確認するようになった。壊れた場合は
 `results/detection_regression.json`に記録され、`scripts/summarize.py`経由でCIの要約にも
 出る。詳細は`scripts/run_detection_regression.py`自身のdocstring参照。
+
+## R33(外部のwebhook・リクエスト受け皿・OAST系サービスへの通信)の追加(2026-11-14)
+
+GTIG/Mandiantの記事「ARTEX and Friends」(2026-10-30)が、ARTEXの実運用で`webhook.site`の多数のURLが
+結果の送り先に使われたと報告していることを受けて、`R33_WEBHOOK_OAST_DOMAINS`を追加した
+(`detections/sigma/r33_server_webhook_oast_egress.yml`と同じ一覧。完全一致、またはサブドメイン)。
+
+- 記事に固有名があるのは`webhook.site`のみ。ほかのホスト(`interact.sh`・`oast.*`・`pipedream.net`・
+  `requestcatcher.com`・`burpcollaborator.net`・`beeceptor.com`)は、同種の一般に知られる公開サービスの
+  例で、網羅ではない。記事の事例に紐づくものでもない。
+- トンネル・ファイル転送系のサービスは、開発端末での誤検知が多いため、含めていない。
+- 未実装: 記事が示す「同じホストの多数の異なるURLへ、短時間に送る(宛先のローテーション)」の検知。
+- 確認(合成ログ): `webhook.site`・サブドメイン・`oast.fun`・`pipedream.net`の4件がR33として一致。
+  名前が紛らわしいだけの`notwebhook.site`・`webhook.site.example.com`・`oast.fun.example.org`は一致しない。
+  `run_detection_regression.py`に、R33の表示を確かめるケースを追加し、判定を無効にする・判定を甘くする、の
+  2通りの壊し方で、失敗することを確認した。
+

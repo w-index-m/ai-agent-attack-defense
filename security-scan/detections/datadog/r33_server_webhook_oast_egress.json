@@ -1,0 +1,29 @@
+{
+  "name": "[R33] Server/production host connects to an external webhook / request-capture / OAST service",
+  "type": "log_detection",
+  "message": "A server-zone host connected to an external webhook, request-capture, or OAST service. GTIG/Mandiant (\"ARTEX and Friends\", 2026-10-30) report threat actors operating ARTEX in real intrusions using webhook.site as a destination for results. Only webhook.site is named in the report; the other hosts are well-known services of the same kind, illustrative and not exhaustive.\n\nTune: developers testing webhooks on a mis-tagged staging/developer host are the main false positive; allowlist known sources. Tunneling and file-transfer services are not covered.",
+  "tags": [
+    "source:ai-agent-attack-defense",
+    "technique:T1102",
+    "technique:T1567",
+    "tactic:command-and-control"
+  ],
+  "queries": [
+    {
+      "name": "server_webhook_oast_egress",
+      "query": "source:proxy @src.zone:(server OR production OR backend OR dmz) @destination.hostname:(webhook.site OR *.webhook.site OR interact.sh OR *.interact.sh OR oast.fun OR *.oast.fun OR oast.live OR *.oast.live OR oast.site OR *.oast.site OR oast.online OR *.oast.online OR oast.pro OR *.oast.pro OR oast.me OR *.oast.me OR pipedream.net OR *.pipedream.net OR requestcatcher.com OR *.requestcatcher.com OR burpcollaborator.net OR *.burpcollaborator.net OR beeceptor.com OR *.beeceptor.com)"
+    }
+  ],
+  "cases": [
+    {
+      "name": "Server-zone host reached an external webhook / request-capture / OAST service",
+      "status": "medium",
+      "condition": "server_webhook_oast_egress > 0"
+    }
+  ],
+  "options": {
+    "evaluationWindow": 300,
+    "keepAlive": 3600,
+    "maxSignalDuration": 86400
+  }
+}

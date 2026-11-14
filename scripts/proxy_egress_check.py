@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """proxy_egress_check: フォワードプロキシのアクセスログを読み、R1(LLM APIへの外向き通信)・
 R4(メッセージングAPIへの外向き通信、C2的チャネル)・R9(許可リスト外ドメインへのエージェント
-egress)・R10(クラウドメタデータサービスへのアクセス)・R31(暗号資産取引所APIへの通信)
-相当の宛先への通信が無いかを確認する(確認専用、読み取りのみ)。
+egress)・R10(クラウドメタデータサービスへのアクセス)・R31(暗号資産取引所APIへの通信)・
+R33(外部のwebhook・リクエスト受け皿・OAST系サービスへの通信)相当の宛先への通信が無いかを確認する(確認専用、読み取りのみ)。
+
+R33は2026-11-14追加: サーバ/本番ホストから、外部のwebhook・リクエスト受け皿・OAST系サービス
+(`webhook.site`など)への通信を見る(`r33_server_webhook_oast_egress.yml`)。GTIG/Mandiantの記事
+(2026-10-30)が、ARTEXの実運用で`webhook.site`の多数のURLが結果の送り先に使われたと報告している。
+記事に固有名があるのは`webhook.site`のみで、ほかは一般に知られる公開サービスの例(網羅ではない)。
+トンネル・ファイル転送系は、開発端末で誤検知が多いため対象外。
 
 R31は2026-11-08追加: サーバ/本番ホストから、暗号資産取引所(Binance・Coinbase・Kraken・
 Upbit・Bithumb・OKX・Bybit)のAPIへの通信を見る(`r31_server_crypto_exchange_api_egress.yml`)。
@@ -116,6 +122,14 @@ R31_CRYPTO_EXCHANGE_DOMAIN_SUBSTRINGS = (
     "api.bybit.",
 )
 
+# r33_server_webhook_oast_egress.yml の selection_service_exact / selection_service_sub と完全に同じ
+# (完全一致、またはそのサブドメイン)。固有名が記事にあるのはwebhook.siteのみで、ほかは一般に知られる例。
+R33_WEBHOOK_OAST_DOMAINS = {
+    "webhook.site",
+    "interact.sh", "oast.fun", "oast.live", "oast.site", "oast.online", "oast.pro", "oast.me",
+    "pipedream.net", "requestcatcher.com", "burpcollaborator.net", "beeceptor.com",
+}
+
 
 def _host_matches(dest_host: str, domains: set[str]) -> bool:
     """完全一致、または対象ドメインのサブドメイン(例: foo.openrouter.ai)を拾う。"""
@@ -129,7 +143,7 @@ def _host_matches(dest_host: str, domains: set[str]) -> bool:
 class ProxyHit:
     src_ip: str
     dest_host: str
-    rule: str  # "R1" / "R4" / "R9" / "R10"
+    rule: str  # "R1" / "R4" / "R9" / "R10" / "R31" / "R33"
     line_no: int
     raw_line: str = field(repr=False)
 
@@ -260,6 +274,10 @@ def _is_r31_crypto_exchange(dest_host: str) -> bool:
     return any(s in dest_host for s in R31_CRYPTO_EXCHANGE_DOMAIN_SUBSTRINGS)
 
 
+def _is_r33_webhook_oast(dest_host: str) -> bool:
+    return _host_matches(dest_host, R33_WEBHOOK_OAST_DOMAINS)
+
+
 def scan_log(
     log_path: str,
     fmt: str,
@@ -300,12 +318,15 @@ def scan_log(
             hits.append(ProxyHit(parsed.src_ip, parsed.dest_host, "R9", i, raw))
         if _is_r31_crypto_exchange(parsed.dest_host):
             hits.append(ProxyHit(parsed.src_ip, parsed.dest_host, "R31", i, raw))
+        if _is_r33_webhook_oast(parsed.dest_host):
+            hits.append(ProxyHit(parsed.src_ip, parsed.dest_host, "R33", i, raw))
 
     return hits, len(lines), None
 
 
 _RULE_LABELS = {
     "R31": "暗号資産取引所APIへの通信",
+    "R33": "外部のwebhook・リクエスト受け皿・OAST系サービスへの通信",
     "R1": "LLM API への外向き通信",
     "R4": "メッセージング API への外向き通信(C2的チャネル)",
     "R9": "エージェント系User-Agentから許可リスト外ドメインへのegress(IDPIの兆候)",
@@ -317,7 +338,7 @@ def print_report(hits: list[ProxyHit], total_lines: int, log_path: str, fmt: str
     print("対象ログ: %s (形式: %s、%d行)" % (log_path, fmt, total_lines))
     print("-" * 60)
     if not hits:
-        print("R1・R4・R9・R10相当の宛先への通信は見つかりませんでした。")
+        print("R1・R4・R9・R10・R31・R33相当の宛先への通信は見つかりませんでした。")
         return
 
     by_pair: dict[tuple[str, str, str], list[ProxyHit]] = {}

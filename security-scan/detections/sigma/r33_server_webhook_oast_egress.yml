@@ -1,0 +1,78 @@
+title: Server/production host connects to an external webhook / request-capture / OAST service
+id: 5d2a8c1e-9b47-4e63-a1f0-r33webhooks0
+status: experimental
+description: >
+  R33. Detects a server-zone host (server / production / backend / DMZ) connecting
+  to an external webhook, request-capture, or out-of-band-interaction (OAST) service.
+  Google Threat Intelligence Group / Mandiant's report "ARTEX and Friends: Enter Agentic
+  Offensive Frameworks" (2026-10-30) says threat actors operating ARTEX in real intrusions used
+  webhook.site as a destination for results (in one case curl posting to 491 rotating
+  webhook.site URLs), and recommends controlling server egress, especially to webhook services,
+  OAST, tunneling, file-transfer, and external AI platforms. Only webhook.site is named in the
+  report; the other hosts below are well-known public services of the same kind, listed as
+  illustrative examples (not exhaustive, and not tied to any reported incident). Tunneling and
+  file-transfer services are NOT covered here (too noisy on developer-facing hosts). External LLM
+  platforms are covered by R1.
+  Tune: the same hosts are used legitimately by developers testing webhooks (mostly on staging
+  or developer machines) -- scope this to production/server zones and allowlist known sources.
+  Not implemented here: the report's stronger signal of "many distinct URLs on the same host in a
+  short time" (rotating destinations).
+references:
+  - https://cloud.google.com/blog/topics/threat-intelligence/artex-and-friends-enter-agentic-offensive-frameworks
+  - ../artex-gtig-crosscheck.ja.md
+author: ai-agent-attack-defense
+date: 2026/11/14
+logsource:
+  category: proxy
+detection:
+  selection_server_zone:
+    src_zone:
+      - 'server'
+      - 'production'
+      - 'backend'
+      - 'dmz'
+  selection_service_exact:
+    dest_host:
+      - 'webhook.site'
+      - 'interact.sh'
+      - 'oast.fun'
+      - 'oast.live'
+      - 'oast.site'
+      - 'oast.online'
+      - 'oast.pro'
+      - 'oast.me'
+      - 'pipedream.net'
+      - 'requestcatcher.com'
+      - 'burpcollaborator.net'
+      - 'beeceptor.com'
+  selection_service_sub:
+    dest_host|endswith:
+      - '.webhook.site'
+      - '.interact.sh'
+      - '.oast.fun'
+      - '.oast.live'
+      - '.oast.site'
+      - '.oast.online'
+      - '.oast.pro'
+      - '.oast.me'
+      - '.pipedream.net'
+      - '.requestcatcher.com'
+      - '.burpcollaborator.net'
+      - '.beeceptor.com'
+  condition: selection_server_zone and (selection_service_exact or selection_service_sub)
+fields:
+  - src_ip
+  - src_zone
+  - dest_host
+  - process_name
+  - user
+falsepositives:
+  - Developers or CI jobs testing webhooks from a staging/developer host that is mis-tagged as a server zone. Allowlist the specific hosts or accounts.
+  - Approved monitoring or integration tests that deliberately post to a request-capture service.
+  - The host list is illustrative, not exhaustive; new services of this kind appear regularly and need to be added for your threat model.
+level: medium
+tags:
+  - attack.command_and_control
+  - attack.t1102
+  - attack.exfiltration
+  - attack.t1567

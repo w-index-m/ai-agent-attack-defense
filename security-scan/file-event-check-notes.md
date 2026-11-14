@@ -103,3 +103,20 @@ R5は、Gambit Securityが自社で発見・回収した攻撃者ステージン
 陰性入力は必ず誤検知0件であることを確認するようになった。壊れた場合は
 `results/detection_regression.json`に記録され、`scripts/summarize.py`経由でCIの要約にも
 出る。詳細は`scripts/run_detection_regression.py`自身のdocstring参照。
+
+## R8-DB(書き込み主体がDBサーバーの場合)の追加(2026-11-14)
+
+GTIG/Mandiantの記事「ARTEX and Friends」(2026-10-30)は、ARTEXが、アプリのSQLインターフェース経由で
+DBのログ出力の機能を使い、JSPのWebシェルを作らせた例を詳しく述べている。R8の設置側は、書き込み主体を
+問わずWebルート配下の実行可能コンテンツを拾うので、この手口も既存ルールで拾える見込みだったが、
+**書き込み主体がDBサーバー(`mysqld`・`mariadbd`・`postgres`)のとき**は、通常まず起きないため、
+高確度の別ルールとして区別した(`r8_webshell_placement_and_spawn.yml`の3つ目のドキュメント)。
+`file_event_check.py`は、この場合を`[R8-DB]`と表示する(それ以外は従来どおり`[R8]`)。
+
+- Linuxのfile_eventのみ。記事は影響を受けたサーバーのOSを明記していないため、Windows(`mysqld.exe`)は未対応。
+- 未実装: DB側のログ(クエリログ・監査ログ)で、ログ出力先の設定が変更されたことを見る検知。
+- 確認(合成ログ): `mysqld`によるWebルート配下の`.jsp`の作成は`[R8-DB]`、`php`によるものは`[R8]`と表示。
+  `mysqld`によるWebルート外のログ、`mysqld`によるWebルート配下の`.csv`、`apt`によるWebルート配下の`.php`
+  (デプロイ用ツールとして除外)は一致しない。`run_detection_regression.py`に表示を確かめるケースを追加し、
+  判定を無効にすると失敗することを確認した。
+

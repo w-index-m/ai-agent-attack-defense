@@ -1,1 +1,4 @@
 {"src_ip": "10.0.0.5", "dest_host": "example.com"}
+{"src_ip": "10.0.0.5", "dest_host": "notwebhook.site"}
+{"src_ip": "10.0.0.5", "dest_host": "webhook.site.example.com"}
+{"src_ip": "10.0.0.5", "dest_host": "oast.fun.example.org"}

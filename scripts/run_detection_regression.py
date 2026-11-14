@@ -93,6 +93,40 @@ def check_exit_code_case(name: str, extra_args: list[str]) -> list[dict]:
     return findings
 
 
+# 1b. 特定のルール(の表示)が出るかで判定するケース(2026-11-14追加)。1.は「何かにヒットしたか」
+#     しか見ないため、同じスクリプト内で後から足したルール(R33・R8-DB等)が実際に効いているかは
+#     ここで確かめる。(スクリプト名, 追加CLI引数, positive側の入力ファイル名, 出力に含まれるべき文字列)
+OUTPUT_CONTAINS_CASES: list[tuple[str, list[str], str, list[str]]] = [
+    ("proxy_egress_check", ["--format", "jsonl"], "positive_r33.jsonl", ["[R33]"]),
+    ("file_event_check", [], "positive_r8_db.jsonl", ["[R8-DB]"]),
+    ("file_event_check", [], "positive_r8_generic.jsonl", ["[R8]"]),
+]
+
+
+def check_output_contains_case(name: str, extra_args: list[str], fixture: str, expected: list[str]) -> list[dict]:
+    script = SCRIPTS / f"{name}.py"
+    log_path = FIXTURES / name / fixture
+    rc, output = run([str(script), "--log-path", str(log_path), *extra_args])
+    findings = []
+    if rc != 1:
+        findings.append({
+            "severity": "high",
+            "title": "regression: %s が %s でヒットしなかった(終了コード%d)" % (name, fixture, rc),
+            "location": str(log_path),
+            "detail": output[-500:],
+        })
+        return findings
+    for text in expected:
+        if text not in output:
+            findings.append({
+                "severity": "high",
+                "title": "regression: %s の %s の出力に %s が無い" % (name, fixture, text),
+                "location": str(log_path),
+                "detail": output[-500:],
+            })
+    return findings
+
+
 # --------------------------------------------------------------------------
 # 2. SARIF出力の中身(指定したruleIdの有無)で判定するスクリプト
 # --------------------------------------------------------------------------
@@ -208,6 +242,8 @@ def main() -> int:
 
     for name, extra_args in EXIT_CODE_CASES:
         findings.extend(check_exit_code_case(name, extra_args))
+    for name, extra_args, fixture, expected in OUTPUT_CONTAINS_CASES:
+        findings.extend(check_output_contains_case(name, extra_args, fixture, expected))
     for name, flag, rule_id in SARIF_PRESENCE_CASES:
         findings.extend(check_sarif_presence_case(name, flag, rule_id, tmp_out_dir))
     findings.extend(check_f5_bigip_apm_case(tmp_out_dir))
@@ -223,8 +259,8 @@ def main() -> int:
         return 1
 
     print(
-        "OK: all %d detection scripts classified their positive/negative fixtures correctly."
-        % total_checks
+        "OK: all %d detection scripts classified their positive/negative fixtures correctly "
+        "(plus %d rule-specific output checks)." % (total_checks, len(OUTPUT_CONTAINS_CASES))
     )
     return 0
 

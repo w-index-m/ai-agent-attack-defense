@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """file_event_check: ファイル作成/変更イベントのログを読み、R5(cron/systemd永続化の新規作成)・
-R8設置側(Webルート配下への実行可能コンテンツの書き込み)・R20(Markdownファイルの散発書き込み)・
+R8設置側(Webルート配下への実行可能コンテンツの書き込み。書き込み主体がDBサーバーの場合は
+高確度として区別して「R8-DB」と表示)・R20(Markdownファイルの散発書き込み)・
 R28(エディタ拡張機能によるSSH鍵の作成)相当のパターンを確認する(確認専用、読み取りのみ)。
 
 背景:
@@ -49,6 +50,9 @@ R5_PATH_SUFFIXES = (".timer", ".service", "crontab")
 R8_WEBROOT_SUBSTRINGS = ("/var/www/", "/usr/share/nginx/", "/webapps/", "/htdocs/", "/wwwroot/")
 R8_EXECUTABLE_SUFFIXES = (".jsp", ".jspx", ".war", ".php", ".phtml", ".aspx", ".ashx")
 R8_DEPLOY_TOOLING_SUFFIXES = ("/dpkg", "/rpm", "/yum", "/dnf", "/apt", "/apt-get")
+# r8_webshell_placement_and_spawn.yml(3つ目のドキュメント、DB-writer)の selection_db_writer と完全に同じ。
+# DBサーバーのプロセスがWebルートに実行可能コンテンツを書くのは、通常はまず無い(2026-11-14追加)。
+R8_DB_WRITER_SUFFIXES = ("/mysqld", "/mariadbd", "/postgres")
 
 # r20_agent_markdown_handoff_burst.yml の filter_known_doc_paths と完全に同じ。
 R20_KNOWN_DOC_PATH_SUBSTRINGS = (
@@ -112,6 +116,10 @@ def _matches_r8_placement(ev: FileEvent) -> bool:
     return True
 
 
+def _is_r8_db_writer(ev: FileEvent) -> bool:
+    return ev.process_name.endswith(R8_DB_WRITER_SUFFIXES)
+
+
 def _matches_r28(ev: FileEvent) -> bool:
     if not any(s in ev.parent_process_name for s in R28_EDITOR_PARENT_SUBSTRINGS):
         return False
@@ -166,7 +174,7 @@ def scan_log(log_path: str) -> tuple[list[tuple[FileEvent, str]], list[str], int
         if _matches_r5(ev):
             hits.append((ev, "R5"))
         elif _matches_r8_placement(ev):
-            hits.append((ev, "R8"))
+            hits.append((ev, "R8-DB" if _is_r8_db_writer(ev) else "R8"))
         if _matches_r28(ev):
             hits.append((ev, "R28"))
 
@@ -177,6 +185,7 @@ def scan_log(log_path: str) -> tuple[list[tuple[FileEvent, str]], list[str], int
 _RULE_LABELS = {
     "R5": "永続化の新規作成(cron / systemd timer)",
     "R8": "Webシェル設置(Webルート配下への実行可能コンテンツ書き込み)",
+    "R8-DB": "Webシェル設置(書き込み主体がDBサーバー。R8設置側の高確度版)",
     "R28": "エディタ拡張機能によるSSH鍵の作成/authorized_keysの変更",
 }
 
