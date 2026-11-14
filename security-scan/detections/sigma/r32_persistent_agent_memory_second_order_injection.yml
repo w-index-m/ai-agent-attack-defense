@@ -41,6 +41,20 @@ description: >
   r30_multi_egress_ip_proxy_rotation.yml. See
   ../../scripts/memory_poisoning_check.py for a standalone script that
   implements the same logic directly against a log file.
+
+  2026-11-14 note: GTIG's September 2026 AI Threat Tracker report (per the
+  text a user pasted into this session) reports, in real campaigns, the
+  LOCATION and the PERSISTENCE technique this rule watches: the DUSTMAKER
+  credential stealer drops/modifies files in hidden AI-assistant and IDE
+  workspace directories (.claude/, .vscode/, .cursor/) and hijacks their
+  configuration so it runs when the workspace is opened, and MIDNIGHT
+  NEPTUNE (DPRK-nexus) altered Claude CLI hooks. Those are malware writing
+  into the same places, not an agent writing its own memory after reading
+  untrusted content: the two-stage shape of THIS rule (write, then a later
+  session's first egress to a non-allowlisted domain) remains this repo's
+  own construction. A simpler single-stage variant (a non-editor process
+  writing into these directories) is a proposal, not implemented. See
+  ../gtig-ai-threat-tracker-2026-09-crosscheck.ja.md.
 references:
   - ../defense-detection-notes.md
   - ../openclaw-skill-supply-chain.ja.md
