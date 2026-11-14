@@ -109,3 +109,59 @@ tags:
   - attack.persistence
   - attack.t1059.004
   - attack.t1505.003
+---
+title: Database server process writes executable web content under a web root
+id: 6e1b9d34-0f52-4a78-8c1d-r8dbwriter00
+status: experimental
+description: >
+  R8 (DB-writer). The higher-confidence variant of R8 (placement): the writer of the executable
+  web content is a database server process (mysqld / mariadbd / postgres). A database server
+  rarely creates script files under a web root; one way to get a web shell onto a server is to
+  abuse a database's file-output feature so the database process itself writes the script file.
+  Google Threat Intelligence Group / Mandiant's report "ARTEX and Friends" (2026-10-30)
+  describes ARTEX producing JSP web shells this way through an application's SQL interface.
+  Linux file_event only; the report does not state the OS of the affected server, so a Windows
+  equivalent (mysqld.exe writing under a web root) is not covered here. Correlate with the
+  database's own query/audit log and with R8 (spawn).
+references:
+  - https://cloud.google.com/blog/topics/threat-intelligence/artex-and-friends-enter-agentic-offensive-frameworks
+  - ../artex-gtig-crosscheck.ja.md
+author: ai-agent-attack-defense
+date: 2026/11/14
+logsource:
+  product: linux
+  category: file_event
+detection:
+  selection_db_writer:
+    Image|endswith:
+      - '/mysqld'
+      - '/mariadbd'
+      - '/postgres'
+  selection_root:
+    TargetFilename|contains:
+      - '/var/www/'
+      - '/usr/share/nginx/'
+      - '/webapps/'
+      - '/htdocs/'
+      - '/wwwroot/'
+  selection_ext:
+    TargetFilename|endswith:
+      - '.jsp'
+      - '.jspx'
+      - '.war'
+      - '.php'
+      - '.phtml'
+      - '.aspx'
+      - '.ashx'
+  condition: selection_db_writer and selection_root and selection_ext
+fields:
+  - TargetFilename
+  - Image
+  - User
+  - ParentImage
+falsepositives:
+  - A deliberate export of script-like files into a web root by a database job (very rare). Allowlist the specific job and path.
+level: high
+tags:
+  - attack.persistence
+  - attack.t1505.003

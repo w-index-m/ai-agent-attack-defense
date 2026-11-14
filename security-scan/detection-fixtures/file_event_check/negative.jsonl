@@ -1,1 +1,4 @@
 {"target_file": "/home/user/notes.txt", "process_name": "/usr/bin/vim"}
+{"target_file": "/var/lib/mysql/general.log", "process_name": "/usr/sbin/mysqld"}
+{"target_file": "/var/www/html/export.csv", "process_name": "/usr/sbin/mysqld"}
+{"target_file": "/var/www/html/index.php", "process_name": "/usr/bin/apt"}
