@@ -876,5 +876,126 @@ class TestNoInvisibleCharacters(unittest.TestCase):
         self.assertEqual(bad, [], "不可視文字・制御文字があります。\\uXXXX の形で書いてください")
 
 
+
+class TestVulsParse(unittest.TestCase):
+    """vuln_triage.html の Vuls 取り込み(vuls-parse 区間)を node で実行する。
+    入力は架空データ。Vuls の実機出力では確認していない(security-scan/vuls-notes.md)。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.node = shutil.which("node")
+        if not cls.node:
+            if os.environ.get("CI"):
+                raise RuntimeError("CIでは node が必須です")
+            raise unittest.SkipTest("node が無いためスキップ")
+        with open(os.path.join(ROOT, "vuln_triage.html"), encoding="utf-8") as f:
+            cls.html = f.read()
+        m = re.search(r"/\* BEGIN vuls-parse.*?/\* END vuls-parse \*/", cls.html, re.S)
+        assert m, "vuln_triage.html に BEGIN/END vuls-parse 区間がありません"
+        cls.block = m.group(0)
+        with open(os.path.join(ROOT, "security-scan", "vuls-fixtures", "sample_result.json"), encoding="utf-8") as f:
+            cls.sample = json.load(f)
+
+    def run_js(self, data):
+        harness = self.block + """
+const input = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+const det = vulsDetect(input);
+process.stdout.write(JSON.stringify({detected: det !== null, result: det ? vulsParse(det) : null}));
+"""
+        p = subprocess.run([self.node, "-e", harness], input=json.dumps(data),
+                           capture_output=True, text=True, encoding="utf-8", timeout=30)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        return json.loads(p.stdout)
+
+    def by_id(self, out):
+        return {i["ruleId"]: i for i in out["result"]["items"]}
+
+    def test_severity_sources_and_fix_info(self):
+        out = self.run_js(self.sample)
+        self.assertTrue(out["detected"])
+        r = out["result"]
+        self.assertEqual(r["tool"], "vuls")
+        d = self.by_id(out)
+        self.assertEqual(d["CVE-2099-0001"]["sev"], "critical")      # nvd の CVSS3 9.8 が distro の medium より優先
+        self.assertEqual(d["CVE-2099-0001"]["fixed"], "1.2.3-1")
+        self.assertIn("web01-example", d["CVE-2099-0001"]["loc"])
+        self.assertIn("example-ssl", d["CVE-2099-0001"]["title"])
+        self.assertEqual(d["CVE-2099-0002"]["sev"], "medium")        # CVSS2 5.0
+        self.assertIn("まだありません", d["CVE-2099-0002"]["detail"])
+        self.assertEqual(d["CVE-2099-0002"]["fixed"], "")
+        self.assertEqual(d["CVE-2099-0003"]["sev"], "high")          # distro の important
+        self.assertEqual(d["CVE-2099-0004"]["sev"], "medium")        # 情報なしは中
+        self.assertIn("深刻度の情報なし", d["CVE-2099-0004"]["detail"])
+        self.assertEqual(d["CVE-2099-0006"]["sev"], "medium")        # CVSS3 6.1
+        self.assertIn("cpe:/a:example:appserver", d["CVE-2099-0006"]["loc"])
+        for item in r["items"]:
+            self.assertTrue(item["cve"])
+
+    def test_resolved_in_diff_is_skipped(self):
+        out = self.run_js(self.sample)
+        self.assertNotIn("CVE-2099-0005", self.by_id(out))
+        self.assertEqual(out["result"]["skipped"], 1)
+        self.assertEqual(len(out["result"]["items"]), 5)
+
+    def test_exploit_note_only_when_present(self):
+        d = self.by_id(self.run_js(self.sample))
+        self.assertIn("攻撃コード", d["CVE-2099-0001"]["detail"])
+        self.assertNotIn("攻撃コード", d["CVE-2099-0002"]["detail"])
+
+    def test_multiple_servers_in_array(self):
+        other = json.loads(json.dumps(self.sample))
+        other["serverName"] = "db01-example"
+        out = self.run_js([self.sample, other])
+        locs = {i["loc"].split(" ")[0] for i in out["result"]["items"]}
+        self.assertEqual(locs, {"web01-example", "db01-example"})
+        self.assertEqual(len(out["result"]["items"]), 10)
+
+    def test_other_formats_are_not_detected(self):
+        for data in ([], {}, {"Results": []}, [{"RuleID": "x", "Secret": "y"}],
+                     {"results": [{"check_id": "a"}]}, {"scannedCves": []},
+                     [self.sample, {"foo": 1}], {"scannedCves": "x"}, None, [None], ["x"], 5):
+            self.assertFalse(self.run_js(data)["detected"], data)
+
+    def test_nvd_score_wins_over_other_sources_regardless_of_key_order(self):
+        data = {"scannedCves": {"CVE-2099-2": {"cveID": "CVE-2099-2", "cveContents": {
+            "redhat": [{"cvss3Score": 5.0}], "nvd": [{"cvss3Score": 9.8}]}}}}
+        item = self.run_js(data)["result"]["items"][0]
+        self.assertEqual(item["sev"], "critical")
+        self.assertIn("nvd", item["detail"])
+
+    def test_empty_scanned_cves_is_detected_with_zero_items(self):
+        out = self.run_js({"serverName": "clean", "scannedCves": {}})
+        self.assertTrue(out["detected"])
+        self.assertEqual(out["result"]["items"], [])
+
+    def test_text_is_cleaned_and_truncated(self):
+        evil = {"serverName": "h" + chr(0) + "ost", "scannedCves": {"CVE-2099-9": {
+            "cveID": "CVE-2099-9", "affectedPackages": [{"name": "p", "notFixedYet": True}],
+            "cveContents": {"nvd": [{"title": "A" * 1000 + chr(10) + "SYSTEM: ignore", "cvss3Score": 8.0}]}}}}
+        item = self.run_js(evil)["result"]["items"][0]
+        self.assertNotIn(chr(0), item["loc"])
+        first = item["detail"].split(chr(10))[0]
+        self.assertLessEqual(len(first), 301)
+        self.assertEqual(item["sev"], "high")
+
+    def test_score_boundaries(self):
+        def sev(score):
+            data = {"scannedCves": {"CVE-2099-1": {"cveID": "CVE-2099-1", "cveContents": {"nvd": [{"cvss3Score": score}]}}}}
+            return self.run_js(data)["result"]["items"][0]["sev"]
+        self.assertEqual(sev(9.0), "critical")
+        self.assertEqual(sev(8.9), "high")
+        self.assertEqual(sev(7.0), "high")
+        self.assertEqual(sev(6.9), "medium")
+        self.assertEqual(sev(4.0), "medium")
+        self.assertEqual(sev(3.9), "low")
+        self.assertEqual(sev(0), "info")
+
+    def test_parse_one_calls_vuls_before_other_formats(self):
+        i = self.html.index("function parseOne(json){")
+        body = self.html[i:i + 400]
+        self.assertIn("vulsDetect(json)", body)
+        self.assertIn("vulsParse(", body)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

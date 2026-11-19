@@ -1,0 +1,48 @@
+{
+  "jsonVersion": 4,
+  "serverName": "web01-example",
+  "family": "ubuntu",
+  "release": "22.04",
+  "scannedCves": {
+    "CVE-2099-0001": {
+      "cveID": "CVE-2099-0001",
+      "confidences": [{"score": 100, "detectionMethod": "OvalMatch"}],
+      "affectedPackages": [{"name": "example-ssl", "notFixedYet": false, "fixedIn": "1.2.3-1"}],
+      "cveContents": {
+        "ubuntu": [{"type": "ubuntu", "cveID": "CVE-2099-0001", "severity": "medium"}],
+        "nvd": [{"type": "nvd", "cveID": "CVE-2099-0001", "title": "架空: 暗号ライブラリの境界外書き込み", "cvss3Score": 9.8, "cvss3Severity": "CRITICAL"}]
+      },
+      "exploits": [{"exploitType": "example", "id": "EX-1"}],
+      "diffStatus": "+"
+    },
+    "CVE-2099-0002": {
+      "cveID": "CVE-2099-0002",
+      "affectedPackages": [{"name": "example-web", "notFixedYet": true}],
+      "cveContents": {"redhat": [{"type": "redhat", "cveID": "CVE-2099-0002", "summary": "架空: 細工した要求で停止する", "cvss2Score": 5.0, "severity": "moderate"}]}
+    },
+    "CVE-2099-0003": {
+      "cveID": "CVE-2099-0003",
+      "affectedPackages": [{"name": "example-libs", "notFixedYet": false, "fixedIn": "4.5-2"}],
+      "cveContents": {"debian": [{"type": "debian", "cveID": "CVE-2099-0003", "severity": "important"}]}
+    },
+    "CVE-2099-0004": {
+      "cveID": "CVE-2099-0004",
+      "affectedPackages": [{"name": "example-old", "notFixedYet": false, "fixedIn": "9"}],
+      "cveContents": {}
+    },
+    "CVE-2099-0005": {
+      "cveID": "CVE-2099-0005",
+      "affectedPackages": [{"name": "example-resolved", "notFixedYet": false, "fixedIn": "1"}],
+      "cveContents": {"nvd": [{"type": "nvd", "cvss3Score": 7.5}]},
+      "diffStatus": "-"
+    },
+    "CVE-2099-0006": {
+      "cveID": "CVE-2099-0006",
+      "cpeURIs": ["cpe:/a:example:appserver:3.1"],
+      "cveContents": {"nvd": [{"type": "nvd", "title": "架空: CPE 照合のみの検出", "cvss3Score": 6.1}]}
+    }
+  },
+  "packages": {"example-ssl": {"name": "example-ssl", "version": "1.2.0", "release": "1"}},
+  "errors": [],
+  "warnings": []
+}
