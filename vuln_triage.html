@@ -113,7 +113,7 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
 <div class="wrap">
   <header>
     <h1>脆弱性トリアージ</h1>
-    <p class="lead">Semgrep、Trivy、gitleaks、SARIF、netcheck、zgrab2 の結果(JSON / JSON Lines)を貼ると、優先度順に並べて、直し方と、今回の攻撃連鎖・検知防御タグ(R1–R8 / ③)との関係を表示します。</p>
+    <p class="lead">Semgrep、Trivy、gitleaks、SARIF、netcheck、zgrab2、Vuls の結果(JSON / JSON Lines)を貼ると、優先度順に並べて、直し方と、今回の攻撃連鎖・検知防御タグ(R1–R8 / ③)との関係を表示します。</p>
   </header>
 
   <section aria-labelledby="h-in">
@@ -231,8 +231,8 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
       <p class="note">Semgrep・Trivy・gitleaks=このリポジトリ自身のコードを確認(対象欄は使いません)。netcheck=対象のポートに接続できるかどうかだけを確認する(中身は送らない、最も軽い確認)。zgrab2=対象に接続し、動いているソフトの種類やバージョンが分かる応答(バナー)を取得する専用ツール(<a class="src" href="security-scan/zgrab2-notes.md">詳細ノート</a>。未インストールでもGoが入っていれば、本家ソース(github.com/zmap/zgrab2)から自動ビルドを試みる。Goも無い場合のみエラーになる)。HTTPバナー取得(軽量)=zgrab2本体が無くても使える代替。ポート80(HTTP)・443(HTTPS)へのGETだけをPython標準ライブラリで行い、結果はzgrab2互換として取り込む(SSH/TLS詳細など他プロトコルは非対応)。追加プロトコルを確認(軽量)=同じくzgrab2不要で、SSH/FTP/Telnet/SMTP/MySQL/SMBのバナー・応答取得、Redis/Memcached/SOCKS5/MQTTの最小限コマンド送信、PostgreSQL/RDPのプロトコルネゴシエーション確認、TLSのバージョン・証明書期限確認、SNMP(UDP、sysDescr取得)、AMQP/MongoDBの応答の簡易抽出、IPP(印刷サービス)、Modbus(読み取り専用コマンドのみ)ができる。MSSQL/Oracle/PPTPはプロトコル仕様どおり実装したが、このサンドボックスに実機が無く自作の模擬応答での自己テストのみ(実機と異なる可能性あり)。制御系(OT/ICS)はModbus以外(DNP3/BACnet/Siemens等)は、実機が無く誤判定リスクが高いため非対応。Strix・Cairn=自律型ペネトレーションAIエージェント(モックLLM版。既定で<code style="font-family:var(--font-mono)">sqli-lab</code>デモアプリへSQLi認証バイパスを実行)。Strixは事前に<a class="src" href="security-scan/strix-local-poc/README.md">strix-local-poc/README.md</a>の手順+<code style="font-family:var(--font-mono)">STRIX_LOCAL_DIR</code>環境変数の設定が必要。Cairnは事前に<a class="src" href="security-scan/cairn-lab/cairn-authorized-lab-runbook.md">cairn-authorized-lab-runbook.md</a>の手順+<code style="font-family:var(--font-mono)">CAIRN_LOCAL_DIR</code>環境変数の設定が必要。詳細: <a class="src" href="security-scan/local-scan-server-notes.md">local-scan-server-notes.md</a></p>
     </div>
     <div class="panel">
-      <label for="paste" class="note">JSON を貼り付けるか、ファイルを選びます。ツールの種類(Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2)は自動で判別します。複数回の取り込みは合算されますが、同じ内容を二重に取り込もうとすると警告して追加しません。</label>
-      <textarea id="paste" placeholder='例: semgrep --json / trivy fs --format json / gitleaks detect --report-format json / *.sarif / netcheck の保存 JSON / zgrab2 の出力(1 行 1 ターゲットの JSON Lines)'></textarea>
+      <label for="paste" class="note">JSON を貼り付けるか、ファイルを選びます。ツールの種類(Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2 / Vuls)は自動で判別します。複数回の取り込みは合算されますが、同じ内容を二重に取り込もうとすると警告して追加しません。</label>
+      <textarea id="paste" placeholder='例: semgrep --json / trivy fs --format json / gitleaks detect --report-format json / *.sarif / netcheck の保存 JSON / zgrab2 の出力(1 行 1 ターゲットの JSON Lines) / Vuls の結果 JSON(実機未確認)'></textarea>
       <div class="row">
         <button class="primary" id="btn-parse" type="button">取り込む</button>
         <label class="btn" for="file">ファイルを選ぶ</label>
@@ -264,7 +264,7 @@ details.cfgwrap summary::-webkit-details-marker{display:revert}
     <div class="filters">
       <input id="q" type="search" placeholder="ファイル名・ルール名で絞り込み" aria-label="絞り込み">
       <select id="f-sev" aria-label="重大度"><option value="">重大度: すべて</option><option value="critical">緊急</option><option value="high">高</option><option value="medium">中</option><option value="low">低</option><option value="info">情報</option></select>
-      <select id="f-tool" aria-label="ツール"><option value="">ツール: すべて</option><option value="semgrep">Semgrep</option><option value="trivy">Trivy</option><option value="gitleaks">gitleaks</option><option value="sarif">SARIF</option><option value="netcheck">netcheck</option><option value="zgrab2">zgrab2</option></select>
+      <select id="f-tool" aria-label="ツール"><option value="">ツール: すべて</option><option value="semgrep">Semgrep</option><option value="trivy">Trivy</option><option value="gitleaks">gitleaks</option><option value="sarif">SARIF</option><option value="netcheck">netcheck</option><option value="zgrab2">zgrab2</option><option value="vuls">Vuls</option></select>
       <select id="f-chain" aria-label="攻撃連鎖"><option value="">攻撃連鎖: すべて</option><option value="1">連鎖に関係するもののみ</option></select>
     </div>
     <div id="list" class="list"></div>
@@ -580,7 +580,90 @@ function parseJsonLines(text){
   return out.length?out:null;
 }
 
+/* BEGIN vuls-parse (実機未確認: Vuls の出力形式は仕様の記憶と架空データによる。security-scan/vuls-notes.md 参照) */
+/* ---- Vuls (JSON) 取り込み ----
+   Vuls の結果 JSON(results/<日時>/<サーバー名>.json、または vuls report -format-json の出力)は、
+   サーバー 1 台ぶんの {"serverName","family","release","scannedCves":{"CVE-..":{...}},"packages":{...}} 。
+   scannedCves の各 CVE に affectedPackages / cveContents(nvd・jvn・各ディストリ) / exploits などが付く。
+   ここでは 1 CVE を 1 指摘にし、深刻度は CVSS3 → CVSS2 → ディストリ評価の順で決める。
+   ※ 脆弱性の有無の判定は Vuls 側。ここでは並べ替えと直し方の表示だけを行う。 */
+var VULS_SRC_ORDER=["nvd","jvn","redhat","redhat_api","ubuntu","ubuntu_api","debian","debian_security_tracker","oracle","amazon","suse","alma","rocky","fedora","trivy","ghsa"];
+function vulsIsObj(x){return !!x&&typeof x==="object"&&!Array.isArray(x)}
+function vulsDetect(json){
+  var arr=Array.isArray(json)?json:[json];
+  if(!arr.length) return null;
+  for(var i=0;i<arr.length;i++){ if(!vulsIsObj(arr[i])||!vulsIsObj(arr[i].scannedCves)) return null }
+  return arr;
+}
+function vulsText(x,max){x=String(x==null?"":x).replace(/[\u0000-\u001f\u007f]+/g," ").trim();return x.length>max?x.slice(0,max)+"…":x}
+function vulsSevFromScore(n){
+  if(typeof n!=="number"||!isFinite(n)||n<0) return "";
+  return n>=9?"critical":(n>=7?"high":(n>=4?"medium":(n>0?"low":"info")));
+}
+function vulsSevFromText(t){
+  t=String(t||"").toLowerCase();
+  if(t==="critical")return"critical";
+  if(t==="high"||t==="important")return"high";
+  if(t==="medium"||t==="moderate")return"medium";
+  if(t==="low")return"low";
+  if(t==="negligible"||t==="unimportant"||t==="none"||t==="info")return"info";
+  return "";
+}
+function vulsContents(cve){
+  /* cveContents は {ソース名:[{...}]}。優先順に並べ替えて 1 本の配列にする */
+  var cc=vulsIsObj(cve.cveContents)?cve.cveContents:{},out=[],seen={};
+  VULS_SRC_ORDER.concat(Object.keys(cc)).forEach(function(k){
+    if(seen[k]||!Array.isArray(cc[k])) return; seen[k]=1;
+    cc[k].forEach(function(c){ if(vulsIsObj(c)){out.push({src:k,c:c})} });
+  });
+  return out;
+}
+function vulsSeverity(cons){
+  var i,c;
+  for(i=0;i<cons.length;i++){c=cons[i].c; var a=vulsSevFromScore(c.cvss3Score); if(a) return {sev:a,why:"CVSS3 "+c.cvss3Score+"("+cons[i].src+")"}}
+  for(i=0;i<cons.length;i++){c=cons[i].c; var b=vulsSevFromText(c.cvss3Severity); if(b) return {sev:b,why:"CVSS3 "+c.cvss3Severity+"("+cons[i].src+")"}}
+  for(i=0;i<cons.length;i++){c=cons[i].c; var d=vulsSevFromScore(c.cvss2Score); if(d) return {sev:d,why:"CVSS2 "+c.cvss2Score+"("+cons[i].src+")"}}
+  for(i=0;i<cons.length;i++){c=cons[i].c; var e=vulsSevFromText(c.cvss2Severity)||vulsSevFromText(c.severity); if(e) return {sev:e,why:"評価 "+(c.cvss2Severity||c.severity)+"("+cons[i].src+")"}}
+  return {sev:"medium",why:"深刻度の情報なし(中として扱う)"};
+}
+function vulsParse(results){
+  var tool="vuls",out=[],skipped=0;
+  results.forEach(function(res){
+    var server=vulsText(res.serverName||res.ServerName||"vuls-host",80);
+    var ids=Object.keys(res.scannedCves||{});
+    ids.forEach(function(id){
+      var cve=res.scannedCves[id]; if(!vulsIsObj(cve)){skipped++;return}
+      if(cve.diffStatus==="-"){skipped++;return} /* 差分表示で「解消済み」の印 */
+      var cid=vulsText(cve.cveID||id,40);
+      var cons=vulsContents(cve),sv=vulsSeverity(cons);
+      var pk=Array.isArray(cve.affectedPackages)?cve.affectedPackages.filter(vulsIsObj):[];
+      var names=pk.map(function(p){return vulsText(p.name,60)}).filter(Boolean);
+      var fixedBy="",nofix=[],fx=[];
+      pk.forEach(function(p){
+        var n=vulsText(p.name,60);
+        if(p.notFixedYet){nofix.push(n)}
+        else if(p.fixedIn){var v=vulsText(p.fixedIn,60); fx.push(n+" → "+v); if(!fixedBy) fixedBy=v}
+      });
+      var cpes=Array.isArray(cve.cpeURIs)?cve.cpeURIs:(Array.isArray(cve.cpeNames)?cve.cpeNames:[]);
+      var what=names.length?names.join(", "):(cpes.length?vulsText(cpes[0],80):"");
+      var head=cons.length?(cons[0].c.title||cons[0].c.summary||""):"";
+      var detail=vulsText(head,300);
+      detail+=(detail?"\n":"")+"深刻度の根拠: "+sv.why;
+      if(fx.length) detail+="\n修正版: "+fx.join(" / ");
+      if(nofix.length) detail+="\n修正版: まだありません("+nofix.join(", ")+")";
+      if(!fx.length&&!nofix.length) detail+="\n修正版: Vuls の出力から判別できません";
+      var ex=(Array.isArray(cve.exploits)?cve.exploits.length:0)+(Array.isArray(cve.metasploits)?cve.metasploits.length:0);
+      if(ex) detail+="\n公開された攻撃コードの記録があります("+ex+"件、Vuls の記録)。優先して確認してください。";
+      out.push({tool:tool,sev:sv.sev,ruleId:cid,title:cid+(what?" "+what:""),
+        loc:server+(what?" ("+what+")":""),detail:detail,raw:"",cve:true,fixed:fixedBy});
+    });
+  });
+  return {tool:tool,items:out,skipped:skipped};
+}
+/* END vuls-parse */
+
 function parseOne(json){
+  var vl=vulsDetect(json); if(vl) return vulsParse(vl);
   var zg=Array.isArray(json)?json:((json&&typeof json.ip==="string")?[json]:null);
   if(zg&&zg.length&&zg[0]&&typeof zg[0].ip==="string"&&zg[0].data&&typeof zg[0].data==="object") return zgrabParse(zg);
   var out=[],tool=null;
@@ -654,7 +737,7 @@ function addJson(text,name){
   var json;
   try{json=JSON.parse(text)}catch(e){json=parseJsonLines(text); if(!json) return "JSON として読めませんでした: "+name}
   var r=parseOne(json);
-  if(!r.tool) return "対応していない形式です(Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2 の JSON): "+name;
+  if(!r.tool) return "対応していない形式です(Semgrep / Trivy / gitleaks / SARIF / netcheck / zgrab2 / Vuls の JSON): "+name;
   var key=hashKey(JSON.stringify(json));
   if(importedKeys.indexOf(key)>=0) return "同じ内容は取り込み済みです。二重に数えないよう、追加しませんでした: "+name;
   importedKeys.push(key);
