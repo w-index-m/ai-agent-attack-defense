@@ -69,6 +69,12 @@ For the full list from R9 onward (LLM-targeted attacks, real individual-CVE resp
 | Egress (outbound traffic) | Traffic leaving a server. Restricting this with an allowlist makes C2 and data exfiltration harder. |
 | VM escape | Breaking out of a virtual machine to take over the underlying host (hypervisor). |
 | Ransomware | An attack that encrypts data and demands a ransom, often also targeting backups so they can't be used to recover. |
+| CyberStrikeAI | An open-source offensive framework: a Go backend acts as command and orchestration server, connecting several LLMs to 100+ security tools and YAML attack recipes. GTIG (Nov 2026) reports **experimentation**, not in-the-wild deployment. |
+| HexStrike AI | An MCP-based harness that lets an LLM drive 150+ offensive tools, coordinated by 12+ specialized sub-agents. GTIG reports **experimentation**. |
+| PentAGI | An open-source autonomous offensive framework that lowers the barrier for entry-level operators. GTIG reports that from late Aug to early Oct 2026, a customized platform built on it was used for reconnaissance and vulnerability scanning of organizations in Asia. |
+| ZeroHollow / Agent Zero | Tools named in GTIG's Nov 2026 report. ZeroHollow: an inference service used for exploit development and LLM routing. Agent Zero: an open-source agent framework with autonomous code execution and dynamic tool generation. |
+| LLM Mixers (LLM resale proxies) | An example, per GTIG's summary only, of underground proxy services that resell access to high-performance AI models using stolen LLM credentials or cloud resources. Victims bear the billing and quota use. |
+| n-day exploitation | Exploiting a vulnerability after its fix is published, against unpatched systems. GTIG notes LLM-automated patch diffing that weaponizes fixes soon after release. |
 
 ## Defensive mechanisms & tools
 
