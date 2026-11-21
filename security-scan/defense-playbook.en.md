@@ -203,6 +203,20 @@ decide in advance:
   **who approves and how to reach them**.
 - A **target time** from detection to first action per signal; measure it in exercises (§7).
 
+### 4.5 Assume a short gap between disclosure and exploitation; patch internet-facing systems first
+GTIG's November 2026 report (see [`gtig-ai-threat-tracker-2026-11-crosscheck.ja.md`](gtig-ai-threat-tracker-2026-11-crosscheck.ja.md), Japanese)
+notes that LLMs and agentic frameworks are used to **automate patch diffing**, weaponize published fixes quickly,
+and scale attacks on internet-facing servers. Techniques are unchanged; **speed and scale** are what changed.
+Decide in advance:
+- **Fix internet-facing systems first**. Rough order: (1) reachable from outside (VPN, firewalls, web servers, admin
+  consoles), (2) exploitable without authentication, (3) with recorded public exploit code. Internal-only
+  systems come after.
+- Prepare **interim mitigations** per system (restrict sources, disable the feature, block by rule) for when a patch can't be applied at once.
+- **Subscribe** to vendor advisories, set a **target number of days** from notice to fix, and measure actual results.
+- Use the existing `netcheck` (exposure), `dep_cve_check.py`, `os_patch_check_*`, and `vuln_triage` (prioritization).
+
+This is a way of thinking based on the report's **summary**; the report gives no specific day counts. Set them for your own situation.
+
 ---
 
 ## 5. Decoy-based detection (honeytokens) — design memo [not implemented]
