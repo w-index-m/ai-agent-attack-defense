@@ -56,6 +56,23 @@ python3 run_regression.py
 | ⑦スタック済みクエリ | ❌ 未対応 | SQLiteの呼び出しは1回に1文のみで、デモアプリの作りでは再現しにくい。別のDB(PostgreSQL等)と環境が要る |
 | ⑧Out-of-band(OOB) | ❌ 未対応 | デモアプリに外部送信の機能が無く、再現する仕組みを持たない |
 
+## SQLi以外: Open Redirect(Allowlistバイパス)を、モックLLM経由で実機確認(2026-11-27)
+
+`auto_vuln_scanner.py --llm-class`(未定義の脆弱性クラスを、ペイロードと判定方法ごとLLMに決めさせる、
+UNREVIEWEDの機能)を、**モックLLM**(`security-scan/sqli-lab/mock_llm_server_juiceshop_open_redirect.py`)を
+相手に、OWASP Juice Shopの`/redirect?to=`(Allowlist Bypass課題)へ実行し、実機で確認した。
+
+- **先に手で確認**(推測で進めない): `curl`で`to=https://attacker.example/?x=https://github.com/juice-shop/juice-shop`を
+  送ると、`attacker.example`(許可リストに無いはずのドメイン)へ302が通ることを確認。許可されたURLを、
+  別のURLのクエリ文字列に埋め込むと、チェックをすり抜けるバグ。
+- この手口を、モックLLMの「台本」(固定の`payloads`と`detect: reflected_marker, marker: attacker.example`)として仕込み、
+  `--llm-class "Open Redirect (Allowlistバイパス)"`で実行。
+- **実機で、想定どおり1件の指摘が出た**ことを確認(モックLLM側のログ、`auto_vuln_scanner.py`側の出力の両方で裏づけ)。
+- ここでのLLM(モック)の役割は、「人が先に見つけた手口を、台本として読み上げただけ」。実際の判定は、
+  `auto_vuln_scanner.py`の既存の決定的なコード(`_make_llm_detect`)が行った。`--llm-class`の性質上、
+  **UNREVIEWEDの注意書きは変わらない**(他の対象・他のモデルでも同じ手口が通る保証はない)。
+- 詳細・手順: `deck/sqli-types-and-techniques.pptx`16枚目、`mock_llm_server_juiceshop_open_redirect.py`のコメント。
+
 ## IPA「安全なウェブサイトの作り方」(1.1–1.11)との対応
 
 2026-11-08、IPAの目次(1.1〜1.11)と本リポジトリの対応状況を照合した結果。

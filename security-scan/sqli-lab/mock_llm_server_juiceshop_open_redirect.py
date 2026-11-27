@@ -31,6 +31,15 @@ reflected_marker path) -- this mock only supplies the payload string and
 the marker to look for, exactly the way a real LLM response would, so the
 end-to-end --llm-class mechanism can be exercised against a real target.
 
+2026-11-27: confirmed end-to-end against the user's own locally-run Juice
+Shop (http://127.0.0.1:3000) -- this script + auto_vuln_scanner.py
+--llm-class produced exactly the finding below, matching the curl check
+above (first in a sandbox replica, then on the real target):
+
+    1 finding(s):
+      param='to' payload='https://attacker.example/?x=https://github.com/juice-shop/juice-shop'
+        reason: llm-defined (reflected): 'attacker.example' seen in response, not in baseline
+
 Usage:
     python3 mock_llm_server_juiceshop_open_redirect.py [port]   # default 11434
 
