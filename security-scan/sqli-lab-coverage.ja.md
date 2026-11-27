@@ -49,7 +49,7 @@ python3 run_regression.py
 |---|---|---|
 | ①認証バイパス | ✅ 実機確認済み | sqli-lab `/login`(`sqli`クラス)。Juice Shopのログイン画面でも別途確認(2026-11-27) |
 | ②エラーベース | ✅ 実機確認済み | sqli-lab `/login`(SQLエラー文字列の漏洩)。Juice Shop `/rest/products/search?q=' --`で`SQLITE_ERROR: incomplete input`を確認(2026-11-27) |
-| ③UNIONベース | ⚠️ 一部 | sqli-labの`sqli`クラスは`' UNION SELECT NULL,NULL,NULL --`を送るが、判定は認証バイパス/エラーの有無のみで、UNIONで別テーブルの値を読み出せたかは未確認。Juice Shopでの列数当ては着手段階(2026-11-27、実機確認は未完了) |
+| ③UNIONベース | ✅ 実機確認済み(2026-11-27) | sqli-labの`sqli`クラスは認証バイパス/エラーの有無のみの判定。**Juice Shop**の`/rest/products/search`(`q`パラメータ)で、列数当て(10列、途中でPowerShellの`-notmatch`配列誤判定に気づき修正)→`UNION SELECT sql,'2',...,'10' FROM sqlite_master--`で、`Products`・`Users`(email・password・role・totpSecret等の列名を含む)ほぼ全テーブルの定義を一括取得。データそのもの(実際のメール・パスワード)の抽出は未実施 |
 | ④ブラインド(真偽値) | ✅ 実機確認済み | sqli-lab `sqli_blind_boolean`(`/user_exists`) |
 | ⑤ブラインド(時間) | ✅ 実機確認済み | sqli-lab `sqli_blind_time`(`/login`。SQLiteに`sleep()`が無いため再帰CTEで代替) |
 | ⑥セカンドオーダー | ✅ 実機確認済み | sqli-lab `second_order_sqli` |
