@@ -16,3 +16,9 @@ SQLインジェクションの8分類(認証バイパス・エラーベース・
   Juice Shopではヒットしても「status code changed (200→500)」という汎用判定のみになる(個別の手口の判別は未対応)。
   実際にSQLエラーが漏れていることの確認は、`curl`でレスポンス本文を直接見て行った(`SQLITE_ERROR: incomplete input`)。
 - 詳細: `security-scan/sqli-lab-coverage.ja.md`の「8分類との対応」の節。
+- 15枚目「モックLLM・実LLMが有効になる場面」: `auto_vuln_scanner.py`の`--llm-payloads`(既存クラスの固定
+  ペイロードに、LLMが考えた追加の文字列を足す。判定は既存の決定的なロジックのまま)と`--llm-class`(未定義の
+  脆弱性クラスを、ペイロード・判定方法ともLLMに決めさせる。UNREVIEWED)の説明。どちらも既定では無効で、
+  `--llm-url`(既定: ローカルのOllama)を指すときだけ有効になる。「モックLLM」は`security-scan/*-local-poc/
+  mock_llm_server.py`(固定の台本で応答するOpenAI互換サーバー)を指す場合を指し、本物のLLMに差し替えても
+  呼び出し方は同じ。今回のJuice Shopでの実行(13・14枚目)は、どちらのオプションも使っていない。
