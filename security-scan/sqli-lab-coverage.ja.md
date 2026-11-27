@@ -58,6 +58,19 @@ python3 run_regression.py
 | ⑦スタック済みクエリ | ❌ 未対応 | SQLiteの呼び出しは1回に1文のみで、デモアプリの作りでは再現しにくい。別のDB(PostgreSQL等)と環境が要る |
 | ⑧Out-of-band(OOB) | ❌ 未対応 | デモアプリに外部送信の機能が無く、再現する仕組みを持たない |
 
+## モックLLM経由の追加実演: UNIONでの全テーブル定義取得、Strixでの実演(2026-11-27)
+
+上のOpen Redirectに加えて、同じ`--llm-class`の仕組みで、**UNIONによる全テーブル定義の取得**
+(③の実機確認そのもの)も、モックLLM(`security-scan/sqli-lab/mock_llm_server_juiceshop_union.py`)
+を使って再現した。判定は`reflected_marker`(目印: `CREATE TABLE \`Users\``)。サンドボックス内の
+模擬サーバーで動作確認済み。実機(ご自分のJuice Shop)での最終確認は、利用者側の実行待ち。
+
+同じ finding を、**Strix**(自律型ペンテストのローカル実行PoC、`security-scan/strix-local-poc/`)
+の台本としても用意した(`mock_llm_server_juiceshop.py`)。こちらは、既存の`local_scan_server.py`の
+GUI(`/scan/strix`)には未配線で、他の変種台本(`mock_llm_server_deserialize.py`等)と同様、
+手動での実行用。プロトコルの往復(接続確認→偵察コマンド→レポート提出→終了)は、このサンドボックス内で
+確認済み。実機でのStrix完走(WSL2)は、利用者側の実行待ち。
+
 ## SQLi以外: Open Redirect(Allowlistバイパス)を、モックLLM経由で実機確認(2026-11-27)
 
 `auto_vuln_scanner.py --llm-class`(未定義の脆弱性クラスを、ペイロードと判定方法ごとLLMに決めさせる、
