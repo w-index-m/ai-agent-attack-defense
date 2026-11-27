@@ -40,6 +40,22 @@ python3 run_regression.py
 | `bfla` | `/admin_secrets` | `/admin_secrets_safe` | 非admin権限のセッションでadmin専用機能を呼べる |
 | `session_fixation` | `/fixation_login`(+`/fixation_whoami`) | `/fixation_login_safe`(+`/fixation_whoami_safe`) | ログイン前に提示したセッションIDを、サーバーがログイン後も使い続ける |
 
+## SQLiの8分類(手口ベース)との対応
+
+`deck/sqli-types-and-techniques.pptx`のスライド(①〜⑧)と、本リポジトリでの実践状況の対応。IPAの目次(上の1.1)とは
+別の切り口(手口の技術的な分類)。
+
+| 手口 | 状態 | 根拠 |
+|---|---|---|
+| ①認証バイパス | ✅ 実機確認済み | sqli-lab `/login`(`sqli`クラス)。Juice Shopのログイン画面でも別途確認(2026-11-27) |
+| ②エラーベース | ✅ 実機確認済み | sqli-lab `/login`(SQLエラー文字列の漏洩)。Juice Shop `/rest/products/search?q=' --`で`SQLITE_ERROR: incomplete input`を確認(2026-11-27) |
+| ③UNIONベース | ⚠️ 一部 | sqli-labの`sqli`クラスは`' UNION SELECT NULL,NULL,NULL --`を送るが、判定は認証バイパス/エラーの有無のみで、UNIONで別テーブルの値を読み出せたかは未確認。Juice Shopでの列数当ては着手段階(2026-11-27、実機確認は未完了) |
+| ④ブラインド(真偽値) | ✅ 実機確認済み | sqli-lab `sqli_blind_boolean`(`/user_exists`) |
+| ⑤ブラインド(時間) | ✅ 実機確認済み | sqli-lab `sqli_blind_time`(`/login`。SQLiteに`sleep()`が無いため再帰CTEで代替) |
+| ⑥セカンドオーダー | ✅ 実機確認済み | sqli-lab `second_order_sqli` |
+| ⑦スタック済みクエリ | ❌ 未対応 | SQLiteの呼び出しは1回に1文のみで、デモアプリの作りでは再現しにくい。別のDB(PostgreSQL等)と環境が要る |
+| ⑧Out-of-band(OOB) | ❌ 未対応 | デモアプリに外部送信の機能が無く、再現する仕組みを持たない |
+
 ## IPA「安全なウェブサイトの作り方」(1.1–1.11)との対応
 
 2026-11-08、IPAの目次(1.1〜1.11)と本リポジトリの対応状況を照合した結果。
