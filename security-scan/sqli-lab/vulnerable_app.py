@@ -30,7 +30,7 @@ import requests
 # unchanged. Use the same values for the scanners (VULN_APP_PORT / VULN_INTERNAL_PORT).
 APP_PORT = int(os.environ.get("VULN_APP_PORT", "5000"))
 INTERNAL_PORT = int(os.environ.get("VULN_INTERNAL_PORT", "5001"))
-from flask import Flask, make_response, request, session
+from flask import Flask, make_response, redirect, request, session
 from markupsafe import escape
 
 app = Flask(__name__)
@@ -52,6 +52,20 @@ def init_db() -> None:
             ("alice", "alice_pw_123", 0),
             ("bob", "bob_pw_456", 0),
             ("admin", "S3cretAdminPW!", 1),
+        ],
+    )
+    # 5列のテーブル(users は4列)。auto_vuln_scanner.py の sqli_union クラスが
+    # 「3列固定」のような決め打ちに依存せず、本当に列数を自動で当てられることを
+    # 確認するためのペア(/catalog, /catalog_safe)。
+    conn.execute("DROP TABLE IF EXISTS catalog")
+    conn.execute(
+        "CREATE TABLE catalog (id INTEGER PRIMARY KEY, name TEXT, category TEXT, price REAL, in_stock INTEGER)"
+    )
+    conn.executemany(
+        "INSERT INTO catalog (name, category, price, in_stock) VALUES (?, ?, ?, ?)",
+        [
+            ("Widget", "tools", 9.99, 1),
+            ("Gadget", "electronics", 19.99, 0),
         ],
     )
     conn.commit()
@@ -80,6 +94,41 @@ def login() -> tuple[str, int]:
     if rows:
         return f"Login OK. Query was: {query}\nRows: {rows}", 200
     return f"Login failed. Query was: {query}", 401
+
+
+@app.route("/catalog", methods=["GET"])
+def catalog() -> tuple[str, int]:
+    q = request.args.get("q", "")
+    # VULNERABLE: user input concatenated directly into SQL string. 5-column
+    # SELECT, deliberately not 3 (unlike /login), to prove auto_vuln_scanner.py's
+    # sqli_union class auto-detects the column count rather than assuming a
+    # fixed number. Deliberately does NOT echo the constructed query text back
+    # (unlike /login) -- a realistic app wouldn't, and doing so would make any
+    # different payload "change the response" trivially, regardless of whether
+    # the SQL actually behaved differently (this is what the diff-from-baseline
+    # check in detect_sqli_union() relies on).
+    query = f"SELECT id, name, category, price, in_stock FROM catalog WHERE name LIKE '%{q}%'"
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        rows = conn.execute(query).fetchall()
+    except sqlite3.OperationalError as exc:
+        return f"SQL error: {exc}", 500
+    finally:
+        conn.close()
+    return f"Catalog results. Rows: {rows}", 200
+
+
+@app.route("/catalog_safe", methods=["GET"])
+def catalog_safe() -> tuple[str, int]:
+    q = request.args.get("q", "")
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        rows = conn.execute(
+            "SELECT id, name, category, price, in_stock FROM catalog WHERE name LIKE ?", (f"%{q}%",)
+        ).fetchall()
+    finally:
+        conn.close()
+    return f"Catalog results. Rows: {rows}", 200
 
 
 @app.route("/login_safe", methods=["GET"])
@@ -736,6 +785,35 @@ def dashboard_safe() -> tuple[str, int]:
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
     return resp
+
+
+# Open Redirect(許可リストのバイパス): 許可されたURLの文字列が「含まれるか」だけで
+# 判定する、ナイーブな実装(脆弱版)と、完全一致で判定する実装(修正版)のペア。
+# 2026-11-27、OWASP Juice Shopの/redirect?to=で、実際に同じ型のバグ(許可されたURLを、
+# 攻撃者のURLのクエリ文字列に埋め込むと、チェックをすり抜ける)を、手動で確認した
+# (../sqli-lab-coverage.ja.md)。auto_vuln_scanner.pyのopen_redirectクラスが、
+# この手口を自動で試す。
+ALLOWED_REDIRECT_URLS = ["https://example-safe-partner.test/docs"]
+
+
+@app.route("/open_redirect", methods=["GET"])
+def open_redirect() -> tuple[str, int]:
+    to = request.args.get("to", "")
+    # VULNERABLE: 許可リストのURLが、対象の文字列に「含まれているか」だけを見る
+    # (部分一致。先頭一致でもない)。攻撃者のURLのクエリ文字列の中に、許可された
+    # URLを埋め込むだけで、チェックをすり抜けて、まったく別のドメインへ302が通る。
+    if any(allowed in to for allowed in ALLOWED_REDIRECT_URLS):
+        return redirect(to, code=302)
+    return f"Unrecognized target URL for redirect: {to}", 400
+
+
+@app.route("/open_redirect_safe", methods=["GET"])
+def open_redirect_safe() -> tuple[str, int]:
+    to = request.args.get("to", "")
+    # FIXED: 完全一致(部分一致でも前方一致でもない)。
+    if to in ALLOWED_REDIRECT_URLS:
+        return redirect(to, code=302)
+    return f"Unrecognized target URL for redirect: {to}", 400
 
 
 if __name__ == "__main__":

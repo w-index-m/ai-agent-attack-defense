@@ -6,10 +6,10 @@
 
 ```
 python3 run_regression.py
-→ OK: all 19 classes classified correctly (38 endpoint checks).
+→ OK: all 21 classes classified correctly (42 endpoint checks).
 ```
 
-## 19クラスの一覧
+## 21クラスの一覧(2026-11-27に`sqli_union`・`open_redirect`を追加して19→21に拡張)
 
 ### `auto_vuln_scanner.py`(GETパラメータにペイロードを注入してレスポンスを比較する型、12クラス)
 
@@ -18,6 +18,8 @@ python3 run_regression.py
 | `sqli` | `/login` | `/login_safe` | SQLエラー文字列の漏洩・認証バイパス・ステータス変化 |
 | `sqli_blind_time` | `/login` | `/login_safe` | 応答時間の差のみ(SQLiteに`sleep()`が無いため再帰CTEで代替、約1秒遅延) |
 | `sqli_blind_boolean` | `/user_exists` | `/user_exists_safe` | 「Match./No match.」の2値のみからの真偽判定 |
+| `sqli_union`(2026-11-27追加) | `/catalog` | `/catalog_safe` | UNIONの列数・閉じ方を自動で当てる(固定の3列決め打ちではない)。SQLエラーが出ず、かつベースラインと応答が変わることを根拠に候補を提示。Juice Shopでの実機確認(10列)を受けて追加 |
+| `open_redirect`(2026-11-27追加) | `/open_redirect` | `/open_redirect_safe` | 許可リストが部分一致で判定されているバイパス。許可されたURLが、別のリダイレクト先に埋め込まれて通ることを検知。Juice Shopの`/redirect?to=`での実機確認を受けて追加 |
 | `xss` | `/search` | `/search_safe` | ペイロードがエスケープされずHTMLに反射 |
 | `cmdi` | `/diag` | `/diag_safe` | `id`コマンドの出力漏洩 |
 | `traversal` | `/file` | `/file_safe` | `/etc/passwd`の内容読み出し |
@@ -100,7 +102,7 @@ R24/R25(Node.js/PyPI Brotliデコーダ境界外書き込み、CVE-2026-111497)�
 UAF、CVE-2026-98432)が該当する(いずれもGate 3まで一次情報源で裏取り済み。
 `verification-gates.md`参照)。
 
-sqli-labの19クラスのうち、`mass_assignment`・`ssrf`・`account_enum`・`deserialize`は、
+sqli-labの21クラスのうち、`mass_assignment`・`ssrf`・`account_enum`・`deserialize`は、
 IPAの目次には明示的な項目が無いが、本リポジトリが独自に対応している脆弱性クラス。
 
 ## 2026-11-08の変更点(新規4クラス)

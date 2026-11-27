@@ -29,10 +29,11 @@ Claude Codeのクラウドサンドボックス環境は外向きのLLM通信が
   自身のコードではない。そのため、CIの既存ステップ(Semgrep/Trivy/gitleaks)のような
   「このリポジトリの脆弱性を検出するゲート」としては組み込んでいない。組み込んだのは
   「このラボ自身の検出スクリプト(`auto_vuln_scanner.py`/`session_vuln_check.py`)が
-  壊れていないか」を確認する**回帰テスト**。`vulnerable_app.py`を起動し、全38パターン
-  (19クラス×脆弱/修正。2026-11-06に`sqli_blind_time`・`sqli_blind_boolean`・`second_order_sqli`・
+  壊れていないか」を確認する**回帰テスト**。`vulnerable_app.py`を起動し、全42パターン
+  (21クラス×脆弱/修正。2026-11-06に`sqli_blind_time`・`sqli_blind_boolean`・`second_order_sqli`・
   `bfla`を追加して11→15クラスに拡張、2026-11-08に`session_fixation`・`header_injection`・
-  `mail_header_injection`・`clickjacking`を追加して15→19クラスに拡張)を実行して、
+  `mail_header_injection`・`clickjacking`を追加して15→19クラスに拡張、2026-11-27に
+  `sqli_union`・`open_redirect`を追加して19→21クラスに拡張)を実行して、
   **脆弱版は必ずVULNERABLE、修正版は必ずsafeと判定されること**をアサートする。クラス自体や
   判定ロジックが壊れた場合にのみ、
   不一致として報告される(正常時は何も出力しない。他のパーサー(Semgrep等)と同じ、
@@ -698,7 +699,7 @@ python3 session_vuln_check.py --class stored_xss --url http://127.0.0.1:5000 \
 
 ## まとめて1回で実行する
 
-[`scan_all.sh`](scan_all.sh): 上記38パターン(19クラス × それぞれ脆弱/修正)を1コマンドで
+[`scan_all.sh`](scan_all.sh): 上記42パターン(21クラス × それぞれ脆弱/修正)を1コマンドで
 実行するラッパースクリプト。`vulnerable_app.py`が起動済みであることが前提。
 
 ```bash

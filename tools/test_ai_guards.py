@@ -41,6 +41,11 @@ def rd_file(path):
 def load(rel, name):
     spec = importlib.util.spec_from_file_location(name, os.path.join(ROOT, rel))
     mod = importlib.util.module_from_spec(spec)
+    # sys.modules へ先に登録する: `from __future__ import annotations` の下で
+    # @dataclass を使うモジュール(例: auto_vuln_scanner.py)は、遅延評価される
+    # 注釈(文字列)を解決するのに sys.modules[cls.__module__] を引くため、
+    # 登録前に exec_module すると見つからず壊れる。
+    sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod
 
@@ -995,6 +1000,134 @@ process.stdout.write(JSON.stringify({detected: det !== null, result: det ? vulsP
         body = self.html[i:i + 400]
         self.assertIn("vulsDetect(json)", body)
         self.assertIn("vulsParse(", body)
+
+
+
+class TestSqliUnionDetect(unittest.TestCase):
+    """security-scan/sqli-lab/auto_vuln_scanner.py の sqli_union クラス
+    (UNIONの列数・閉じ方の自動検出。2026-11-27、OWASP Juice Shopでの実機確認を受けて追加)。
+    scan()を介さず、detect_sqli_union()を直接、合成の応答で呼ぶ(requestsへの実通信なし)。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load("security-scan/sqli-lab/auto_vuln_scanner.py", "auto_vuln_scanner_test")
+
+    class _FakeResp:
+        def __init__(self, text, status_code):
+            self.text = text
+            self.status_code = status_code
+
+    def detect(self, resp_text, resp_status, baseline_text="Catalog results. Rows: []", baseline_status=200):
+        resp = self._FakeResp(resp_text, resp_status)
+        baseline = self._FakeResp(baseline_text, baseline_status)
+        return self.mod.detect_sqli_union(resp, baseline, "irrelevant-payload")
+
+    def test_rejects_juice_shop_style_sqlite_error_title(self):
+        # 実機(Juice Shop)で見た実際の文言: "Error: SQLITE_ERROR: incomplete input"。
+        # status=200にして、500判定ではなく「sqlite_error」マーカー自体で弾かれることを切り分ける。
+        r = self.detect("Error: SQLITE_ERROR: incomplete input", 200)
+        self.assertIsNone(r)
+
+    def test_rejects_union_column_mismatch_marker(self):
+        # 実機(Juice Shop)で見た実際の文言(列数不一致)。"SQLITE_ERROR"という語を含めず、
+        # status=200にして、「result columns」マーカー自体で弾かれることを切り分ける。
+        r = self.detect(
+            "Query failed: these SELECT statements do not have the same number of result columns",
+            200,
+        )
+        self.assertIsNone(r)
+
+    def test_rejects_5xx_even_without_a_known_marker_text(self):
+        r = self.detect("Internal Server Error", 500)
+        self.assertIsNone(r)
+
+    def test_rejects_when_response_matches_baseline(self):
+        # 安全な版(パラメータ化クエリ)相当: エラーも出ないが、応答もベースラインと
+        # 一切変わらない(2026-11-27、/catalog_safeで実際に起きた誤検知)。
+        same_text = "Catalog results. Rows: []"
+        r = self.detect(same_text, 200, baseline_text=same_text)
+        self.assertIsNone(r)
+
+    def test_accepts_when_clean_and_differs_from_baseline(self):
+        r = self.detect("Catalog results. Rows: [(None, None, None, None, None)]", 200)
+        self.assertIsNotNone(r)
+        self.assertIn("union-columns candidate", r)
+
+    def test_payload_list_covers_expected_closers_and_column_range(self):
+        payloads = self.mod.SQLI_UNION_PAYLOADS
+        self.assertIn("' UNION SELECT NULL,NULL,NULL,NULL,NULL--", payloads)  # 5列(/catalog)
+        self.assertIn("' UNION SELECT NULL,NULL,NULL--", payloads)  # 3列(/login)
+        self.assertIn('")) UNION SELECT NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL--', payloads)  # 10列(Juice Shop相当)
+        self.assertEqual(len(payloads), len(set(payloads)), "重複ペイロードがある")
+
+    def test_sqli_union_registered_in_vuln_classes(self):
+        self.assertIn("sqli_union", self.mod.VULN_CLASSES)
+
+
+
+class TestOpenRedirectDetect(unittest.TestCase):
+    """security-scan/sqli-lab/auto_vuln_scanner.py の open_redirect クラス
+    (許可リストのバイパス。2026-11-27、OWASP Juice Shopでの実機確認を受けて追加)。
+    scan()を介さず、detect_open_redirect()を直接、合成の応答で呼ぶ。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = load("security-scan/sqli-lab/auto_vuln_scanner.py", "auto_vuln_scanner_test_2")
+
+    class _FakeResp:
+        def __init__(self, status_code, headers=None):
+            self.status_code = status_code
+            self.headers = headers or {}
+
+    ALLOWED = "https://example-safe-partner.test/docs"
+
+    def detect(self, resp_status, resp_location, baseline_status=302, baseline_location=ALLOWED):
+        resp = self._FakeResp(resp_status, {"Location": resp_location} if resp_location else {})
+        baseline = self._FakeResp(baseline_status, {"Location": baseline_location} if baseline_location else {})
+        return self.mod.detect_open_redirect(resp, baseline, "irrelevant-payload")
+
+    def test_rejects_non_redirect_status(self):
+        r = self.detect(400, "https://attacker.example/?x=" + self.ALLOWED)
+        self.assertIsNone(r)
+
+    def test_rejects_when_no_location_header(self):
+        r = self.detect(302, "")
+        self.assertIsNone(r)
+
+    def test_rejects_when_baseline_did_not_redirect(self):
+        r = self.detect(302, "https://attacker.example/?x=" + self.ALLOWED, baseline_status=400, baseline_location="")
+        self.assertIsNone(r)
+
+    def test_rejects_when_location_equals_baseline(self):
+        # 行き先が、許可されたURLそのまま(バイパスではない)
+        r = self.detect(302, self.ALLOWED)
+        self.assertIsNone(r)
+
+    def test_rejects_when_allowed_url_not_embedded(self):
+        # 許可されたURLを一切含まない、無関係な行き先(このクラスの対象外)
+        r = self.detect(302, "https://attacker.example/totally-unrelated")
+        self.assertIsNone(r)
+
+    def test_accepts_when_allowed_url_embedded_in_different_target(self):
+        r = self.detect(302, "https://attacker.example/?x=" + self.ALLOWED)
+        self.assertIsNotNone(r)
+        self.assertIn("open-redirect candidate", r)
+        self.assertIn("attacker.example", r)
+
+    def test_accepts_for_each_redirect_status_code(self):
+        for code in (301, 302, 303, 307, 308):
+            r = self.detect(code, "https://attacker.example/?x=" + self.ALLOWED)
+            self.assertIsNotNone(r, f"status {code} should be treated as a redirect")
+
+    def test_payloads_each_embed_the_demo_allowed_url(self):
+        payloads = self.mod.OPEN_REDIRECT_PAYLOADS
+        self.assertTrue(len(payloads) >= 3)
+        for pl in payloads:
+            self.assertIn(self.ALLOWED, pl)
+            self.assertNotEqual(pl, self.ALLOWED, "そのままの許可URLはバイパスの実演にならない")
+
+    def test_open_redirect_registered_in_vuln_classes(self):
+        self.assertIn("open_redirect", self.mod.VULN_CLASSES)
 
 
 if __name__ == "__main__":

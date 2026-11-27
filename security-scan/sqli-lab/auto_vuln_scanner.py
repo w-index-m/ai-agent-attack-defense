@@ -195,6 +195,8 @@ SQL_ERROR_MARKERS = (
     "you have an error in your sql syntax",
     "unclosed quotation mark",
     "odbc sql server driver",
+    "sqlite_error",  # 例: "Error: SQLITE_ERROR: ..." (Node.js/better-sqlite3系。OWASP Juice Shopで実機確認、2026-11-27)
+    "result columns",  # 例: "...do not have the same number of result columns"(UNIONの列数不一致、SQLite)
 )
 
 SQLI_PAYLOADS = [
@@ -222,6 +224,64 @@ def detect_sqli(resp: requests.Response, baseline: requests.Response, payload: s
         return f"status code changed ({baseline.status_code} -> {resp.status_code})"
 
     return None
+
+
+# SQLi, UNION-based: auto-detect the column count AND the closing syntax
+# needed before "UNION SELECT ...", instead of a single hardcoded 3-column
+# guess (which only matched this lab's own /login by coincidence; a real
+# target's query can need any column count -- OWASP Juice Shop's own
+# product search needed 10, confirmed 2026-11-27, see
+# ../sqli-lab-coverage.ja.md). Tries several common ways the injected
+# string can need to "close" what comes before it (a lone quote, or a
+# quote plus one/two closing parentheses for a query wrapped in extra
+# "(" "OR" "(" grouping, as Juice Shop's own search query is), crossed
+# with column counts 1..MAX_UNION_COLUMNS. Judgment is still decisive and
+# simple: no known SQL-error marker, and no 5xx -- NOT the query running
+# correctly and NOT the column count being "right" in a positive sense
+# (the tool cannot tell from the outside whether a UNION with the wrong
+# column count might, coincidentally, also avoid a visible error on some
+# other target). Multiple findings are expected and normal: confirm by
+# hand which one actually reads real data (e.g. replace NULL with
+# `sql` FROM sqlite_master, or real column names) before trusting any of
+# them, the same way this project's own real run against Juice Shop did.
+#
+# Known limitation: judging "differs from baseline" by comparing the full
+# response text breaks down against an endpoint that echoes the raw query
+# text back into every response (this lab's own /login does, for the
+# sqli/sqli_blind_* classes' sake) -- then ANY different payload "changes
+# the response" trivially, regardless of whether the SQL behaved any
+# differently, producing noisy false positives. Tested and regression-
+# checked against /catalog (../sqli-lab-coverage.ja.md), which does not
+# echo the query, like most real apps (including Juice Shop) don't. Point
+# this class at an endpoint that echoes the query back verbatim only with
+# that in mind.
+_SQLI_UNION_CLOSERS = ("'", '"', "')", '")', "'))", '"))')
+_MAX_UNION_COLUMNS = 12
+
+SQLI_UNION_PAYLOADS = [
+    f"{closer} UNION SELECT {','.join(['NULL'] * n)}--"
+    for closer in _SQLI_UNION_CLOSERS
+    for n in range(1, _MAX_UNION_COLUMNS + 1)
+]
+
+
+def detect_sqli_union(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    text = resp.text.lower()
+    if any(marker in text for marker in SQL_ERROR_MARKERS):
+        return None
+    if resp.status_code >= 500:
+        return None
+    if resp.text == baseline.text:
+        # 安全な版(パラメータ化クエリ)は、注入した文字列をただのデータとして扱うだけなので、
+        # エラーも出ず5xxにもならないが、応答もベースラインから一切変わらない。
+        # 「エラーが出ない」だけでは、この「無害に無視された」場合と区別できないため、
+        # 応答がベースラインと実際に変わったことも必須の条件にする。
+        return None
+    return (
+        "union-columns candidate: no SQL error for this closing syntax + column count, "
+        "and the response differs from the baseline -- confirm by hand before trusting "
+        "(e.g. replace one NULL with sql FROM sqlite_master, or a real column name)"
+    )
 
 
 # --------------------------------------------------------------------------
@@ -473,6 +533,51 @@ def detect_clickjacking(resp: requests.Response, baseline: requests.Response, pa
 
 
 # --------------------------------------------------------------------------
+# Open Redirect (allowlist bypass): the allowlist check is bypassed by
+# embedding an allowed URL inside the query string of an attacker-controlled
+# one. Confirmed by hand against OWASP Juice Shop's own /redirect?to=
+# (2026-11-27, see ../sqli-lab-coverage.ja.md): a naive "is the allowed URL
+# a substring of the target" check lets `https://attacker.example/?x=<allowed
+# URL>` through. The payloads below are tailored to THIS lab's own demo
+# allowlist (vulnerable_app.py's ALLOWED_REDIRECT_URLS) -- against a real
+# target, substitute ITS allowed URL(s) into the same wrapper patterns (the
+# same way this project did by hand for Juice Shop before scripting it; see
+# ../sqli-lab/mock_llm_server_juiceshop_open_redirect.py).
+# --------------------------------------------------------------------------
+
+_OPEN_REDIRECT_ALLOWED_DEMO_URL = "https://example-safe-partner.test/docs"
+
+OPEN_REDIRECT_PAYLOADS = [
+    f"https://attacker.example/?x={_OPEN_REDIRECT_ALLOWED_DEMO_URL}",
+    f"https://attacker.example/{_OPEN_REDIRECT_ALLOWED_DEMO_URL}",
+    f"https://attacker.example/#{_OPEN_REDIRECT_ALLOWED_DEMO_URL}",
+    f"https://{_OPEN_REDIRECT_ALLOWED_DEMO_URL.removeprefix('https://')}.attacker.example/",
+]
+
+
+def detect_open_redirect(resp: requests.Response, baseline: requests.Response, payload: str) -> str | None:
+    if resp.status_code not in (301, 302, 303, 307, 308):
+        return None
+    location = resp.headers.get("Location", "")
+    if not location:
+        return None
+    baseline_location = baseline.headers.get("Location", "")
+    if not baseline_location:
+        # ベースライン自体がリダイレクトしていないと、「許可された本来の行き先」が
+        # 分からず、比較しようがない(--baselineには、許可されている実在のURLを渡す)。
+        return None
+    if location == baseline_location:
+        return None  # 行き先が同じ(バイパスではない)
+    if baseline_location not in location:
+        return None  # 「許可されたURLが、別のURLに埋め込まれている」形に見えない
+    return (
+        f"open-redirect candidate: baseline's allowed target ({baseline_location!r}) appears "
+        f"embedded inside a different redirect target ({location!r}) -- the allowlist check "
+        "likely uses substring/includes matching instead of an exact match"
+    )
+
+
+# --------------------------------------------------------------------------
 # Registry: add a new vulnerability class here
 # --------------------------------------------------------------------------
 
@@ -524,6 +629,14 @@ VULN_CLASSES: dict[str, VulnClass] = {
         impact="エラーや画面の見た目に一切差が出なくても、「真偽」2値だけの応答から、"
         "SQL インジェクションの有無や、1 文字ずつのデータ抽出に悪用されうる。",
         fix="SQL をパラメータ化クエリで組み立てる(他の SQLi と同じ対策で防げる)。",
+    ),
+    "sqli_union": VulnClass(
+        SQLI_UNION_PAYLOADS,
+        detect_sqli_union,
+        title="SQL インジェクション(UNIONベース・列数/閉じ方の自動検出)",
+        impact="UNION SELECT で、別テーブルの値を結果に混ぜ込める可能性がある。このクラス自体は"
+        "「エラーが出ない組み合わせ」を探すだけで、実際にデータを読めるかは未確認(候補の提示)。",
+        fix="パラメータ化クエリ(プレースホルダ)に直す。詳細なエラーメッセージを画面に出さない。",
     ),
     "xss": VulnClass(
         XSS_PAYLOADS,
@@ -609,6 +722,16 @@ VULN_CLASSES: dict[str, VulnClass] = {
         "利用者に意図しないクリックをさせられうる。",
         fix="`X-Frame-Options`(DENY/SAMEORIGIN)または CSP の `frame-ancestors` で、"
         "埋め込みを許可するオリジンを制限する。",
+    ),
+    "open_redirect": VulnClass(
+        OPEN_REDIRECT_PAYLOADS,
+        detect_open_redirect,
+        title="Open Redirect(許可リストのバイパス)",
+        impact="フィッシングや、認証後のトークン漏洩(OAuthのredirect_uri等)に悪用されうる。"
+        "利用者からは、信頼しているサイトのドメインに見えるリンクが、実際には攻撃者のサイトへ"
+        "転送する。",
+        fix="許可リストは、部分一致・前方一致ではなく、完全一致(または厳密なホスト名比較)で"
+        "判定する。可能なら相対パスのみを許可し、外部ドメインへのリダイレクトを無くす。",
     ),
 }
 

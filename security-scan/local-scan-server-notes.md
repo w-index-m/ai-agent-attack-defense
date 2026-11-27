@@ -42,7 +42,7 @@ POSTする。
 | `POST /scan/java_cacerts_emudhra` | `scripts/java_cacerts_emudhra_check.py`(R14) | 同上(ローカルのJava cacertsのみ参照) |
 | `POST /scan/linux_kernel_cve202698432` | `scripts/linux_kernel_cve202698432_check.py`(R26) | 同上(`--dmesg`等のログ確認オプションは付けず、バージョン判定のみ) |
 | `POST /scan/linux_kernel_infinitycore` | `scripts/linux_kernel_infinitycore_check.py`(R21) | 同上 |
-| `POST /scan/sqli_lab_regression` | `security-scan/sqli-lab/run_regression.py`を実行し、`vulnerable_app.py`を自動起動して19クラス38パターンを検証。出力(`sqli_lab.json`と同じ配列形式)はSARIF形式に変換してから返す | 「このリポジトリの脆弱性」ではなく「ラボ自身の検出スクリプトが壊れていないか」の確認。対象欄は使わない |
+| `POST /scan/sqli_lab_regression` | `security-scan/sqli-lab/run_regression.py`を実行し、`vulnerable_app.py`を自動起動して21クラス42パターンを検証(2026-11-27に`sqli_union`・`open_redirect`を追加)。出力(`sqli_lab.json`と同じ配列形式)はSARIF形式に変換してから返す | 「このリポジトリの脆弱性」ではなく「ラボ自身の検出スクリプトが壊れていないか」の確認。対象欄は使わない |
 
 どのツールも、生のJSON出力をそのまま返す（加工しない）。ページ側は、既存の`addJson()`（貼り付け/
 ファイル読み込みと同じ関数）にそのまま渡すので、解析ロジックは一本化されている。`strix`が返す
