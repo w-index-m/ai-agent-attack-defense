@@ -70,6 +70,7 @@ SCANNER_CASES = [
     ("sqli", "/login", {"username": "zzz", "password": "zzz"}, "/login_safe", {"username": "zzz", "password": "zzz"}, "username"),
     ("sqli_blind_time", "/login", {"username": "zzz", "password": "zzz"}, "/login_safe", {"username": "zzz", "password": "zzz"}, "username"),
     ("sqli_blind_boolean", "/user_exists", {"username": "zzz"}, "/user_exists_safe", {"username": "zzz"}, "username"),
+    ("sqli_union", "/catalog", {"q": "zzz"}, "/catalog_safe", {"q": "zzz"}, "q"),
     ("xss", "/search", {"q": "zzz"}, "/search_safe", {"q": "zzz"}, "q"),
     ("cmdi", "/diag", {"host": "zzz"}, "/diag_safe", {"host": "zzz"}, "host"),
     ("traversal", "/file", {"name": "public.txt"}, "/file_safe", {"name": "public.txt"}, "name"),
@@ -93,6 +94,7 @@ SCANNER_CASES = [
         "to",
     ),
     ("clickjacking", "/dashboard", {}, "/dashboard_safe", {}, "dummy"),
+    ("open_redirect", "/open_redirect", {"to": "https://example-safe-partner.test/docs"}, "/open_redirect_safe", {"to": "https://example-safe-partner.test/docs"}, "to"),
 ]
 
 # (class_name, vulnerable-path overrides, safe-path overrides)

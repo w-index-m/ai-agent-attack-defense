@@ -6,10 +6,10 @@
 
 ```
 python3 run_regression.py
-→ OK: all 19 classes classified correctly (38 endpoint checks).
+→ OK: all 21 classes classified correctly (42 endpoint checks).
 ```
 
-## 19クラスの一覧
+## 21クラスの一覧(2026-11-27に`sqli_union`・`open_redirect`を追加して19→21に拡張)
 
 ### `auto_vuln_scanner.py`(GETパラメータにペイロードを注入してレスポンスを比較する型、12クラス)
 
@@ -18,6 +18,8 @@ python3 run_regression.py
 | `sqli` | `/login` | `/login_safe` | SQLエラー文字列の漏洩・認証バイパス・ステータス変化 |
 | `sqli_blind_time` | `/login` | `/login_safe` | 応答時間の差のみ(SQLiteに`sleep()`が無いため再帰CTEで代替、約1秒遅延) |
 | `sqli_blind_boolean` | `/user_exists` | `/user_exists_safe` | 「Match./No match.」の2値のみからの真偽判定 |
+| `sqli_union`(2026-11-27追加) | `/catalog` | `/catalog_safe` | UNIONの列数・閉じ方を自動で当てる(固定の3列決め打ちではない)。SQLエラーが出ず、かつベースラインと応答が変わることを根拠に候補を提示。Juice Shopでの実機確認(10列)を受けて追加 |
+| `open_redirect`(2026-11-27追加) | `/open_redirect` | `/open_redirect_safe` | 許可リストが部分一致で判定されているバイパス。許可されたURLが、別のリダイレクト先に埋め込まれて通ることを検知。Juice Shopの`/redirect?to=`での実機確認を受けて追加 |
 | `xss` | `/search` | `/search_safe` | ペイロードがエスケープされずHTMLに反射 |
 | `cmdi` | `/diag` | `/diag_safe` | `id`コマンドの出力漏洩 |
 | `traversal` | `/file` | `/file_safe` | `/etc/passwd`の内容読み出し |
@@ -39,6 +41,52 @@ python3 run_regression.py
 | `second_order_sqli` | `/second_order_audit`(`/second_order_signup`で注入) | `/second_order_audit_safe` | signupで保存した値が、別の後続リクエストで初めてSQLに使われる |
 | `bfla` | `/admin_secrets` | `/admin_secrets_safe` | 非admin権限のセッションでadmin専用機能を呼べる |
 | `session_fixation` | `/fixation_login`(+`/fixation_whoami`) | `/fixation_login_safe`(+`/fixation_whoami_safe`) | ログイン前に提示したセッションIDを、サーバーがログイン後も使い続ける |
+
+## SQLiの8分類(手口ベース)との対応
+
+`deck/sqli-types-and-techniques.pptx`のスライド(①〜⑧)と、本リポジトリでの実践状況の対応。IPAの目次(上の1.1)とは
+別の切り口(手口の技術的な分類)。
+
+| 手口 | 状態 | 根拠 |
+|---|---|---|
+| ①認証バイパス | ✅ 実機確認済み | sqli-lab `/login`(`sqli`クラス)。Juice Shopのログイン画面でも別途確認(2026-11-27) |
+| ②エラーベース | ✅ 実機確認済み | sqli-lab `/login`(SQLエラー文字列の漏洩)。Juice Shop `/rest/products/search?q=' --`で`SQLITE_ERROR: incomplete input`を確認(2026-11-27) |
+| ③UNIONベース | ✅ 実機確認済み(2026-11-27) | sqli-labの`sqli`クラスは認証バイパス/エラーの有無のみの判定。**Juice Shop**の`/rest/products/search`(`q`パラメータ)で、列数当て(10列、途中でPowerShellの`-notmatch`配列誤判定に気づき修正)→`UNION SELECT sql,'2',...,'10' FROM sqlite_master--`で、`Products`・`Users`(email・password・role・totpSecret等の列名を含む)ほぼ全テーブルの定義を一括取得。データそのもの(実際のメール・パスワード)の抽出は未実施 |
+| ④ブラインド(真偽値) | ✅ 実機確認済み | sqli-lab `sqli_blind_boolean`(`/user_exists`) |
+| ⑤ブラインド(時間) | ✅ 実機確認済み | sqli-lab `sqli_blind_time`(`/login`。SQLiteに`sleep()`が無いため再帰CTEで代替) |
+| ⑥セカンドオーダー | ✅ 実機確認済み | sqli-lab `second_order_sqli` |
+| ⑦スタック済みクエリ | ❌ 未対応 | SQLiteの呼び出しは1回に1文のみで、デモアプリの作りでは再現しにくい。別のDB(PostgreSQL等)と環境が要る |
+| ⑧Out-of-band(OOB) | ❌ 未対応 | デモアプリに外部送信の機能が無く、再現する仕組みを持たない |
+
+## モックLLM経由の追加実演: UNIONでの全テーブル定義取得、Strixでの実演(2026-11-27)
+
+上のOpen Redirectに加えて、同じ`--llm-class`の仕組みで、**UNIONによる全テーブル定義の取得**
+(③の実機確認そのもの)も、モックLLM(`security-scan/sqli-lab/mock_llm_server_juiceshop_union.py`)
+を使って再現した。判定は`reflected_marker`(目印: `CREATE TABLE \`Users\``)。サンドボックス内の
+模擬サーバーで動作確認済み。実機(ご自分のJuice Shop)での最終確認は、利用者側の実行待ち。
+
+同じ finding を、**Strix**(自律型ペンテストのローカル実行PoC、`security-scan/strix-local-poc/`)
+の台本としても用意した(`mock_llm_server_juiceshop.py`)。こちらは、既存の`local_scan_server.py`の
+GUI(`/scan/strix`)には未配線で、他の変種台本(`mock_llm_server_deserialize.py`等)と同様、
+手動での実行用。プロトコルの往復(接続確認→偵察コマンド→レポート提出→終了)は、このサンドボックス内で
+確認済み。実機でのStrix完走(WSL2)は、利用者側の実行待ち。
+
+## SQLi以外: Open Redirect(Allowlistバイパス)を、モックLLM経由で実機確認(2026-11-27)
+
+`auto_vuln_scanner.py --llm-class`(未定義の脆弱性クラスを、ペイロードと判定方法ごとLLMに決めさせる、
+UNREVIEWEDの機能)を、**モックLLM**(`security-scan/sqli-lab/mock_llm_server_juiceshop_open_redirect.py`)を
+相手に、OWASP Juice Shopの`/redirect?to=`(Allowlist Bypass課題)へ実行し、実機で確認した。
+
+- **先に手で確認**(推測で進めない): `curl`で`to=https://attacker.example/?x=https://github.com/juice-shop/juice-shop`を
+  送ると、`attacker.example`(許可リストに無いはずのドメイン)へ302が通ることを確認。許可されたURLを、
+  別のURLのクエリ文字列に埋め込むと、チェックをすり抜けるバグ。
+- この手口を、モックLLMの「台本」(固定の`payloads`と`detect: reflected_marker, marker: attacker.example`)として仕込み、
+  `--llm-class "Open Redirect (Allowlistバイパス)"`で実行。
+- **実機で、想定どおり1件の指摘が出た**ことを確認(モックLLM側のログ、`auto_vuln_scanner.py`側の出力の両方で裏づけ)。
+- ここでのLLM(モック)の役割は、「人が先に見つけた手口を、台本として読み上げただけ」。実際の判定は、
+  `auto_vuln_scanner.py`の既存の決定的なコード(`_make_llm_detect`)が行った。`--llm-class`の性質上、
+  **UNREVIEWEDの注意書きは変わらない**(他の対象・他のモデルでも同じ手口が通る保証はない)。
+- 詳細・手順: `deck/sqli-types-and-techniques.pptx`16枚目、`mock_llm_server_juiceshop_open_redirect.py`のコメント。
 
 ## IPA「安全なウェブサイトの作り方」(1.1–1.11)との対応
 
@@ -67,7 +115,7 @@ R24/R25(Node.js/PyPI Brotliデコーダ境界外書き込み、CVE-2026-111497)�
 UAF、CVE-2026-98432)が該当する(いずれもGate 3まで一次情報源で裏取り済み。
 `verification-gates.md`参照)。
 
-sqli-labの19クラスのうち、`mass_assignment`・`ssrf`・`account_enum`・`deserialize`は、
+sqli-labの21クラスのうち、`mass_assignment`・`ssrf`・`account_enum`・`deserialize`は、
 IPAの目次には明示的な項目が無いが、本リポジトリが独自に対応している脆弱性クラス。
 
 ## 2026-11-08の変更点(新規4クラス)
